@@ -19,6 +19,54 @@ import {
   units,
 } from "~/server/db/schema";
 
+function buildFacilityFilterConditions(filter?: {
+  search?: string;
+  stateCode?: string;
+  primaryFuel?: string;
+  nercRegion?: string;
+  sourceCategory?: string;
+}) {
+  const conditions = [];
+
+  if (filter?.stateCode && filter.stateCode !== "ALL") {
+    conditions.push(eq(facilities.stateCode, filter.stateCode));
+  }
+
+  if (filter?.nercRegion && filter.nercRegion !== "ALL") {
+    conditions.push(eq(facilities.nercRegion, filter.nercRegion));
+  }
+
+  if (filter?.sourceCategory && filter.sourceCategory !== "ALL") {
+    conditions.push(eq(facilities.sourceCategory, filter.sourceCategory));
+  }
+
+  if (filter?.search && filter.search.trim() !== "") {
+    const term = `%${filter.search.trim().toLowerCase()}%`;
+    const numericSearch = Number.parseInt(filter.search.trim(), 10);
+    if (!Number.isNaN(numericSearch)) {
+      conditions.push(
+        sql`(${facilities.id} = ${numericSearch} OR lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
+      );
+    } else {
+      conditions.push(
+        sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
+      );
+    }
+  }
+
+  if (filter?.primaryFuel && filter.primaryFuel !== "ALL") {
+    conditions.push(
+      sql`${facilities.id} IN (
+        SELECT DISTINCT ${units.facilityId}
+        FROM ${units}
+        WHERE ${units.primaryFuel} = ${filter.primaryFuel}
+      )`,
+    );
+  }
+
+  return conditions;
+}
+
 export const facilitiesRouter = createTRPCRouter({
   /**
    * Get overall system metrics, grid stats, and anomaly counts
@@ -174,54 +222,12 @@ export const facilitiesRouter = createTRPCRouter({
       const {
         page,
         pageSize,
-        search,
-        stateCode,
-        primaryFuel,
-        nercRegion,
-        sourceCategory,
         sortBy = "name",
         sortDir = "asc",
       } = input;
       const offset = (page - 1) * pageSize;
 
-      const conditions = [];
-
-      if (stateCode && stateCode !== "ALL") {
-        conditions.push(eq(facilities.stateCode, stateCode));
-      }
-
-      if (nercRegion && nercRegion !== "ALL") {
-        conditions.push(eq(facilities.nercRegion, nercRegion));
-      }
-
-      if (sourceCategory && sourceCategory !== "ALL") {
-        conditions.push(eq(facilities.sourceCategory, sourceCategory));
-      }
-
-      if (search && search.trim() !== "") {
-        const term = `%${search.trim().toLowerCase()}%`;
-        const numericSearch = Number.parseInt(search.trim(), 10);
-        if (!Number.isNaN(numericSearch)) {
-          conditions.push(
-            sql`(${facilities.id} = ${numericSearch} OR lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-          );
-        } else {
-          conditions.push(
-            sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-          );
-        }
-      }
-
-      if (primaryFuel && primaryFuel !== "ALL") {
-        conditions.push(
-          sql`${facilities.id} IN (
-            SELECT DISTINCT ${units.facilityId}
-            FROM ${units}
-            WHERE ${units.primaryFuel} = ${primaryFuel}
-          )`,
-        );
-      }
-
+      const conditions = buildFacilityFilterConditions(input);
       const whereClause =
         conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -327,44 +333,8 @@ export const facilitiesRouter = createTRPCRouter({
     .query(async ({ ctx, input }) => {
       const conditions = [
         sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
+        ...buildFacilityFilterConditions(input),
       ];
-
-      if (input?.stateCode && input.stateCode !== "ALL") {
-        conditions.push(eq(facilities.stateCode, input.stateCode));
-      }
-
-      if (input?.nercRegion && input.nercRegion !== "ALL") {
-        conditions.push(eq(facilities.nercRegion, input.nercRegion));
-      }
-
-      if (input?.sourceCategory && input.sourceCategory !== "ALL") {
-        conditions.push(eq(facilities.sourceCategory, input.sourceCategory));
-      }
-
-      if (input?.search && input.search.trim() !== "") {
-        const term = `%${input.search.trim().toLowerCase()}%`;
-        const numericSearch = Number.parseInt(input.search.trim(), 10);
-        if (!Number.isNaN(numericSearch)) {
-          conditions.push(
-            sql`(${facilities.id} = ${numericSearch} OR lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-          );
-        } else {
-          conditions.push(
-            sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-          );
-        }
-      }
-
-      if (input?.primaryFuel && input.primaryFuel !== "ALL") {
-        conditions.push(
-          sql`${facilities.id} IN (
-            SELECT DISTINCT ${units.facilityId}
-            FROM ${units}
-            WHERE ${units.primaryFuel} = ${input.primaryFuel}
-          )`,
-        );
-      }
-
       const whereClause = and(...conditions);
 
       const rows = await ctx.db
@@ -444,74 +414,39 @@ export const facilitiesRouter = createTRPCRouter({
       });
 
       return plants.map((plant) => {
-        const totalCapacityMW = plant.units.reduce(
-          (acc, u) => acc + (u.nameplateCapacityMW ?? 0),
-          0,
-        );
+        let totalCapacityMW = 0;
+        let operatingUnitsCount = 0;
+        let so2ControlledUnits = 0;
+        let noxControlledUnits = 0;
+        let pmControlledUnits = 0;
+        const primaryFuels = new Set<string>();
+        const secondaryFuels = new Set<string>();
 
-        const primaryFuels = Array.from(
-          new Set(plant.units.map((u) => u.primaryFuel).filter(Boolean)),
-        );
+        for (const u of plant.units) {
+          totalCapacityMW += u.nameplateCapacityMW ?? 0;
+          if (u.primaryFuel) primaryFuels.add(u.primaryFuel);
+          if (u.secondaryFuel) secondaryFuels.add(u.secondaryFuel);
+          if ((u.operatingStatus ?? "").toLowerCase().includes("op"))
+            operatingUnitsCount++;
+          if (u.so2Controls) so2ControlledUnits++;
+          if (u.noxControls) noxControlledUnits++;
+          if (u.pmControls) pmControlledUnits++;
+        }
 
-        const secondaryFuels = Array.from(
-          new Set(plant.units.map((u) => u.secondaryFuel).filter(Boolean)),
-        );
-
-        const totalGenerationMWh = plant.annualRecords.reduce(
-          (acc, r) => acc + r.grossGenerationMWh,
-          0,
-        );
-
-        const totalOperatingHours = plant.annualRecords.reduce(
-          (acc, r) => acc + r.operatingHours,
-          0,
-        );
-
-        const totalCo2Tons = plant.annualRecords.reduce(
-          (acc, r) => acc + r.co2MassTons,
-          0,
-        );
-
-        const totalSo2Tons = plant.annualRecords.reduce(
-          (acc, r) => acc + r.so2MassTons,
-          0,
-        );
-
-        const totalNoxTons = plant.annualRecords.reduce(
-          (acc, r) => acc + r.noxMassTons,
-          0,
-        );
-
-        const totalHeatInputMMBtu = plant.annualRecords.reduce(
-          (acc, r) => acc + r.heatInputMMBtu,
-          0,
-        );
-
-        const carbonIntensity =
-          totalGenerationMWh > 0
-            ? Math.round((totalCo2Tons * 2000.0) / totalGenerationMWh)
-            : null;
-
-        const heatRate =
-          totalGenerationMWh > 0
-            ? Number((totalHeatInputMMBtu / totalGenerationMWh).toFixed(2))
-            : null;
-
-        const operatingUnitsCount = plant.units.filter((u) =>
-          (u.operatingStatus ?? "").toLowerCase().includes("op"),
-        ).length;
-
-        const so2ControlledUnits = plant.units.filter((u) =>
-          Boolean(u.so2Controls),
-        ).length;
-
-        const noxControlledUnits = plant.units.filter((u) =>
-          Boolean(u.noxControls),
-        ).length;
-
-        const pmControlledUnits = plant.units.filter((u) =>
-          Boolean(u.pmControls),
-        ).length;
+        let totalGen = 0;
+        let totalHours = 0;
+        let totalCo2 = 0;
+        let totalSo2 = 0;
+        let totalNox = 0;
+        let totalHeat = 0;
+        for (const r of plant.annualRecords) {
+          totalGen += r.grossGenerationMWh;
+          totalHours += r.operatingHours;
+          totalCo2 += r.co2MassTons;
+          totalSo2 += r.so2MassTons;
+          totalNox += r.noxMassTons;
+          totalHeat += r.heatInputMMBtu;
+        }
 
         return {
           id: plant.id,
@@ -524,15 +459,17 @@ export const facilitiesRouter = createTRPCRouter({
           unitCount: plant.units.length,
           operatingUnitsCount,
           totalCapacityMW: Math.round(totalCapacityMW),
-          primaryFuels,
-          secondaryFuels,
-          totalOperatingHours: Math.round(totalOperatingHours),
-          totalGenerationMWh: Math.round(totalGenerationMWh),
-          totalCo2Tons: Math.round(totalCo2Tons),
-          totalSo2Tons: Math.round(totalSo2Tons),
-          totalNoxTons: Math.round(totalNoxTons),
-          carbonIntensityLbsMWh: carbonIntensity,
-          heatRateMMBtuMWh: heatRate,
+          primaryFuels: Array.from(primaryFuels),
+          secondaryFuels: Array.from(secondaryFuels),
+          totalOperatingHours: Math.round(totalHours),
+          totalGenerationMWh: Math.round(totalGen),
+          totalCo2Tons: Math.round(totalCo2),
+          totalSo2Tons: Math.round(totalSo2),
+          totalNoxTons: Math.round(totalNox),
+          carbonIntensityLbsMWh:
+            totalGen > 0 ? Math.round((totalCo2 * 2000.0) / totalGen) : null,
+          heatRateMMBtuMWh:
+            totalGen > 0 ? Number((totalHeat / totalGen).toFixed(2)) : null,
           so2ControlledUnits,
           noxControlledUnits,
           pmControlledUnits,

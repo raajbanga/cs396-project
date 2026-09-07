@@ -36,58 +36,17 @@ import {
   TableRow,
 } from "~/components/ui/table";
 
-export interface FacilityUnit {
-  id: string;
-  unitId: string;
-  unitType: string | null;
-  primaryFuel: string | null;
-  secondaryFuel: string | null;
-  operatingStatus: string | null;
-  commercialOpDate: string | null;
-  maxHourlyHIRate: number | null;
-  nameplateCapacityMW: number | null;
-  so2Controls: string | null;
-  noxControls: string | null;
-  pmControls: string | null;
-  hgControls: string | null;
-}
+import { getFuelTheme } from "~/lib/map-utils";
+import { type RouterOutputs } from "~/trpc/react";
 
-export interface FacilityAuditLog {
-  id: string;
-  flagType: string;
-  severity: string;
-  details: string;
-  createdAt: Date | number;
-}
-
-export interface FacilityAnnualRecord {
-  id: string;
-  year: number;
-  operatingHours: number;
-  grossGenerationMWh: number;
-  heatInputMMBtu: number;
-  co2MassTons: number;
-  so2MassTons: number;
-  noxMassTons: number;
-  co2IntensityLbsMWh: number | null;
-  heatRateMMBtuMWh: number | null;
-  auditLogs?: FacilityAuditLog[];
-}
-
-export interface FacilityDetailData {
-  id: number;
-  name: string;
-  stateCode: string;
-  county: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  epaRegion: number | null;
-  nercRegion: string | null;
-  sourceCategory: string | null;
-  ownerOperator: string | null;
-  units: FacilityUnit[];
-  annualRecords: FacilityAnnualRecord[];
-}
+export type FacilityDetailData = NonNullable<
+  RouterOutputs["facilities"]["getFacility"]
+>;
+export type FacilityUnit = FacilityDetailData["units"][number];
+export type FacilityAnnualRecord = FacilityDetailData["annualRecords"][number];
+export type FacilityAuditLog = NonNullable<
+  FacilityAnnualRecord["auditLogs"]
+>[number];
 
 interface FacilityDetailDialogProps {
   open: boolean;
@@ -477,7 +436,10 @@ export function FacilityDetailDialog({
                             </div>
                             <div className="flex flex-wrap items-center gap-1 pt-1">
                               {unit.primaryFuel && (
-                                <Badge variant="sky" className="text-[10px]">
+                                <Badge
+                                  variant={getFuelTheme(unit.primaryFuel).variant}
+                                  className="text-[10px]"
+                                >
                                   {unit.primaryFuel}
                                 </Badge>
                               )}
