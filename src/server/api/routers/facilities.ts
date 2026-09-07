@@ -273,6 +273,17 @@ export const facilitiesRouter = createTRPCRouter({
           totalCo2Tons: sql<number>`(
             SELECT COALESCE(ROUND(SUM("annual_records"."co2_mass_tons"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
           )`.as("total_co2_tons"),
+          primaryFuelsRaw: sql<string | null>`(
+            SELECT GROUP_CONCAT(DISTINCT "units"."primary_fuel") FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
+          )`.as("primary_fuels_raw"),
+          carbonIntensityLbsMWh: sql<number | null>`(
+            SELECT ROUND(SUM("annual_records"."co2_mass_tons") * 2000.0 / NULLIF(SUM("annual_records"."gross_generation_mwh"), 0))
+            FROM "annual_records"
+            WHERE "annual_records"."facility_id" = "facilities"."id"
+          )`.as("carbon_intensity_lbs_mwh"),
+          controlledUnitsCount: sql<number>`(
+            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL)
+          )`.as("controlled_units_count"),
         })
         .from(facilities)
         .where(whereClause)
@@ -281,7 +292,12 @@ export const facilitiesRouter = createTRPCRouter({
         .offset(offset);
 
       return {
-        items: facilityRows,
+        items: facilityRows.map((row) => ({
+          ...row,
+          primaryFuels: row.primaryFuelsRaw
+            ? row.primaryFuelsRaw.split(",").filter(Boolean)
+            : [],
+        })),
         totalCount,
         page,
         pageSize,

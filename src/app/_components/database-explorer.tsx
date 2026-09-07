@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { CampdSyncDialog } from "./campd-sync-dialog";
+import { EpaPrimer } from "./epa-primer";
 import { FacilitiesTable } from "./facilities-table";
 import { FacilityDetailDialog } from "./facility-detail-dialog";
 import { FacilityFilters } from "./facility-filters";
@@ -253,6 +254,9 @@ export function DatabaseExplorer() {
             )}
           </div>
         </div>
+
+        {/* Educational 101 Primer for Demystifying EPA Data */}
+        <EpaPrimer />
 
         {/* Stats Metrics Cards */}
         <StatMetrics stats={stats} isLoading={statsLoading} />
