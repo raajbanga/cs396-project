@@ -22,7 +22,7 @@ export const TableHeader = React.forwardRef<
   <thead
     ref={ref}
     className={cn(
-      "border-b border-edge bg-surface/80 text-[11px] font-semibold tracking-wider text-fg-muted uppercase",
+      "border-b border-edge bg-surface/80 text-xs font-medium tracking-wider text-fg-muted uppercase",
       className,
     )}
     {...props}

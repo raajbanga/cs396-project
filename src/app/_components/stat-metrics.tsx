@@ -1,5 +1,5 @@
 import { Activity, AlertTriangle, Building2, Globe, Zap } from "lucide-react";
-import { MetricCard } from "~/components/ui/metric-card";
+import { StatTile } from "~/components/ui/stat-tile";
 
 interface StatMetricsProps {
   stats?: {
@@ -18,7 +18,8 @@ interface StatMetricsProps {
 export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
   return (
     <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-      <MetricCard
+      <StatTile
+        variant="card"
         title="Total Facilities"
         icon={<Building2 className="h-4 w-4 text-fg-muted" />}
         value={
@@ -27,7 +28,8 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
         subtext={`${stats?.totalStates ?? 52} states & territories`}
       />
 
-      <MetricCard
+      <StatTile
+        variant="card"
         title="Tracked Capacity"
         icon={<Zap className="h-4 w-4 text-amber-400" />}
         value={
@@ -44,14 +46,16 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
         }
       />
 
-      <MetricCard
+      <StatTile
+        variant="card"
         title="Reliability Grids"
         icon={<Globe className="h-4 w-4 text-sky-400" />}
         value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
         subtext="ERCOT, SERC, WECC, etc."
       />
 
-      <MetricCard
+      <StatTile
+        variant="card"
         title="Annual CO₂"
         icon={<Activity className="h-4 w-4 text-emerald-400" />}
         value={
@@ -65,7 +69,8 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
         subtext="Monitored stack mass"
       />
 
-      <MetricCard
+      <StatTile
+        variant="card"
         title="Audit Flags"
         icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
         value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}

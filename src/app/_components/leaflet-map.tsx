@@ -104,8 +104,8 @@ export function LeafletMap({
       // Hover tooltip
       marker.bindTooltip(
         `<div class="text-xs font-sans">
-          <div class="font-semibold text-zinc-100">${plant.name} (${plant.stateCode})</div>
-          <div class="text-[11px] text-zinc-400">${theme.name} • ${plant.totalCapacityMW.toLocaleString()} MW</div>
+          <div class="font-semibold text-fg">${plant.name} (${plant.stateCode})</div>
+          <div class="text-xs text-fg-muted">${theme.name} • ${plant.totalCapacityMW.toLocaleString()} MW</div>
         </div>`,
         {
           direction: "top",
@@ -124,12 +124,12 @@ export function LeafletMap({
   }, [facilities, metricMode, selectedFacilityId, onInspectFacility]);
 
   return (
-    <div className="relative isolate z-0 h-[420px] sm:h-[520px] lg:h-[620px] w-full overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-950 shadow-xs">
+    <div className="relative isolate z-0 h-[420px] sm:h-[520px] lg:h-[620px] w-full overflow-hidden rounded-xl border border-edge/80 bg-surface/20 shadow-xs">
       <div ref={mapContainerRef} className="h-full w-full" />
 
       {/* Floating Instructions */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 text-xs text-zinc-400">
-        <div className="rounded-md border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 backdrop-blur-md shadow-xs">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 text-xs text-fg-muted">
+        <div className="rounded-md border border-edge/80 bg-surface/90 px-3 py-1.5 backdrop-blur-md shadow-xs">
           <span>Leaflet Mercator Map • Click any marker to view full facility profile</span>
         </div>
       </div>

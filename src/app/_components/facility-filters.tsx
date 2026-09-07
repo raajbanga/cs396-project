@@ -16,7 +16,6 @@ interface FilterOptions {
   states: string[];
   fuels: string[];
   nercRegions: string[];
-  sourceCategories: string[];
 }
 
 interface FacilityFiltersProps {
@@ -33,7 +32,6 @@ interface FacilityFiltersProps {
   isLoading: boolean;
   hasActiveFilters: boolean;
   onResetFilters: () => void;
-  compareCount: number;
 }
 
 export function FacilityFilters({
@@ -158,7 +156,7 @@ export function FacilityFilters({
             <SlidersHorizontal className="h-3.5 w-3.5 text-fg-muted" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20 text-[10px] font-bold text-emerald-400">
+              <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20 text-xs font-semibold text-emerald-400">
                 {activeFilterCount}
               </span>
             )}
