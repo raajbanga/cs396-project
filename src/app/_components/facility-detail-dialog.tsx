@@ -13,7 +13,6 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
-  Trees,
   X,
   Zap,
 } from "lucide-react";
@@ -110,69 +109,69 @@ export function FacilityDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col p-6">
-        <DialogHeader className="border-b border-zinc-800 pb-3">
-          <div className="flex w-full flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-mono text-xs font-bold text-emerald-400">
-                  ORISPL #{facility?.id ?? facilityId}
-                </span>
-                {facility?.nercRegion && (
-                  <Badge variant="sky" className="font-mono text-[10px]">
-                    Grid: {facility.nercRegion}
-                  </Badge>
-                )}
-                {facility?.epaRegion && (
-                  <Badge variant="outline" className="font-mono text-[10px]">
-                    EPA Region {facility.epaRegion}
-                  </Badge>
-                )}
-                {facility?.sourceCategory && (
-                  <Badge variant="secondary" className="text-[10px]">
-                    {facility.sourceCategory}
-                  </Badge>
-                )}
-              </div>
-              <DialogTitle className="mt-1 text-xl font-bold text-white">
-                {facility?.name ?? "Loading Facility Dossier..."}
-              </DialogTitle>
-              <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-                <span>Owner: {facility?.ownerOperator ?? "Unlisted"}</span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-zinc-500" />
-                  {facility?.county ? `${facility.county} Co., ` : ""}
-                  {facility?.stateCode}
-                </span>
-                {mapsUrl && (
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-0.5 text-[11px] text-sky-400 underline hover:text-sky-300"
-                  >
-                    <span>Google Maps</span>
-                    <ExternalLink className="h-2.5 w-2.5" />
-                  </a>
-                )}
-              </div>
-            </div>
+      <DialogContent className="relative flex h-[90dvh] max-h-[90dvh] sm:h-auto sm:max-h-[90vh] w-full max-w-4xl flex-col p-3.5 sm:p-6 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="absolute right-3.5 top-3.5 sm:right-5 sm:top-5 z-10 flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+          aria-label="Close dialog"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close dialog"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <DialogHeader className="shrink-0 border-b border-zinc-800 pb-3 pr-10">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-xs font-bold text-emerald-400">
+                ORISPL #{facility?.id ?? facilityId}
+              </span>
+              {facility?.nercRegion && (
+                <Badge variant="sky" className="font-mono text-[10px]">
+                  Grid: {facility.nercRegion}
+                </Badge>
+              )}
+              {facility?.epaRegion && (
+                <Badge variant="outline" className="font-mono text-[10px]">
+                  EPA Region {facility.epaRegion}
+                </Badge>
+              )}
+              {facility?.sourceCategory && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {facility.sourceCategory}
+                </Badge>
+              )}
+            </div>
+            <DialogTitle className="mt-1 text-lg font-bold text-white sm:text-xl">
+              {facility?.name ?? "Loading Facility Dossier..."}
+            </DialogTitle>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <span>Owner: {facility?.ownerOperator ?? "Unlisted"}</span>
+              <span>•</span>
+              <span className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-zinc-500" />
+                {facility?.county ? `${facility.county} Co., ` : ""}
+                {facility?.stateCode}
+              </span>
+              {mapsUrl && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 text-[11px] text-sky-400 underline hover:text-sky-300"
+                >
+                  <span>Google Maps</span>
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
-        {/* Quick KPI Stats Row */}
-        {facility && (
-          <div className="grid grid-cols-2 gap-2.5 pt-3 text-xs sm:grid-cols-5">
+        {/* Scrollable Dossier Body (KPIs, Narrative, Tabs, and Tables) */}
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-3.5 sm:space-y-4 py-2 pr-1 -mr-1">
+          {/* Quick KPI Stats Row */}
+          {facility && (
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 pt-2 text-xs sm:grid-cols-5">
             <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
               <span className="flex items-center gap-1 text-[10px] font-semibold text-zinc-500 uppercase">
                 <Zap className="h-3 w-3 text-amber-400" />
@@ -236,7 +235,7 @@ export function FacilityDetailDialog({
               </span>
             </div>
 
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
+            <div className="col-span-2 sm:col-span-1 rounded-lg border border-zinc-800 bg-zinc-950 p-2.5">
               <span className="flex items-center gap-1 text-[10px] font-semibold text-zinc-500 uppercase">
                 {allAuditLogs.length > 0 ? (
                   <AlertTriangle className="h-3 w-3 text-amber-400" />
@@ -263,12 +262,12 @@ export function FacilityDetailDialog({
 
         {/* What is Happening at This Plant? - Plain-English Storytelling Card */}
         {story && (
-          <div className="space-y-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4">
+          <div className="space-y-2.5 rounded-lg border border-zinc-800/80 bg-zinc-900/30 p-3.5 sm:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span className="text-xs font-bold tracking-wider text-white uppercase">
-                  What is Happening at This Plant?
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                <span className="text-xs font-semibold tracking-wide text-white uppercase">
+                  Plant Overview & Role
                 </span>
               </div>
               <span
@@ -279,32 +278,32 @@ export function FacilityDetailDialog({
               </span>
             </div>
 
-            <p className="text-xs leading-relaxed font-medium text-zinc-100">
+            <p className="text-xs leading-relaxed font-medium text-zinc-200">
               {story.headline}
             </p>
 
-            <div className="grid grid-cols-1 gap-3 pt-1 text-[11px] md:grid-cols-2">
-              <div className="space-y-1 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3">
-                <span className="mb-1 block font-semibold text-sky-400">
+            <div className="grid grid-cols-1 gap-2 pt-0.5 text-[11px] sm:grid-cols-2">
+              <div className="space-y-1 rounded-md border border-zinc-800/60 bg-zinc-950/50 p-2.5">
+                <span className="mb-0.5 block font-semibold text-sky-400">
                   ⚡ Grid & Operational Role
                 </span>
-                <p className="leading-relaxed text-zinc-300">
+                <p className="leading-relaxed text-zinc-400">
                   {story.gridStory}
                 </p>
               </div>
 
-              <div className="space-y-1 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3">
-                <span className="mb-1 block font-semibold text-emerald-400">
-                  🌱 Emissions & Environmental Footprint
+              <div className="space-y-1 rounded-md border border-zinc-800/60 bg-zinc-950/50 p-2.5">
+                <span className="mb-0.5 block font-semibold text-emerald-400">
+                  🌱 Emissions & Footprint
                 </span>
-                <p className="leading-relaxed text-zinc-300">
+                <p className="leading-relaxed text-zinc-400">
                   {story.environmentalStory}
                 </p>
               </div>
             </div>
 
             {/* Tangible Real-World Equivalents Bar */}
-            <div className="flex flex-wrap items-center gap-4 border-t border-zinc-800/60 pt-1 text-[11px]">
+            <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800/60 pt-2 text-[11px]">
               <div className="flex items-center gap-1.5 text-zinc-300">
                 <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                 <span>
@@ -318,20 +317,9 @@ export function FacilityDetailDialog({
                 <div className="flex items-center gap-1.5 text-zinc-300">
                   <Car className="h-3.5 w-3.5 shrink-0 text-sky-400" />
                   <span>
-                    Emissions equal{" "}
+                    Emissions ≈{" "}
                     <strong className="text-white">
                       {story.equivalents.carsDrivenFormatted}
-                    </strong>
-                  </span>
-                </div>
-              )}
-              {story.equivalents.treesNeededRaw > 0 && (
-                <div className="flex items-center gap-1.5 text-zinc-300">
-                  <Trees className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                  <span>
-                    Offset requires{" "}
-                    <strong className="text-white">
-                      {story.equivalents.treesNeededFormatted}
                     </strong>
                   </span>
                 </div>
@@ -341,44 +329,43 @@ export function FacilityDetailDialog({
         )}
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-zinc-800 pt-2 text-xs font-medium">
+        <div className="sticky top-0 z-10 flex border-b border-zinc-800 bg-zinc-900/95 backdrop-blur-md pt-1 text-xs sm:text-sm font-medium overflow-x-auto whitespace-nowrap">
           <button
             type="button"
             onClick={() => setActiveTab("units")}
-            className={`cursor-pointer border-b-2 px-4 py-2 transition-colors ${
+            className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
               activeTab === "units"
                 ? "border-emerald-400 font-semibold text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            Generation Fleet ({facility?.units.length ?? 0} Units)
+            Generation Fleet ({facility?.units.length ?? 0})
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("emissions")}
-            className={`cursor-pointer border-b-2 px-4 py-2 transition-colors ${
+            className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
               activeTab === "emissions"
                 ? "border-emerald-400 font-semibold text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            CEMS Emissions Timeline ({facility?.annualRecords.length ?? 0}{" "}
-            Years)
+            Emissions Timeline ({facility?.annualRecords.length ?? 0} Yrs)
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("audit")}
-            className={`flex cursor-pointer items-center gap-1.5 border-b-2 px-4 py-2 transition-colors ${
+            className={`flex cursor-pointer items-center gap-1.5 border-b-2 px-3.5 py-2 transition-colors ${
               activeTab === "audit"
                 ? "border-emerald-400 font-semibold text-white"
                 : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            <span>Physical Sanity Audits</span>
+            <span>Sanity Audits</span>
             {allAuditLogs.length > 0 && (
               <Badge
                 variant="warning"
-                className="px-1 py-0 font-mono text-[9px]"
+                className="px-1.5 py-0 font-mono text-[10px]"
               >
                 {allAuditLogs.length}
               </Badge>
@@ -387,7 +374,7 @@ export function FacilityDetailDialog({
         </div>
 
         {/* Tab Content Body */}
-        <div className="mt-2 flex-1 space-y-4 overflow-y-auto pr-1 text-xs">
+        <div className="pt-2 space-y-4 text-xs">
           {isLoading ? (
             <div className="py-20 text-center text-zinc-400">
               <RefreshCw className="mx-auto mb-2 h-6 w-6 animate-spin text-emerald-400" />
@@ -621,16 +608,18 @@ export function FacilityDetailDialog({
             </div>
           )}
         </div>
+      </div>
 
-        <DialogFooter className="border-t border-zinc-800 pt-3">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => onOpenChange(false)}
-          >
-            Close Dossier
-          </Button>
-        </DialogFooter>
+      <DialogFooter className="shrink-0 border-t border-zinc-800 pt-3 mt-auto">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onOpenChange(false)}
+          className="w-full sm:w-auto h-9 text-xs sm:text-sm font-medium cursor-pointer"
+        >
+          Close Dossier
+        </Button>
+      </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -6,9 +6,9 @@ import { Geist } from "next/font/google";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
-  title: "EPA CAMPD Data Management System | Phase 1",
+  title: "GridPulse | US Power & Emissions Intelligence",
   description:
-    "EPA Clean Air Markets Program Data management, normalization, and relational explorer.",
+    "Real-time US power grid, generation capacity, and continuous emissions monitoring platform.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

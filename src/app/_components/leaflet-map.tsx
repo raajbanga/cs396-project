@@ -30,25 +30,33 @@ export function LeafletMap({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Default center on continental USA
+    // Continental USA initial center
     const map = L.map(mapContainerRef.current, {
       center: [39.8283, -98.5795],
       zoom: 4,
       minZoom: 3,
-      maxZoom: 12,
+      maxZoom: 20,
       zoomControl: false,
     });
 
-    // Dark theme CartoDB basemap tiles
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
-      },
-    ).addTo(map);
+    // CARTO Basemap Tiles with API key
+    const cartoKey =
+      process.env.NEXT_PUBLIC_CARTO_API ?? process.env.CARTO_API;
+
+    const tileUrl = cartoKey
+      ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${cartoKey}`
+      : process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+        ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
+        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+
+    const attribution =
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+    L.tileLayer(tileUrl, {
+      attribution,
+      subdomains: "abcd",
+      maxZoom: 20,
+    }).addTo(map);
 
     // Zoom control in top right
     L.control.zoom({ position: "topright" }).addTo(map);
@@ -116,12 +124,12 @@ export function LeafletMap({
   }, [facilities, metricMode, selectedFacilityId, onInspectFacility]);
 
   return (
-    <div className="relative h-[620px] w-full overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl">
+    <div className="relative isolate z-0 h-[420px] sm:h-[520px] lg:h-[620px] w-full overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-950 shadow-xs">
       <div ref={mapContainerRef} className="h-full w-full" />
 
       {/* Floating Instructions */}
-      <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] flex items-center gap-2 text-[11px] text-zinc-400">
-        <div className="rounded-md border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 backdrop-blur-md shadow-md">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 text-xs text-zinc-400">
+        <div className="rounded-md border border-zinc-800 bg-zinc-900/90 px-3 py-1.5 backdrop-blur-md shadow-xs">
           <span>Leaflet Mercator Map • Click any marker to view full facility profile</span>
         </div>
       </div>

@@ -70,32 +70,30 @@ export function PlantComparisonDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[92vh] max-w-6xl flex-col p-6">
-        <DialogHeader className="pb-3">
-          <div className="space-y-1">
+      <DialogContent className="relative flex h-[90dvh] max-h-[90dvh] sm:h-auto sm:max-h-[90vh] w-full max-w-5xl flex-col p-3.5 sm:p-6 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="absolute right-3.5 top-3.5 sm:right-5 sm:top-5 z-10 flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+          aria-label="Close dialog"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <DialogHeader className="shrink-0 border-b border-zinc-800 pb-3 pr-10">
+          <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <Badge variant="sky" className="font-mono text-[10px]">
-                PRD Section 1.2
-              </Badge>
               <span className="text-xs text-zinc-400">
-                Benchmarking {plants.length} Generating Facilities
+                Comparing {plants.length} Facilities
               </span>
             </div>
-            <DialogTitle className="text-xl">
-              Head-to-Head Plant Benchmarking Matrix
+            <DialogTitle className="text-lg font-bold text-white sm:text-xl">
+              Plant Benchmarking Matrix
             </DialogTitle>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onOpenChange(false)}
-            aria-label="Close dialog"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
-        <div className="mt-2 flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="mt-2 flex-1 min-h-0 space-y-4 overflow-y-auto pr-1">
           {isLoading ? (
             <div className="py-24 text-center text-zinc-400">
               <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin text-emerald-400" />
@@ -494,11 +492,11 @@ export function PlantComparisonDialog({
           )}
         </div>
 
-        <DialogFooter className="items-center justify-between border-t border-zinc-800 pt-3">
+        <DialogFooter className="shrink-0 mt-auto flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 border-t border-zinc-800 pt-3">
           <button
             type="button"
             onClick={onClearSelection}
-            className="cursor-pointer text-xs text-zinc-400 underline hover:text-zinc-200"
+            className="cursor-pointer text-xs text-zinc-400 underline hover:text-zinc-200 text-center sm:text-left py-1"
           >
             Clear comparison selection ({plants.length} plants)
           </button>
@@ -506,6 +504,7 @@ export function PlantComparisonDialog({
             variant="secondary"
             size="sm"
             onClick={() => onOpenChange(false)}
+            className="h-9 text-xs sm:text-sm font-medium"
           >
             Close Benchmarking
           </Button>

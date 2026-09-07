@@ -27,7 +27,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <div
-      className="animate-in fade-in fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-4 backdrop-blur-xs duration-150"
+      className="animate-in fade-in fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-zinc-950/80 p-0 sm:p-4 backdrop-blur-xs duration-150"
       onClick={() => onOpenChange(false)}
     >
       {children}
@@ -43,7 +43,7 @@ export function DialogContent({
   return (
     <div
       className={cn(
-        "animate-in zoom-in-95 relative flex max-h-[90vh] w-full max-w-4xl flex-col rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl duration-150",
+        "animate-in zoom-in-95 relative flex h-[90dvh] max-h-[90dvh] sm:h-auto sm:max-h-[90vh] w-full max-w-4xl flex-col rounded-t-2xl sm:rounded-xl border border-zinc-800 bg-zinc-900/95 p-3.5 sm:p-6 shadow-2xl backdrop-blur-md duration-150 overflow-hidden",
         className,
       )}
       onClick={(e) => e.stopPropagation()}
@@ -61,7 +61,7 @@ export function DialogHeader({
   return (
     <div
       className={cn(
-        "flex items-start justify-between border-b border-zinc-800 pb-4",
+        "flex shrink-0 items-start justify-between border-b border-zinc-800 pb-3",
         className,
       )}
       {...props}
@@ -100,7 +100,7 @@ export function DialogFooter({
   return (
     <div
       className={cn(
-        "mt-4 flex justify-end gap-2 border-t border-zinc-800 pt-3",
+        "mt-auto flex shrink-0 items-center justify-end gap-2 border-t border-zinc-800 pt-3",
         className,
       )}
       {...props}

@@ -63,6 +63,7 @@ export function D3Globe({
   // Interaction tracking refs
   const isDraggingRef = useRef(false);
   const lastPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const downPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragMovedRef = useRef(false);
   const animFrameRef = useRef<number | null>(null);
 
@@ -252,12 +253,13 @@ export function D3Globe({
       const [px, py] = coords;
       const fuelTheme = getFuelTheme(plant.primaryFuel);
 
-      // Determine dot radius based on metric mode
-      let r = 3;
+      // Determine dot radius based on metric mode + scale zoom bonus
+      const zoomBonus = Math.min(3.5, Math.max(0, (scale - 400) / 1200));
+      let r = 3 + zoomBonus;
       if (metricMode === "capacity") {
-        r = Math.max(2, Math.min(9, Math.sqrt(plant.totalCapacityMW) * 0.12));
+        r = Math.max(2.5, Math.min(10, Math.sqrt(plant.totalCapacityMW) * 0.12)) + zoomBonus;
       } else if (metricMode === "co2") {
-        r = Math.max(2, Math.min(9, Math.sqrt(plant.totalCo2Tons) * 0.003));
+        r = Math.max(2.5, Math.min(10, Math.sqrt(plant.totalCo2Tons) * 0.003)) + zoomBonus;
       }
 
       const isHovered = hoveredPlant?.id === plant.id;
@@ -360,6 +362,7 @@ export function D3Globe({
     canvas.setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragMovedRef.current = false;
+    downPosRef.current = { x: e.clientX, y: e.clientY };
     lastPointerRef.current = { x: e.clientX, y: e.clientY };
   };
 
@@ -376,8 +379,12 @@ export function D3Globe({
     if (isDraggingRef.current) {
       const dx = clientX - lastPointerRef.current.x;
       const dy = clientY - lastPointerRef.current.y;
+      const totalDist = Math.hypot(
+        clientX - downPosRef.current.x,
+        clientY - downPosRef.current.y,
+      );
 
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+      if (totalDist > 7) {
         dragMovedRef.current = true;
       }
 
@@ -410,7 +417,7 @@ export function D3Globe({
       const centerLat = -rotation[1];
 
       let closest: MapFacility | null = null;
-      let minDistance = 14; // pixels hit radius
+      let minDistance = 16; // pixels hit radius for desktop hover
 
       for (const p of facilities) {
         if (
@@ -449,18 +456,66 @@ export function D3Globe({
 
     isDraggingRef.current = false;
 
-    // If it was a click without significant drag motion
-    if (!dragMovedRef.current && hoveredPlant) {
-      onInspectFacility(hoveredPlant.id);
+    // Check if this was a tap/click without drag motion
+    const totalDist = Math.hypot(
+      e.clientX - downPosRef.current.x,
+      e.clientY - downPosRef.current.y,
+    );
+
+    if (!dragMovedRef.current && totalDist <= 8) {
+      // Direct hit-test at tap point with touch-friendly 22px tolerance
+      let targetPlant = hoveredPlant;
+
+      if (!targetPlant && canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const cx = rect.width / 2;
+        const cy = rect.height / 2;
+
+        const projection = d3
+          .geoOrthographic()
+          .scale(scale)
+          .translate([cx, cy])
+          .rotate(rotation)
+          .clipAngle(90);
+
+        const centerLon = -rotation[0];
+        const centerLat = -rotation[1];
+        let minDistance = 22; // generous touch tolerance
+
+        for (const p of facilities) {
+          if (
+            d3.geoDistance([p.longitude, p.latitude], [centerLon, centerLat]) >
+            Math.PI / 2
+          ) {
+            continue;
+          }
+
+          const coords = projection([p.longitude, p.latitude]);
+          if (!coords) continue;
+
+          const dist = Math.hypot(coords[0] - x, coords[1] - y);
+          if (dist < minDistance) {
+            minDistance = dist;
+            targetPlant = p;
+          }
+        }
+      }
+
+      if (targetPlant) {
+        onInspectFacility(targetPlant.id);
+      }
     }
   };
 
-  // Scroll wheel zoom
+  // Scroll wheel zoom with exponential scaling up to 10,000
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     setScale((prev) => {
-      const delta = -e.deltaY * 0.45;
-      return Math.max(160, Math.min(1800, prev + delta));
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const next = prev * factor;
+      return Math.max(160, Math.min(10000, next));
     });
   };
 
@@ -473,7 +528,7 @@ export function D3Globe({
   return (
     <div
       ref={containerRef}
-      className="relative flex h-[620px] w-full flex-col overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 select-none shadow-2xl"
+      className="relative flex h-[420px] sm:h-[520px] lg:h-[620px] w-full flex-col overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-950 select-none shadow-xs"
     >
       {/* Loading Overlay */}
       {isLoadingGeo && (
@@ -496,8 +551,8 @@ export function D3Globe({
       />
 
       {/* Top Floating HUD: Controls & Camera Presets */}
-      <div className="pointer-events-none absolute top-4 left-4 right-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="pointer-events-auto flex items-center gap-1.5 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-lg">
+      <div className="pointer-events-none absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-xs">
           <Button
             variant="ghost"
             size="sm"
@@ -513,7 +568,7 @@ export function D3Globe({
             ) : (
               <Play className="h-3 w-3" />
             )}
-            <span>{autoRotate ? "Spinning" : "Auto-Rotate"}</span>
+            <span className="hidden sm:inline">{autoRotate ? "Spinning" : "Auto-Rotate"}</span>
           </Button>
 
           <div className="h-3.5 w-px bg-zinc-800" />
@@ -525,43 +580,43 @@ export function D3Globe({
             className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
           >
             <Compass className="h-3 w-3 mr-1 text-emerald-400" />
-            <span>US Center</span>
+            <span>US</span>
           </Button>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPreset(78, -38, 560)}
-            className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
           >
-            <span>East (PJM/SERC)</span>
+            <span>East</span>
           </Button>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPreset(99, -31, 720)}
-            className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
           >
-            <span>Texas (ERCOT)</span>
+            <span>Texas</span>
           </Button>
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPreset(118, -38, 560)}
-            className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
           >
-            <span>West (WECC)</span>
+            <span>West</span>
           </Button>
         </div>
 
         {/* Zoom & Reset Controls */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-lg">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-xs">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setScale((s) => Math.min(1800, s * 1.25))}
+            onClick={() => setScale((s) => Math.min(10000, s * 1.35))}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
             title="Zoom in"
           >
@@ -570,7 +625,7 @@ export function D3Globe({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setScale((s) => Math.max(160, s * 0.8))}
+            onClick={() => setScale((s) => Math.max(160, s * 0.72))}
             className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
             title="Zoom out"
           >
@@ -599,11 +654,20 @@ export function D3Globe({
       {hoveredPlant && hoverPos && (
         <div
           style={{
-            left: Math.min(
-              hoverPos.x + 16,
-              (containerRef.current?.clientWidth ?? 800) - 270,
+            left: Math.max(
+              8,
+              Math.min(
+                hoverPos.x + 16,
+                (containerRef.current?.clientWidth ?? 800) - 270,
+              ),
             ),
-            top: Math.max(16, hoverPos.y - 40),
+            top: Math.max(
+              8,
+              Math.min(
+                hoverPos.y - 40,
+                (containerRef.current?.clientHeight ?? 600) - 200,
+              ),
+            ),
           }}
           className="pointer-events-none absolute z-30 w-64 rounded-lg border border-zinc-700 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-md transition-all duration-75 animate-in fade-in zoom-in-95"
         >
