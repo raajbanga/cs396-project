@@ -14,19 +14,21 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
-  X,
   Zap,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { generatePlantStory } from "~/lib/plant-narrative";
+import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { FuelBadge } from "~/components/ui/fuel-badge";
+import { StatTile } from "~/components/ui/stat-tile";
 import {
   Table,
   TableBody,
@@ -35,8 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-
-import { getFuelTheme } from "~/lib/map-utils";
+import { generatePlantStory } from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
 export type FacilityDetailData = NonNullable<
@@ -110,15 +111,9 @@ export function FacilityDetailDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="relative flex h-[90dvh] max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden p-3.5 sm:h-auto sm:max-h-[90vh] sm:p-6">
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg sm:right-5 sm:top-5"
-          aria-label="Close dialog"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <DialogClose onClose={() => onOpenChange(false)} />
 
+        {/* Dialog Header */}
         <DialogHeader className="shrink-0 border-b border-edge pb-3 pr-10">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -141,10 +136,12 @@ export function FacilityDetailDialog({
                 </Badge>
               )}
             </div>
+
             <DialogTitle className="mt-1">
               {facility?.name ?? "Loading Facility Dossier..."}
             </DialogTitle>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
+
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
               <span>Owner: {facility?.ownerOperator ?? "Unlisted"}</span>
               <span>•</span>
               <span className="flex items-center gap-1">
@@ -157,10 +154,10 @@ export function FacilityDetailDialog({
                   href={mapsUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-0.5 text-[11px] text-sky-400 underline hover:text-sky-300"
+                  className="inline-flex items-center gap-0.5 text-xs text-sky-400 underline hover:text-sky-300"
                 >
                   <span>Google Maps</span>
-                  <ExternalLink className="h-2.5 w-2.5" />
+                  <ExternalLink className="h-3 w-3" />
                 </a>
               )}
             </div>
@@ -168,143 +165,129 @@ export function FacilityDetailDialog({
         </DialogHeader>
 
         {/* Scrollable Body */}
-        <div className="-mr-1 min-h-0 flex-1 space-y-3.5 overflow-y-auto py-2 pr-1 sm:space-y-4">
-          {/* KPI Stats Row */}
+        <div className="-mr-1 min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
+          {/* Top 5 Key Stats Strip */}
           {facility && (
-            <div className="grid grid-cols-2 gap-2 pt-2 text-xs sm:grid-cols-5 sm:gap-2.5">
-              <div className="rounded-lg border border-edge bg-canvas p-2.5">
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-fg-muted">
-                  <Zap className="h-3 w-3 text-amber-400" />
-                  Nameplate Capacity
-                </span>
-                <div className="mt-1 font-mono text-base font-bold text-fg">
-                  {totalCapacityMW > 0
+            <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5 sm:gap-2.5">
+              <StatTile
+                label="Capacity"
+                icon={<Zap className="h-3.5 w-3.5 text-amber-400" />}
+                value={
+                  totalCapacityMW > 0
                     ? `${Math.round(totalCapacityMW).toLocaleString()} MW`
-                    : "—"}
-                </div>
-                <span className="text-[10px] text-fg-muted">
-                  {facility.units.length} total units
-                </span>
-              </div>
+                    : "—"
+                }
+                subtext={`${facility.units.length} total units`}
+              />
 
-              <div className="rounded-lg border border-edge bg-canvas p-2.5">
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-fg-muted">
-                  <Activity className="h-3 w-3 text-emerald-400" />
-                  2022 Generation
-                </span>
-                <div className="mt-1 font-mono text-base font-bold text-fg">
-                  {latestRecord?.grossGenerationMWh
+              <StatTile
+                label="Generation"
+                icon={<Activity className="h-3.5 w-3.5 text-emerald-400" />}
+                value={
+                  latestRecord?.grossGenerationMWh
                     ? `${Math.round(latestRecord.grossGenerationMWh).toLocaleString()} MWh`
-                    : "—"}
-                </div>
-                <span className="text-[10px] text-fg-muted">
-                  {latestRecord?.operatingHours.toLocaleString() ?? 0} hrs dispatch
-                </span>
-              </div>
+                    : "—"
+                }
+                subtext={`${latestRecord?.operatingHours.toLocaleString() ?? 0} dispatch hrs`}
+              />
 
-              <div className="rounded-lg border border-edge bg-canvas p-2.5">
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-fg-muted">
-                  <Flame className="h-3 w-3 text-amber-500" />
-                  2022 CO₂ Mass
-                </span>
-                <div className="mt-1 font-mono text-base font-bold text-fg">
-                  {latestRecord?.co2MassTons
+              <StatTile
+                label="CO₂ Mass"
+                icon={<Flame className="h-3.5 w-3.5 text-amber-500" />}
+                value={
+                  latestRecord?.co2MassTons
                     ? `${Math.round(latestRecord.co2MassTons).toLocaleString()} t`
-                    : "—"}
-                </div>
-                <span className="text-[10px] text-fg-muted">
-                  Direct stack emissions
-                </span>
-              </div>
+                    : "—"
+                }
+                subtext="Direct stack output"
+              />
 
-              <div className="rounded-lg border border-edge bg-canvas p-2.5">
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-fg-muted">
-                  <Gauge className="h-3 w-3 text-emerald-400" />
-                  Carbon Intensity
-                </span>
-                <div className="mt-1 font-mono text-base font-bold text-emerald-400">
-                  {latestRecord?.co2IntensityLbsMWh
+              <StatTile
+                label="Intensity"
+                icon={<Gauge className="h-3.5 w-3.5 text-emerald-400" />}
+                value={
+                  latestRecord?.co2IntensityLbsMWh
                     ? `${Math.round(latestRecord.co2IntensityLbsMWh)} lbs/MWh`
-                    : "—"}
-                </div>
-                <span className="text-[10px] text-fg-muted">
-                  {latestRecord?.heatRateMMBtuMWh
+                    : "—"
+                }
+                valueClassName="text-emerald-400"
+                subtext={
+                  latestRecord?.heatRateMMBtuMWh
                     ? `${latestRecord.heatRateMMBtuMWh.toFixed(1)} MMBtu/MWh`
-                    : "Thermal rate N/A"}
-                </span>
-              </div>
+                    : "Heat rate N/A"
+                }
+              />
 
-              <div className="col-span-2 rounded-lg border border-edge bg-canvas p-2.5 sm:col-span-1">
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase text-fg-muted">
-                  {allAuditLogs.length > 0 ? (
-                    <AlertTriangle className="h-3 w-3 text-amber-400" />
+              <StatTile
+                label="Sanity Audit"
+                icon={
+                  allAuditLogs.length > 0 ? (
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
                   ) : (
-                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                  )}
-                  Data Sanity Status
-                </span>
-                <div className="mt-1 text-sm font-bold">
-                  {allAuditLogs.length > 0 ? (
-                    <span className="font-mono text-amber-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  )
+                }
+                value={
+                  allAuditLogs.length > 0 ? (
+                    <span className="text-amber-400">
                       {allAuditLogs.length} Flagged
                     </span>
                   ) : (
-                    <span className="text-emerald-400">Verified Clean</span>
-                  )}
-                </div>
-                <span className="text-[10px] text-fg-muted">
-                  PRD 3.3 Rule Engine
-                </span>
-              </div>
+                    <span className="text-emerald-400">Clean</span>
+                  )
+                }
+                subtext="Thermodynamic audit"
+                className="col-span-2 sm:col-span-1"
+              />
             </div>
           )}
 
-          {/* Plant Overview & Role Card */}
+          {/* Plant Overview & Real-World Impact */}
           {story && (
-            <div className="space-y-2.5 rounded-lg border border-edge/80 bg-surface/30 p-3.5 sm:p-4">
+            <div className="space-y-3 rounded-lg border border-edge bg-surface/40 p-3.5 sm:p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-fg">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-fg">
                     Plant Overview & Role
                   </span>
                 </div>
                 <span
-                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${story.roleInfo.badgeClass}`}
+                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${story.roleInfo.badgeClass}`}
                   title={story.roleInfo.description}
                 >
                   <span>{story.roleInfo.badgeLabel}</span>
                 </span>
               </div>
 
-              <p className="text-xs font-medium leading-relaxed text-fg-2">
+              <p className="text-xs font-medium leading-relaxed text-fg sm:text-sm">
                 {story.headline}
               </p>
 
-              <div className="grid grid-cols-1 gap-2 pt-0.5 text-[11px] sm:grid-cols-2">
-                <div className="space-y-1 rounded-md border border-edge/60 bg-canvas/50 p-2.5">
-                  <span className="mb-0.5 flex items-center gap-1.5 font-semibold text-sky-400">
-                    <Zap className="h-3 w-3" />
-                    Grid & Operational Role
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <div className="space-y-1 rounded-md border border-edge/60 bg-canvas/60 p-3">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-400">
+                    <Zap className="h-3.5 w-3.5" />
+                    Grid & Operational Dispatch
                   </span>
-                  <p className="leading-relaxed text-fg-muted">
+                  <p className="text-xs leading-relaxed text-fg-2">
                     {story.gridStory}
                   </p>
                 </div>
 
-                <div className="space-y-1 rounded-md border border-edge/60 bg-canvas/50 p-2.5">
-                  <span className="mb-0.5 flex items-center gap-1.5 font-semibold text-emerald-400">
-                    <Leaf className="h-3 w-3" />
-                    Emissions & Footprint
+                <div className="space-y-1 rounded-md border border-edge/60 bg-canvas/60 p-3">
+                  <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                    <Leaf className="h-3.5 w-3.5" />
+                    Environmental Footprint
                   </span>
-                  <p className="leading-relaxed text-fg-muted">
+                  <p className="text-xs leading-relaxed text-fg-2">
                     {story.environmentalStory}
                   </p>
                 </div>
               </div>
 
-              {/* Real-World Equivalents */}
-              <div className="flex flex-wrap items-center gap-3 border-t border-edge/60 pt-2 text-[11px]">
+              {/* Tangible Human Equivalents */}
+              <div className="flex flex-wrap items-center gap-3 border-t border-edge/60 pt-2.5 text-xs">
                 <div className="flex items-center gap-1.5 text-fg-2">
                   <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" />
                   <span>
@@ -329,8 +312,8 @@ export function FacilityDetailDialog({
             </div>
           )}
 
-          {/* Tab Switcher */}
-          <div className="sticky top-0 z-10 flex overflow-x-auto whitespace-nowrap border-b border-edge bg-surface/95 pt-1 text-xs font-medium backdrop-blur-md sm:text-sm">
+          {/* Clean Segmented Tab Switcher */}
+          <div className="sticky top-0 z-10 flex border-b border-edge bg-surface/95 pt-1 text-xs font-medium backdrop-blur-md sm:text-sm">
             <button
               type="button"
               onClick={() => setActiveTab("units")}
@@ -340,7 +323,7 @@ export function FacilityDetailDialog({
                   : "border-transparent text-fg-muted hover:text-fg"
               }`}
             >
-              Generation Fleet ({facility?.units.length ?? 0})
+              Fleet Units ({facility?.units.length ?? 0})
             </button>
             <button
               type="button"
@@ -351,7 +334,7 @@ export function FacilityDetailDialog({
                   : "border-transparent text-fg-muted hover:text-fg"
               }`}
             >
-              Emissions Timeline ({facility?.annualRecords.length ?? 0} Yrs)
+              Annual Timeline ({facility?.annualRecords.length ?? 0} Yrs)
             </button>
             <button
               type="button"
@@ -374,16 +357,19 @@ export function FacilityDetailDialog({
             </button>
           </div>
 
-          {/* Tab Content */}
-          <div className="space-y-4 pt-2 text-xs">
+          {/* Tab Content Panes */}
+          <div className="space-y-4 pt-1">
             {isLoading ? (
               <div className="py-20 text-center text-fg-muted">
                 <RefreshCw className="mx-auto mb-2 h-6 w-6 animate-spin text-emerald-400" />
-                <p className="text-xs">Loading comprehensive plant records...</p>
+                <p className="text-xs sm:text-sm">
+                  Loading comprehensive plant records...
+                </p>
               </div>
             ) : activeTab === "units" ? (
+              /* TAB 1: FLEET UNITS */
               facility?.units.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-edge p-8 text-center text-fg-muted">
+                <div className="rounded-lg border border-dashed border-edge p-8 text-center text-xs text-fg-muted">
                   No generation units recorded for this facility.
                 </div>
               ) : (
@@ -391,12 +377,16 @@ export function FacilityDetailDialog({
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b border-edge bg-surface/60">
-                        <TableHead className="w-20">Unit ID</TableHead>
-                        <TableHead>Type & Fuels</TableHead>
+                        <TableHead className="w-24">Unit ID</TableHead>
+                        <TableHead>Type & Primary Fuel</TableHead>
                         <TableHead>Operating Status</TableHead>
-                        <TableHead className="text-right">Capacity (MW)</TableHead>
-                        <TableHead>Environmental Controls</TableHead>
-                        <TableHead className="w-28 text-right">Commissioned</TableHead>
+                        <TableHead className="text-right">
+                          Capacity (MW)
+                        </TableHead>
+                        <TableHead>Air Quality Controls</TableHead>
+                        <TableHead className="w-28 text-right">
+                          Commissioned
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -416,15 +406,13 @@ export function FacilityDetailDialog({
                               </div>
                               <div className="flex flex-wrap items-center gap-1 pt-1">
                                 {unit.primaryFuel && (
-                                  <Badge
-                                    variant={getFuelTheme(unit.primaryFuel).variant}
-                                    className="text-[10px]"
-                                  >
-                                    {unit.primaryFuel}
-                                  </Badge>
+                                  <FuelBadge fuel={unit.primaryFuel} size="sm" />
                                 )}
                                 {unit.secondaryFuel && (
-                                  <Badge variant="secondary" className="text-[10px]">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px]"
+                                  >
                                     Sec: {unit.secondaryFuel}
                                   </Badge>
                                 )}
@@ -440,14 +428,14 @@ export function FacilityDetailDialog({
                               </Badge>
                             </TableCell>
 
-                            <TableCell className="text-right font-mono font-bold text-fg-2">
+                            <TableCell className="text-right font-mono font-semibold text-fg">
                               {unit.nameplateCapacityMW
                                 ? `${unit.nameplateCapacityMW} MW`
                                 : "—"}
                             </TableCell>
 
                             <TableCell className="max-w-xs">
-                              <div className="space-y-1 text-[11px]">
+                              <div className="space-y-0.5 text-xs">
                                 {unit.noxControls && (
                                   <div className="truncate text-fg-2">
                                     <span className="font-semibold text-fg-muted">
@@ -459,20 +447,20 @@ export function FacilityDetailDialog({
                                 {unit.so2Controls && (
                                   <div className="truncate text-fg-2">
                                     <span className="font-semibold text-fg-muted">
-                                      SO2:
+                                      SO₂:
                                     </span>{" "}
                                     {unit.so2Controls}
                                   </div>
                                 )}
                                 {!unit.noxControls && !unit.so2Controls && (
-                                  <span className="text-fg-muted italic">
+                                  <span className="text-fg-muted italic text-[11px]">
                                     No controls listed
                                   </span>
                                 )}
                               </div>
                             </TableCell>
 
-                            <TableCell className="text-right font-mono text-[11px] text-fg-muted">
+                            <TableCell className="text-right font-mono text-xs text-fg-muted">
                               {unit.commercialOpDate ?? "—"}
                             </TableCell>
                           </TableRow>
@@ -483,8 +471,9 @@ export function FacilityDetailDialog({
                 </div>
               )
             ) : activeTab === "emissions" ? (
+              /* TAB 2: ANNUAL EMISSIONS */
               facility?.annualRecords.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-edge p-8 text-center text-fg-muted">
+                <div className="rounded-lg border border-dashed border-edge p-8 text-center text-xs text-fg-muted">
                   No annual emissions records available.
                 </div>
               ) : (
@@ -493,11 +482,21 @@ export function FacilityDetailDialog({
                     <TableHeader>
                       <TableRow className="border-b border-edge bg-surface/60">
                         <TableHead className="w-16">Year</TableHead>
-                        <TableHead className="text-right">Generation (MWh)</TableHead>
-                        <TableHead className="text-right">CO₂ (tons)</TableHead>
-                        <TableHead className="text-right">Intensity (lbs/MWh)</TableHead>
-                        <TableHead className="text-right">Heat Rate</TableHead>
-                        <TableHead className="text-right">Op. Hours</TableHead>
+                        <TableHead className="text-right">
+                          Generation (MWh)
+                        </TableHead>
+                        <TableHead className="text-right">
+                          CO₂ Mass (tons)
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Intensity (lbs/MWh)
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Thermal Heat Rate
+                        </TableHead>
+                        <TableHead className="text-right">
+                          Operating Hours
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -516,19 +515,21 @@ export function FacilityDetailDialog({
                               ? Math.round(rec.co2MassTons).toLocaleString()
                               : "—"}
                           </TableCell>
-                          <TableCell className="text-right font-mono text-emerald-400">
-                            {rec.co2IntensityLbsMWh
-                              ? `${Math.round(rec.co2IntensityLbsMWh)}`
-                              : "—"}
+                          <TableCell className="text-right">
+                            <CarbonIntensityBadge
+                              intensity={rec.co2IntensityLbsMWh}
+                              showValue
+                              size="sm"
+                            />
                           </TableCell>
-                          <TableCell className="text-right font-mono text-fg-muted">
+                          <TableCell className="text-right font-mono text-xs text-fg-muted">
                             {rec.heatRateMMBtuMWh
-                              ? `${rec.heatRateMMBtuMWh.toFixed(1)}`
+                              ? `${rec.heatRateMMBtuMWh.toFixed(1)} MMBtu/MWh`
                               : "—"}
                           </TableCell>
-                          <TableCell className="text-right font-mono text-fg-muted">
+                          <TableCell className="text-right font-mono text-xs text-fg-muted">
                             {rec.operatingHours
-                              ? rec.operatingHours.toLocaleString()
+                              ? `${rec.operatingHours.toLocaleString()} hrs`
                               : "—"}
                           </TableCell>
                         </TableRow>
@@ -538,14 +539,15 @@ export function FacilityDetailDialog({
                 </div>
               )
             ) : activeTab === "audit" ? (
+              /* TAB 3: SANITY AUDITS */
               allAuditLogs.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/5 p-6 text-center">
+                <div className="rounded-lg border border-dashed border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
                   <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-400" />
-                  <p className="text-sm font-medium text-emerald-400">
-                    All thermodynamic checks passed
+                  <p className="text-sm font-semibold text-emerald-400">
+                    All Physical Sanity Checks Clean
                   </p>
                   <p className="mt-0.5 text-xs text-fg-muted">
-                    No sanity violations detected for this facility.
+                    No thermodynamic anomalies or reporting violations detected for this plant.
                   </p>
                 </div>
               ) : (
@@ -553,7 +555,7 @@ export function FacilityDetailDialog({
                   <Table>
                     <TableHeader>
                       <TableRow className="border-b border-edge bg-surface/60">
-                        <TableHead className="w-20">Severity</TableHead>
+                        <TableHead className="w-24">Severity</TableHead>
                         <TableHead>Rule Triggered</TableHead>
                         <TableHead>Audit Explanation</TableHead>
                       </TableRow>
@@ -576,7 +578,7 @@ export function FacilityDetailDialog({
                           <TableCell className="font-mono text-xs font-semibold text-fg">
                             {log.flagType}
                           </TableCell>
-                          <TableCell className="max-w-md text-xs text-fg-muted">
+                          <TableCell className="max-w-md text-xs text-fg-2">
                             {log.details}
                           </TableCell>
                         </TableRow>
@@ -589,13 +591,15 @@ export function FacilityDetailDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        {/* Dialog Footer */}
+        <DialogFooter className="mt-auto flex items-center justify-end border-t border-edge pt-3">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() => onOpenChange(false)}
+            className="font-medium"
           >
-            Close
+            Close Facility Dossier
           </Button>
         </DialogFooter>
       </DialogContent>

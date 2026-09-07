@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useEffect } from "react";
+import { X } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 interface DialogProps {
@@ -108,5 +109,27 @@ export function DialogFooter({
       )}
       {...props}
     />
+  );
+}
+
+export function DialogClose({
+  onClose,
+  className,
+}: {
+  onClose: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClose}
+      className={cn(
+        "absolute right-3.5 top-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg sm:right-5 sm:top-5",
+        className,
+      )}
+      aria-label="Close dialog"
+    >
+      <X className="h-4 w-4" />
+    </button>
   );
 }

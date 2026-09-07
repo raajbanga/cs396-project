@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertCircle, Check, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Check, RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -60,14 +61,7 @@ export function CampdSyncDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="relative max-w-md space-y-4 p-4 sm:p-6">
-        <button
-          type="button"
-          onClick={() => onOpenChange(false)}
-          className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg sm:right-5 sm:top-5"
-          aria-label="Close dialog"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <DialogClose onClose={() => onOpenChange(false)} />
 
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
