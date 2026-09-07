@@ -17,10 +17,10 @@ interface StatMetricsProps {
 
 export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
   return (
-    <section className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
       <MetricCard
         title="Total Facilities"
-        icon={<Building2 className="h-3.5 w-3.5 text-zinc-400" />}
+        icon={<Building2 className="h-4 w-4 text-fg-muted" />}
         value={
           isLoading ? "..." : (stats?.totalFacilities.toLocaleString() ?? "0")
         }
@@ -29,7 +29,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <MetricCard
         title="Tracked Capacity"
-        icon={<Zap className="h-3.5 w-3.5 text-amber-400" />}
+        icon={<Zap className="h-4 w-4 text-amber-400" />}
         value={
           isLoading
             ? "..."
@@ -46,14 +46,14 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <MetricCard
         title="Reliability Grids"
-        icon={<Globe className="h-3.5 w-3.5 text-sky-400" />}
+        icon={<Globe className="h-4 w-4 text-sky-400" />}
         value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
         subtext="ERCOT, SERC, WECC, etc."
       />
 
       <MetricCard
         title="Annual CO₂"
-        icon={<Activity className="h-3.5 w-3.5 text-emerald-400" />}
+        icon={<Activity className="h-4 w-4 text-emerald-400" />}
         value={
           isLoading
             ? "..."
@@ -67,7 +67,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <MetricCard
         title="Audit Flags"
-        icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-400" />}
+        icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
         value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}
         valueClassName="font-mono text-amber-400"
         subtext="Sanity violations"

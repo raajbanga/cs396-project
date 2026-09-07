@@ -1,14 +1,50 @@
 @import "tailwindcss";
 
+/* Class-based dark mode variant for next-themes */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
-/* Custom dark styling for Leaflet popups and tooltips */
+/* Expose semantic tokens as Tailwind utility classes */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-edge: var(--edge);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-muted: var(--fg-muted);
+}
+
+/* ─── Light Theme ─────────────────────────────────────────── */
+:root {
+  --canvas: #f4f4f5;      /* zinc-100 — page background */
+  --surface: #ffffff;     /* white — card/panel background */
+  --surface-2: #e4e4e7;   /* zinc-200 — hover/elevated surfaces */
+  --edge: #d4d4d8;        /* zinc-300 — borders */
+  --fg: #18181b;          /* zinc-900 — primary text */
+  --fg-2: #52525b;        /* zinc-600 — secondary text */
+  --fg-muted: #71717a;    /* zinc-500 — muted/placeholder text */
+}
+
+/* ─── Dark Theme ──────────────────────────────────────────── */
+.dark {
+  --canvas: #09090b;      /* zinc-950 */
+  --surface: #18181b;     /* zinc-900 */
+  --surface-2: #27272a;   /* zinc-800 */
+  --edge: #27272a;        /* zinc-800 */
+  --fg: #f4f4f5;          /* zinc-100 */
+  --fg-2: #d4d4d8;        /* zinc-300 */
+  --fg-muted: #71717a;    /* zinc-500 */
+}
+
+/* ─── Leaflet Map (adapts to theme variables) ─────────────── */
 .leaflet-dark-tooltip {
-  background-color: #18181b !important;
-  border: 1px solid #27272a !important;
+  background-color: var(--surface) !important;
+  border: 1px solid var(--edge) !important;
   color: #f43f5e !important;
   border-radius: 6px !important;
   padding: 6px 10px !important;
@@ -16,14 +52,14 @@
 }
 
 .leaflet-dark-tooltip::before {
-  border-top-color: #27272a !important;
+  border-top-color: var(--edge) !important;
 }
 
 .leaflet-container {
-  background-color: #09090b !important;
+  background-color: var(--canvas) !important;
 }
 
-/* Custom sleek scrollbar */
+/* ─── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -32,10 +68,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--edge);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--surface-2);
 }
-

@@ -1,7 +1,8 @@
 import * as React from "react";
 import { cn } from "~/lib/utils";
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "default" | "secondary" | "outline" | "ghost" | "destructive";
   size?: "default" | "sm" | "lg" | "icon";
 }
@@ -10,12 +11,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "default", size = "default", ...props }, ref) => {
     const variantStyles = {
       default:
-        "bg-zinc-100 text-zinc-900 shadow-xs hover:bg-zinc-200/90 active:scale-[0.98]",
+        "bg-fg text-canvas shadow-xs hover:bg-fg/90 active:scale-[0.98]",
       secondary:
-        "bg-zinc-800/80 text-zinc-100 hover:bg-zinc-800 border border-zinc-700/50 active:scale-[0.98]",
+        "bg-surface-2 text-fg hover:bg-surface-2/80 border border-edge active:scale-[0.98]",
       outline:
-        "border border-zinc-800 bg-transparent hover:bg-zinc-800/60 hover:text-zinc-100 text-zinc-300 active:scale-[0.98]",
-      ghost: "hover:bg-zinc-800/60 hover:text-zinc-100 text-zinc-400",
+        "border border-edge bg-transparent hover:bg-surface-2 hover:text-fg text-fg-2 active:scale-[0.98]",
+      ghost: "hover:bg-surface-2 hover:text-fg text-fg-muted",
       destructive:
         "bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 active:scale-[0.98]",
     }[variant];

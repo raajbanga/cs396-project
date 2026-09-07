@@ -106,7 +106,7 @@ export function FacilitiesTable({
 
   const getSortIcon = (field: SortByField) => {
     if (sortBy !== field) {
-      return <ArrowUpDown className="ml-1 h-3 w-3 text-zinc-600 opacity-60" />;
+      return <ArrowUpDown className="ml-1 h-3 w-3 text-fg-muted opacity-60" />;
     }
     return sortDir === "asc" ? (
       <ArrowUp className="ml-1 h-3 w-3 text-emerald-400" />
@@ -115,7 +115,6 @@ export function FacilitiesTable({
     );
   };
 
-  // Fuel badge helper using unified getFuelTheme
   const renderFuelBadge = (fuel: string) => {
     const theme = getFuelTheme(fuel);
     return (
@@ -132,7 +131,6 @@ export function FacilitiesTable({
     );
   };
 
-  // Carbon Intensity badge helper using unified getCarbonIntensityTier
   const renderIntensityBadge = (intensity: number | null) => {
     if (intensity === null || intensity === 0) return null;
     const tier = getCarbonIntensityTier(intensity);
@@ -146,7 +144,6 @@ export function FacilitiesTable({
     );
   };
 
-  // Plain-English Role Icon helper
   const renderRoleIcon = (icon: string) => {
     if (icon === "zap") return <Zap className="h-2.5 w-2.5" />;
     if (icon === "clock") return <Clock className="h-2.5 w-2.5" />;
@@ -155,7 +152,6 @@ export function FacilitiesTable({
     return <Activity className="h-2.5 w-2.5" />;
   };
 
-  // Windowed page numbers with ellipsis
   const getPageNumbers = () => {
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -174,19 +170,18 @@ export function FacilitiesTable({
   const endRecord = Math.min(page * pageSize, totalCount);
 
   return (
-    <Card className="overflow-hidden border-zinc-800/80 bg-zinc-900/20 shadow-xs">
-      {/* Desktop Table View (>= md) */}
+    <Card className="overflow-hidden border-edge/80 bg-surface/20 shadow-xs">
+      {/* Desktop Table (>= md) */}
       <div className="hidden md:block">
         <Table>
           <TableHeader>
-            <TableRow className="border-b border-zinc-800/80 bg-zinc-900/50 hover:bg-zinc-900/50">
+            <TableRow className="border-b border-edge/80 bg-surface/50 hover:bg-surface/50">
               <TableHead className="w-10 text-center">
-                <Scale className="mx-auto h-3.5 w-3.5 text-zinc-500" />
+                <Scale className="mx-auto h-3.5 w-3.5 text-fg-muted" />
               </TableHead>
 
-              {/* ORISPL Column */}
               <TableHead
-                className="w-20 cursor-pointer transition-colors select-none hover:text-zinc-200"
+                className="w-20 cursor-pointer select-none transition-colors hover:text-fg"
                 onClick={() => onSortChange("id")}
                 title="Sort by ORISPL plant code"
               >
@@ -196,9 +191,8 @@ export function FacilitiesTable({
                 </div>
               </TableHead>
 
-              {/* Facility Name & Role Column */}
               <TableHead
-                className="cursor-pointer transition-colors select-none hover:text-zinc-200"
+                className="cursor-pointer select-none transition-colors hover:text-fg"
                 onClick={() => onSortChange("name")}
                 title="Sort by Facility Name"
               >
@@ -209,13 +203,10 @@ export function FacilitiesTable({
               </TableHead>
 
               <TableHead>Location</TableHead>
-
-              {/* Grid & Fuel Column */}
               <TableHead>Grid & Fuels</TableHead>
 
-              {/* Capacity Column */}
               <TableHead
-                className="cursor-pointer text-center transition-colors select-none hover:text-zinc-200"
+                className="cursor-pointer select-none text-center transition-colors hover:text-fg"
                 onClick={() => onSortChange("capacity")}
                 title="Sort by Capacity (MW)"
               >
@@ -225,9 +216,8 @@ export function FacilitiesTable({
                 </div>
               </TableHead>
 
-              {/* Annual CO2 Column */}
               <TableHead
-                className="cursor-pointer text-right transition-colors select-none hover:text-zinc-200"
+                className="cursor-pointer select-none text-right transition-colors hover:text-fg"
                 onClick={() => onSortChange("co2")}
                 title="Sort by Annual CO2 Tonnage"
               >
@@ -244,26 +234,40 @@ export function FacilitiesTable({
             {isLoading ? (
               Array.from({ length: pageSize }).map((_, i) => (
                 <TableRow key={i} className="animate-pulse">
-                  <TableCell className="text-center"><div className="mx-auto h-4 w-4 rounded bg-zinc-800" /></TableCell>
-                  <TableCell><div className="h-4 w-12 rounded bg-zinc-800" /></TableCell>
-                  <TableCell>
-                    <div className="mb-1 h-4 w-48 rounded bg-zinc-800" />
-                    <div className="h-3 w-32 rounded bg-zinc-800/60" />
+                  <TableCell className="text-center">
+                    <div className="mx-auto h-4 w-4 rounded bg-surface-2" />
                   </TableCell>
-                  <TableCell><div className="h-4 w-24 rounded bg-zinc-800" /></TableCell>
-                  <TableCell><div className="h-4 w-32 rounded bg-zinc-800" /></TableCell>
-                  <TableCell className="text-center"><div className="mx-auto h-4 w-16 rounded bg-zinc-800" /></TableCell>
-                  <TableCell className="text-right"><div className="ml-auto h-4 w-16 rounded bg-zinc-800" /></TableCell>
-                  <TableCell className="text-right"><div className="ml-auto h-7 w-16 rounded bg-zinc-800" /></TableCell>
+                  <TableCell>
+                    <div className="h-4 w-12 rounded bg-surface-2" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="mb-1 h-4 w-48 rounded bg-surface-2" />
+                    <div className="h-3 w-32 rounded bg-surface-2/60" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-24 rounded bg-surface-2" />
+                  </TableCell>
+                  <TableCell>
+                    <div className="h-4 w-32 rounded bg-surface-2" />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <div className="mx-auto h-4 w-16 rounded bg-surface-2" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="ml-auto h-4 w-16 rounded bg-surface-2" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="ml-auto h-7 w-16 rounded bg-surface-2" />
+                  </TableCell>
                 </TableRow>
               ))
             ) : facilities?.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={8}
-                  className="py-16 text-center text-zinc-400"
+                  className="py-16 text-center text-fg-muted"
                 >
-                  <p className="text-sm font-medium text-zinc-300">
+                  <p className="text-sm font-medium text-fg-2">
                     No facilities match the active filter criteria.
                   </p>
                   <Button
@@ -297,11 +301,11 @@ export function FacilitiesTable({
                       "group cursor-pointer transition-colors",
                       isSelected
                         ? "bg-emerald-950/20 hover:bg-emerald-950/30"
-                        : "hover:bg-zinc-800/30",
+                        : "hover:bg-surface-2/30",
                     )}
                     onClick={() => onInspect(fac.id)}
                   >
-                    {/* Benchmarking Checkbox */}
+                    {/* Compare Checkbox */}
                     <TableCell
                       className="text-center"
                       onClick={(e) => e.stopPropagation()}
@@ -310,19 +314,19 @@ export function FacilitiesTable({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => onToggleCompare(fac.id)}
-                        className="h-3.5 w-3.5 cursor-pointer rounded border-zinc-700 bg-zinc-950 text-emerald-500 accent-emerald-500 focus:ring-0"
+                        className="h-3.5 w-3.5 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
                         aria-label={`Select ${fac.name} for comparison`}
                       />
                     </TableCell>
 
                     {/* ORISPL ID */}
-                    <TableCell className="font-mono text-xs text-zinc-400">
+                    <TableCell className="font-mono text-xs text-fg-muted">
                       #{fac.id}
                     </TableCell>
 
-                    {/* Facility Name & Grid Role */}
+                    {/* Facility Name & Role */}
                     <TableCell>
-                      <div className="text-sm sm:text-base font-semibold text-zinc-100 transition-colors group-hover:text-emerald-300">
+                      <div className="text-base font-semibold text-fg transition-colors group-hover:text-emerald-400">
                         {fac.name}
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -336,7 +340,7 @@ export function FacilitiesTable({
                           {renderRoleIcon(plantRole.icon)}
                           <span>{plantRole.badgeLabel}</span>
                         </span>
-                        <span className="max-w-[200px] truncate text-xs text-zinc-400">
+                        <span className="max-w-[200px] truncate text-xs text-fg-muted">
                           {fac.ownerOperator ?? "Owner unlisted"}
                         </span>
                       </div>
@@ -344,15 +348,15 @@ export function FacilitiesTable({
 
                     {/* Location */}
                     <TableCell>
-                      <div className="text-sm font-semibold text-zinc-200">
+                      <div className="text-sm font-semibold text-fg-2">
                         {fac.stateCode}
                       </div>
-                      <div className="text-xs text-zinc-400">
+                      <div className="text-xs text-fg-muted">
                         {fac.county ? `${fac.county} Co.` : "County N/A"}
                       </div>
                     </TableCell>
 
-                    {/* Grid & Fuel Tags */}
+                    {/* Grid & Fuel */}
                     <TableCell>
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-1">
@@ -374,13 +378,13 @@ export function FacilitiesTable({
                             </span>
                           )}
                         </div>
-
-                        {/* Primary Fuel Tags */}
                         <div className="flex flex-wrap items-center gap-1">
                           {fac.primaryFuels.length > 0 ? (
-                            fac.primaryFuels.map((fuel) => renderFuelBadge(fuel))
+                            fac.primaryFuels.map((fuel) =>
+                              renderFuelBadge(fuel),
+                            )
                           ) : (
-                            <span className="text-xs text-zinc-500 italic">
+                            <span className="italic text-xs text-fg-muted">
                               Fuel unlisted
                             </span>
                           )}
@@ -390,7 +394,7 @@ export function FacilitiesTable({
 
                     {/* Capacity */}
                     <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-sm sm:text-base font-semibold text-zinc-100">
+                      <div className="flex items-center justify-center gap-1 text-base font-semibold text-fg">
                         <Zap className="h-3.5 w-3.5 text-amber-400" />
                         <span>
                           {fac.totalCapacityMW > 0
@@ -398,29 +402,30 @@ export function FacilitiesTable({
                             : "—"}
                         </span>
                       </div>
-                      <div className="text-xs text-zinc-400">
+                      <div className="text-xs text-fg-muted">
                         {equivalents.homesPoweredRaw > 0 && (
-                          <span className="font-medium text-zinc-300">
+                          <span className="font-medium text-fg-2">
                             {equivalents.homesPoweredFormatted} •{" "}
                           </span>
                         )}
                         <span>
-                          {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
+                          {fac.unitCount}{" "}
+                          {fac.unitCount === 1 ? "unit" : "units"}
                         </span>
                       </div>
                     </TableCell>
 
-                    {/* Annual CO2 & Carbon Intensity */}
+                    {/* Annual CO2 */}
                     <TableCell className="text-right">
-                      <div className="font-mono text-sm sm:text-base font-semibold text-zinc-100">
+                      <div className="font-mono text-base font-semibold text-fg">
                         {fac.totalCo2Tons > 0 ? (
                           `${Number(fac.totalCo2Tons).toLocaleString()} t`
                         ) : (
-                          <span className="text-zinc-600">—</span>
+                          <span className="text-fg-muted">—</span>
                         )}
                       </div>
                       {equivalents.carsDrivenRaw > 0 && (
-                        <div className="text-xs text-zinc-400">
+                        <div className="text-xs text-fg-muted">
                           ≈ {equivalents.carsDrivenFormatted}
                         </div>
                       )}
@@ -429,19 +434,19 @@ export function FacilitiesTable({
                       </div>
                     </TableCell>
 
-                    {/* Inspect Button */}
+                    {/* Inspect */}
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-3 text-xs font-normal text-zinc-400 hover:text-white"
+                        className="h-8 px-3 text-xs font-normal text-fg-muted hover:text-fg"
                         onClick={(e) => {
                           e.stopPropagation();
                           onInspect(fac.id);
                         }}
                       >
                         <span>Inspect</span>
-                        <ArrowRight className="ml-1 h-3.5 w-3.5 text-zinc-400" />
+                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -452,25 +457,25 @@ export function FacilitiesTable({
         </Table>
       </div>
 
-      {/* Mobile Plant Cards View (< md) */}
-      <div className="divide-y divide-zinc-800/60 md:hidden">
+      {/* Mobile Plant Cards (< md) */}
+      <div className="divide-y divide-edge/60 md:hidden">
         {isLoading ? (
           Array.from({ length: Math.min(pageSize, 5) }).map((_, i) => (
-            <div key={i} className="p-3.5 space-y-2 animate-pulse">
+            <div key={i} className="animate-pulse space-y-2 p-3.5">
               <div className="flex items-center justify-between">
-                <div className="h-4 w-40 rounded bg-zinc-800" />
-                <div className="h-4 w-10 rounded bg-zinc-800" />
+                <div className="h-4 w-40 rounded bg-surface-2" />
+                <div className="h-4 w-10 rounded bg-surface-2" />
               </div>
-              <div className="h-3 w-28 rounded bg-zinc-800/60" />
+              <div className="h-3 w-28 rounded bg-surface-2/60" />
               <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="h-10 rounded bg-zinc-800/40" />
-                <div className="h-10 rounded bg-zinc-800/40" />
+                <div className="h-10 rounded bg-surface-2/40" />
+                <div className="h-10 rounded bg-surface-2/40" />
               </div>
             </div>
           ))
         ) : facilities?.length === 0 ? (
-          <div className="py-12 px-4 text-center text-zinc-400">
-            <p className="text-sm font-medium text-zinc-300">
+          <div className="px-4 py-12 text-center text-fg-muted">
+            <p className="text-sm font-medium text-fg-2">
               No facilities match the active filter criteria.
             </p>
             <Button
@@ -497,43 +502,49 @@ export function FacilitiesTable({
                 key={fac.id}
                 onClick={() => onInspect(fac.id)}
                 className={cn(
-                  "p-3.5 space-y-2.5 cursor-pointer transition-colors active:bg-zinc-800/40",
-                  isSelected ? "bg-emerald-950/20" : "hover:bg-zinc-900/40",
+                  "cursor-pointer space-y-2.5 p-3.5 transition-colors active:bg-surface-2/40",
+                  isSelected ? "bg-emerald-950/20" : "hover:bg-surface/40",
                 )}
               >
-                {/* Header: Select Checkbox, Plant Name, State Badge */}
+                {/* Header */}
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="flex min-w-0 items-start gap-2.5">
                     <div
-                      className="pt-0.5 shrink-0"
+                      className="shrink-0 pt-0.5"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => onToggleCompare(fac.id)}
-                        className="h-4 w-4 cursor-pointer rounded border-zinc-700 bg-zinc-950 text-emerald-500 accent-emerald-500 focus:ring-0"
+                        className="h-4 w-4 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
                         aria-label={`Select ${fac.name} for comparison`}
                       />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-base font-semibold tracking-tight text-white truncate">
+                      <h4 className="truncate text-base font-semibold tracking-tight text-fg">
                         {fac.name}
                       </h4>
-                      <div className="flex items-center gap-1.5 text-xs text-zinc-400 truncate">
-                        <span className="font-mono text-zinc-400">#{fac.id}</span>
+                      <div className="flex items-center gap-1.5 truncate text-xs text-fg-muted">
+                        <span className="font-mono">#{fac.id}</span>
                         <span>•</span>
-                        <span>{fac.county ? `${fac.county} Co., ` : ""}{fac.stateCode}</span>
+                        <span>
+                          {fac.county ? `${fac.county} Co., ` : ""}
+                          {fac.stateCode}
+                        </span>
                       </div>
                     </div>
                   </div>
 
-                  <Badge variant="outline" className="text-xs px-2 py-0.5 font-mono shrink-0">
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 px-2 py-0.5 font-mono text-xs"
+                  >
                     {fac.stateCode}
                   </Badge>
                 </div>
 
-                {/* Tags Row */}
+                {/* Tags */}
                 <div className="flex flex-wrap items-center gap-1">
                   <span
                     className={cn(
@@ -546,12 +557,17 @@ export function FacilitiesTable({
                   </span>
 
                   {fac.nercRegion && (
-                    <Badge variant="sky" className="px-2 py-0.5 font-mono text-xs">
+                    <Badge
+                      variant="sky"
+                      className="px-2 py-0.5 font-mono text-xs"
+                    >
                       {fac.nercRegion}
                     </Badge>
                   )}
 
-                  {fac.primaryFuels.slice(0, 2).map((fuel) => renderFuelBadge(fuel))}
+                  {fac.primaryFuels.slice(0, 2).map((fuel) =>
+                    renderFuelBadge(fuel),
+                  )}
 
                   {fac.controlledUnitsCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-400">
@@ -561,29 +577,34 @@ export function FacilitiesTable({
                   )}
                 </div>
 
-                {/* Metrics 2-column strip */}
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3 text-xs">
+                {/* Metrics Strip */}
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-edge/60 bg-canvas/60 p-3 text-xs">
                   <div>
-                    <span className="text-xs text-zinc-400 block">Nameplate</span>
-                    <span className="text-base font-bold text-zinc-100">
+                    <span className="block text-xs text-fg-muted">
+                      Nameplate
+                    </span>
+                    <span className="text-base font-bold text-fg">
                       {fac.totalCapacityMW > 0
                         ? `${Number(fac.totalCapacityMW).toLocaleString()} MW`
                         : "—"}
                     </span>
-                    <span className="text-xs text-zinc-400 block mt-0.5">
+                    <span className="mt-0.5 block text-xs text-fg-muted">
                       {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
                     </span>
                   </div>
 
                   <div className="text-right">
-                    <span className="text-xs text-zinc-400 block">Annual CO₂</span>
+                    <span className="block text-xs text-fg-muted">
+                      Annual CO₂
+                    </span>
                     <span className="font-mono text-base font-bold text-emerald-400">
                       {fac.totalCo2Tons > 0
                         ? `${Number(fac.totalCo2Tons).toLocaleString()} t`
                         : "—"}
                     </span>
-                    {fac.carbonIntensityLbsMWh && fac.carbonIntensityLbsMWh > 0 ? (
-                      <span className="text-xs text-zinc-400 block font-mono mt-0.5">
+                    {fac.carbonIntensityLbsMWh &&
+                    fac.carbonIntensityLbsMWh > 0 ? (
+                      <span className="mt-0.5 block font-mono text-xs text-fg-muted">
                         {Math.round(fac.carbonIntensityLbsMWh)} lbs/MWh
                       </span>
                     ) : null}
@@ -595,30 +616,32 @@ export function FacilitiesTable({
         )}
       </div>
 
-      {/* Unified Responsive Pagination Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-zinc-800/80 bg-zinc-900/30 px-3 py-2.5 sm:px-4 sm:py-3">
-        {/* Left: Range and Per-Page Selector */}
-        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start gap-3 text-xs text-zinc-400">
+      {/* Pagination Bar */}
+      <div className="flex flex-col items-center justify-between gap-3 border-t border-edge/80 bg-surface/30 px-3 py-2.5 sm:flex-row sm:px-4 sm:py-3">
+        {/* Left: Range + Per Page */}
+        <div className="flex w-full items-center justify-between gap-3 text-xs text-fg-muted sm:w-auto sm:justify-start">
           <span>
             Showing{" "}
-            <strong className="text-zinc-200">
-              {totalCount === 0 ? 0 : startRecord.toLocaleString()}–{endRecord.toLocaleString()}
+            <strong className="text-fg">
+              {totalCount === 0 ? 0 : startRecord.toLocaleString()}–
+              {endRecord.toLocaleString()}
             </strong>{" "}
             of{" "}
-            <strong className="text-zinc-200">
-              {totalCount.toLocaleString()}
-            </strong>{" "}
+            <strong className="text-fg">{totalCount.toLocaleString()}</strong>{" "}
             <span className="hidden sm:inline">facilities</span>
           </span>
 
-          <div className="flex items-center gap-1.5 sm:border-l sm:border-zinc-800 sm:pl-3">
-            <span className="text-zinc-500">Per page:</span>
+          <div className="flex items-center gap-1.5 sm:border-l sm:border-edge sm:pl-3">
+            <span className="text-fg-muted">Per page:</span>
             <div className="w-16 sm:w-18">
               <Select
                 value={String(pageSize)}
                 onValueChange={(val) => onPageSizeChange(Number(val))}
               >
-                <SelectTrigger sizeVariant="sm" className="h-7 w-full bg-zinc-950 text-xs">
+                <SelectTrigger
+                  sizeVariant="sm"
+                  className="h-7 w-full bg-canvas text-xs"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -632,12 +655,12 @@ export function FacilitiesTable({
           </div>
         </div>
 
-        {/* Right: Navigation, Numeric Buttons & Quick Jump */}
-        <div className="flex w-full sm:w-auto items-center justify-between sm:justify-end gap-1.5">
-          {/* Quick Jump Input */}
+        {/* Right: Navigation */}
+        <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-end">
+          {/* Quick Jump */}
           <form
             onSubmit={handleJumpSubmit}
-            className="hidden sm:flex items-center gap-1 border-r border-zinc-800 pr-2 text-xs text-zinc-400"
+            className="hidden items-center gap-1 border-r border-edge pr-2 text-xs text-fg-muted sm:flex"
           >
             <span>Go to:</span>
             <input
@@ -647,43 +670,41 @@ export function FacilitiesTable({
               value={jumpPageInput}
               onChange={(e) => setJumpPageInput(e.target.value)}
               placeholder={String(page)}
-              className="h-7 w-12 rounded border border-zinc-800 bg-zinc-950 px-1 text-center text-xs text-zinc-200 focus:border-zinc-600 focus:outline-hidden"
+              className="h-7 w-12 rounded border border-edge bg-canvas px-1 text-center text-xs text-fg focus:border-edge focus:outline-none"
             />
           </form>
 
-          {/* First Page */}
           <Button
             variant="outline"
             size="sm"
             disabled={page <= 1 || isPlaceholderData}
             onClick={() => onPageChange(1)}
-            className="hidden sm:inline-flex h-7 w-7 p-0"
+            className="hidden h-7 w-7 p-0 sm:inline-flex"
             title="First page"
           >
             <ChevronsLeft className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Previous Page */}
           <Button
             variant="outline"
             size="sm"
             disabled={page <= 1 || isPlaceholderData}
             onClick={() => onPageChange(Math.max(page - 1, 1))}
-            className="h-7 px-2.5 sm:w-7 sm:p-0 text-xs"
+            className="h-7 px-2.5 text-xs sm:w-7 sm:p-0"
             title="Previous page"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
-            <span className="sm:hidden ml-1">Prev</span>
+            <span className="ml-1 sm:hidden">Prev</span>
           </Button>
 
-          {/* Windowed Numeric Page Buttons (>= sm) */}
-          <div className="hidden sm:flex items-center gap-1">
+          {/* Windowed Page Numbers (>= sm) */}
+          <div className="hidden items-center gap-1 sm:flex">
             {getPageNumbers().map((p, idx) => {
               if (p === "ellipsis") {
                 return (
                   <span
                     key={`ellipsis-${idx}`}
-                    className="px-1 text-xs text-zinc-600 select-none"
+                    className="select-none px-1 text-xs text-fg-muted"
                   >
                     …
                   </span>
@@ -699,8 +720,8 @@ export function FacilitiesTable({
                   className={cn(
                     "h-7 min-w-[28px] cursor-pointer rounded px-1.5 text-xs font-medium transition-colors",
                     isCurrent
-                      ? "bg-zinc-100 font-semibold text-zinc-900 shadow-xs"
-                      : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200",
+                      ? "bg-fg font-semibold text-canvas shadow-xs"
+                      : "text-fg-muted hover:bg-surface-2 hover:text-fg",
                   )}
                 >
                   {p}
@@ -709,31 +730,29 @@ export function FacilitiesTable({
             })}
           </div>
 
-          {/* Mobile Current Page Indicator (< sm) */}
-          <span className="sm:hidden font-mono text-xs text-zinc-300">
+          {/* Mobile Page Indicator */}
+          <span className="font-mono text-xs text-fg-2 sm:hidden">
             Page {page} of {Math.max(totalPages, 1)}
           </span>
 
-          {/* Next Page */}
           <Button
             variant="outline"
             size="sm"
             disabled={page >= totalPages || isPlaceholderData}
             onClick={() => onPageChange(page + 1)}
-            className="h-7 px-2.5 sm:w-7 sm:p-0 text-xs"
+            className="h-7 px-2.5 text-xs sm:w-7 sm:p-0"
             title="Next page"
           >
-            <span className="sm:hidden mr-1">Next</span>
+            <span className="mr-1 sm:hidden">Next</span>
             <ChevronRight className="h-3.5 w-3.5" />
           </Button>
 
-          {/* Last Page */}
           <Button
             variant="outline"
             size="sm"
             disabled={page >= totalPages || isPlaceholderData}
             onClick={() => onPageChange(totalPages)}
-            className="hidden sm:inline-flex h-7 w-7 p-0"
+            className="hidden h-7 w-7 p-0 sm:inline-flex"
             title="Last page"
           >
             <ChevronsRight className="h-3.5 w-3.5" />

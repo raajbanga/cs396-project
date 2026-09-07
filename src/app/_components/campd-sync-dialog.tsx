@@ -59,11 +59,11 @@ export function CampdSyncDialog({
 }: CampdSyncDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="relative max-w-md space-y-3.5 p-4 sm:p-6">
+      <DialogContent className="relative max-w-md space-y-4 p-4 sm:p-6">
         <button
           type="button"
           onClick={() => onOpenChange(false)}
-          className="absolute right-3.5 top-3.5 sm:right-5 sm:top-5 z-10 flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors cursor-pointer"
+          className="absolute right-3.5 top-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg sm:right-5 sm:top-5"
           aria-label="Close dialog"
         >
           <X className="h-4 w-4" />
@@ -72,19 +72,19 @@ export function CampdSyncDialog({
         <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4 text-emerald-400" />
-            <DialogTitle className="text-sm font-semibold tracking-tight text-white sm:text-base">
-              EPA CAMPD Live Sync
-            </DialogTitle>
+            <DialogTitle>EPA CAMPD Live Sync</DialogTitle>
           </div>
         </DialogHeader>
 
         <DialogDescription>
-          Ingest apportioned annual emissions and heat rates from the official EPA CAMPD API, calculate unit-level carbon intensity, and execute physical sanity checks.
+          Ingest apportioned annual emissions and heat rates from the official
+          EPA CAMPD API, calculate unit-level carbon intensity, and execute
+          physical sanity checks.
         </DialogDescription>
 
-        <div className="space-y-3 text-xs">
+        <div className="space-y-3 text-sm">
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               Reporting Year
             </label>
             <Select
@@ -103,7 +103,7 @@ export function CampdSyncDialog({
           </div>
 
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               State Scope
             </label>
             <Select value={syncState} onValueChange={onSyncStateChange}>
@@ -122,7 +122,7 @@ export function CampdSyncDialog({
           </div>
 
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               Batch Size
             </label>
             <Select
@@ -142,7 +142,7 @@ export function CampdSyncDialog({
         </div>
 
         {isSuccess && mutationData && (
-          <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+          <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
             <div className="flex items-center gap-1.5 font-semibold">
               <Check className="h-3.5 w-3.5" />
               <span>Ingestion Successful</span>
@@ -154,7 +154,7 @@ export function CampdSyncDialog({
         )}
 
         {isError && errorMessage && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+          <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Sync error: {errorMessage}</span>
           </div>
