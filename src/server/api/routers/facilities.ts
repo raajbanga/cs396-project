@@ -309,6 +309,104 @@ export const facilitiesRouter = createTRPCRouter({
     }),
 
   /**
+   * Get all facilities with coordinates for map visualization (3D Globe and 2D Leaflet).
+   * Supports optional filtering by state, fuel, NERC region, source category, and search query.
+   */
+  getMapFacilities: publicProcedure
+    .input(
+      z
+        .object({
+          search: z.string().optional(),
+          stateCode: z.string().optional(),
+          primaryFuel: z.string().optional(),
+          nercRegion: z.string().optional(),
+          sourceCategory: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const conditions = [
+        sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
+      ];
+
+      if (input?.stateCode && input.stateCode !== "ALL") {
+        conditions.push(eq(facilities.stateCode, input.stateCode));
+      }
+
+      if (input?.nercRegion && input.nercRegion !== "ALL") {
+        conditions.push(eq(facilities.nercRegion, input.nercRegion));
+      }
+
+      if (input?.sourceCategory && input.sourceCategory !== "ALL") {
+        conditions.push(eq(facilities.sourceCategory, input.sourceCategory));
+      }
+
+      if (input?.search && input.search.trim() !== "") {
+        const term = `%${input.search.trim().toLowerCase()}%`;
+        const numericSearch = Number.parseInt(input.search.trim(), 10);
+        if (!Number.isNaN(numericSearch)) {
+          conditions.push(
+            sql`(${facilities.id} = ${numericSearch} OR lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
+          );
+        } else {
+          conditions.push(
+            sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
+          );
+        }
+      }
+
+      if (input?.primaryFuel && input.primaryFuel !== "ALL") {
+        conditions.push(
+          sql`${facilities.id} IN (
+            SELECT DISTINCT ${units.facilityId}
+            FROM ${units}
+            WHERE ${units.primaryFuel} = ${input.primaryFuel}
+          )`,
+        );
+      }
+
+      const whereClause = and(...conditions);
+
+      const rows = await ctx.db
+        .select({
+          id: facilities.id,
+          name: facilities.name,
+          stateCode: facilities.stateCode,
+          county: facilities.county,
+          latitude: facilities.latitude,
+          longitude: facilities.longitude,
+          nercRegion: facilities.nercRegion,
+          sourceCategory: facilities.sourceCategory,
+          ownerOperator: facilities.ownerOperator,
+          primaryFuel: sql<string | null>`(
+            SELECT "units"."primary_fuel" FROM "units"
+            WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
+            LIMIT 1
+          )`.as("primary_fuel"),
+          totalCapacityMW: sql<number>`(
+            SELECT COALESCE(ROUND(SUM("units"."nameplate_capacity_mw"), 1), 0)
+            FROM "units" WHERE "units"."facility_id" = "facilities"."id"
+          )`.as("total_capacity_mw"),
+          totalCo2Tons: sql<number>`(
+            SELECT COALESCE(ROUND(SUM("annual_records"."co2_mass_tons"), 0), 0)
+            FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
+          )`.as("total_co2_tons"),
+          unitCount: sql<number>`(
+            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id"
+          )`.as("unit_count"),
+        })
+        .from(facilities)
+        .where(whereClause);
+
+      return rows.map((r) => ({
+        ...r,
+        latitude: r.latitude!,
+        longitude: r.longitude!,
+        primaryFuel: r.primaryFuel ?? "Unknown",
+      }));
+    }),
+
+  /**
    * Get single facility with its generating units and annual emissions records
    */
   getFacility: publicProcedure
