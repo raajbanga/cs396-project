@@ -10,7 +10,11 @@ import {
   ChevronsRight,
   ChevronLeft,
   ChevronRight,
+  Flame,
+  HelpCircle,
   Scale,
+  ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -45,6 +49,9 @@ export interface FacilityRow {
   unitCount: number;
   totalCapacityMW: number;
   totalCo2Tons: number;
+  primaryFuels: string[];
+  carbonIntensityLbsMWh: number | null;
+  controlledUnitsCount: number;
 }
 
 export type SortByField = "name" | "id" | "capacity" | "co2";
@@ -113,6 +120,97 @@ export function FacilitiesTable({
     );
   };
 
+  // Fuel badge helper for clean, consistent one-line visual tags
+  const renderFuelBadge = (fuel: string) => {
+    const f = fuel.toLowerCase();
+    if (f.includes("gas") || f.includes("methane")) {
+      return (
+        <Badge
+          key={fuel}
+          variant="sky"
+          className="gap-0.5 px-1.5 py-0 text-[10px] font-medium"
+        >
+          <Flame className="h-2.5 w-2.5 shrink-0 text-sky-400" />
+          <span>{fuel}</span>
+        </Badge>
+      );
+    }
+    if (f.includes("coal") || f.includes("lignite")) {
+      return (
+        <Badge
+          key={fuel}
+          variant="destructive"
+          className="gap-0.5 border-red-800/40 bg-red-950/40 px-1.5 py-0 text-[10px] font-medium text-red-300"
+        >
+          <span>{fuel}</span>
+        </Badge>
+      );
+    }
+    if (f.includes("oil") || f.includes("diesel")) {
+      return (
+        <Badge
+          key={fuel}
+          variant="warning"
+          className="gap-0.5 px-1.5 py-0 text-[10px] font-medium"
+        >
+          <span>{fuel}</span>
+        </Badge>
+      );
+    }
+    return (
+      <Badge
+        key={fuel}
+        variant="secondary"
+        className="px-1.5 py-0 text-[10px] font-medium"
+      >
+        <span>{fuel}</span>
+      </Badge>
+    );
+  };
+
+  // Carbon Intensity badge helper
+  const renderIntensityBadge = (intensity: number | null) => {
+    if (intensity === null || intensity === 0) return null;
+    if (intensity < 950) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
+          title={`${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`}
+        >
+          {intensity} lbs/MWh • Clean CCGT
+        </span>
+      );
+    }
+    if (intensity <= 1600) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+          title={`${intensity} lbs CO2 emitted per MWh generated (Peaker / Intermediate)`}
+        >
+          {intensity} lbs/MWh • Peaker
+        </span>
+      );
+    }
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+        title={`${intensity} lbs CO2 emitted per MWh generated (High-emission fossil / coal)`}
+      >
+        {intensity} lbs/MWh • High Carbon
+      </span>
+    );
+  };
+
+  // Calculate human-scale homes powered equivalent (~750 homes per 1 MW)
+  const formatHomesPowered = (mw: number) => {
+    if (mw <= 0) return null;
+    const homes = mw * 750;
+    if (homes >= 1_000_000) {
+      return `~${(homes / 1_000_000).toFixed(1)}M homes`;
+    }
+    return `~${Math.round(homes / 1_000)}K homes`;
+  };
+
   // Generate windowed page numbers with ellipsis
   const getPageNumbers = () => {
     const pages: (number | "ellipsis")[] = [];
@@ -156,21 +254,26 @@ export function FacilitiesTable({
               <Scale className="mx-auto h-3.5 w-3.5 text-zinc-500" />
             </TableHead>
 
-            {/* ORISPL Column with Sorting */}
+            {/* ORISPL Column with Tooltip */}
             <TableHead
               className="w-24 cursor-pointer transition-colors select-none hover:text-zinc-200"
               onClick={() => onSortChange("id")}
+              title="Click to sort by ORISPL plant code"
             >
-              <div className="flex items-center">
+              <div className="flex items-center gap-1">
                 <span>ORISPL</span>
+                <span title="Official DOE/EIA plant code identifying each facility">
+                  <HelpCircle className="h-3 w-3 text-zinc-500" />
+                </span>
                 {getSortIcon("id")}
               </div>
             </TableHead>
 
-            {/* Facility Name Column with Sorting */}
+            {/* Facility Name Column */}
             <TableHead
               className="cursor-pointer transition-colors select-none hover:text-zinc-200"
               onClick={() => onSortChange("name")}
+              title="Click to sort by Facility Name"
             >
               <div className="flex items-center">
                 <span>Facility Name & Utility</span>
@@ -179,26 +282,38 @@ export function FacilitiesTable({
             </TableHead>
 
             <TableHead>Location</TableHead>
-            <TableHead>NERC Grid & Sector</TableHead>
 
-            {/* Capacity Column with Sorting */}
+            {/* Grid & Fuel Tags Column */}
+            <TableHead>
+              <span>Grid & Primary Fuels</span>
+            </TableHead>
+
+            {/* Capacity Column with Tooltip */}
             <TableHead
               className="cursor-pointer text-center transition-colors select-none hover:text-zinc-200"
               onClick={() => onSortChange("capacity")}
+              title="Click to sort by Capacity (MW)"
             >
-              <div className="flex items-center justify-center">
-                <span>Capacity / Units</span>
+              <div className="flex items-center justify-center gap-1">
+                <span>Capacity / Scale</span>
+                <span title="Nameplate continuous power rating. 1 MW powers ~750 homes.">
+                  <HelpCircle className="h-3 w-3 text-zinc-500" />
+                </span>
                 {getSortIcon("capacity")}
               </div>
             </TableHead>
 
-            {/* Annual CO2 Column with Sorting */}
+            {/* Annual CO2 & Carbon Intensity Column */}
             <TableHead
               className="cursor-pointer text-right transition-colors select-none hover:text-zinc-200"
               onClick={() => onSortChange("co2")}
+              title="Click to sort by Annual CO2 Tonnage"
             >
-              <div className="flex items-center justify-end">
-                <span>Annual CO2 (2022)</span>
+              <div className="flex items-center justify-end gap-1">
+                <span>Annual CO2 & Intensity</span>
+                <span title="Annual stack carbon emissions monitored by CEMS and carbon intensity (lbs CO2/MWh)">
+                  <HelpCircle className="h-3 w-3 text-zinc-500" />
+                </span>
                 {getSortIcon("co2")}
               </div>
             </TableHead>
@@ -259,6 +374,8 @@ export function FacilitiesTable({
           ) : (
             facilities?.map((fac) => {
               const isSelected = compareIds.includes(fac.id);
+              const homesPowered = formatHomesPowered(fac.totalCapacityMW);
+
               return (
                 <TableRow
                   key={fac.id}
@@ -283,10 +400,12 @@ export function FacilitiesTable({
                     />
                   </TableCell>
 
+                  {/* ORISPL ID */}
                   <TableCell className="font-mono text-xs font-semibold text-emerald-400">
                     #{fac.id}
                   </TableCell>
 
+                  {/* Facility Name & Utility */}
                   <TableCell>
                     <div className="font-medium text-zinc-100 transition-colors group-hover:text-emerald-300">
                       {fac.name}
@@ -296,6 +415,7 @@ export function FacilitiesTable({
                     </div>
                   </TableCell>
 
+                  {/* Location */}
                   <TableCell>
                     <div className="font-medium text-zinc-200">
                       {fac.stateCode}
@@ -305,43 +425,79 @@ export function FacilitiesTable({
                     </div>
                   </TableCell>
 
+                  {/* Grid & Fuel Tags for 1-Line Read */}
                   <TableCell>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {fac.nercRegion && (
-                        <Badge
-                          variant="sky"
-                          className="py-0 font-mono text-[10px]"
-                        >
-                          {fac.nercRegion}
-                        </Badge>
-                      )}
-                      <span className="truncate text-[11px] text-zinc-400">
-                        {fac.sourceCategory ?? "Unspecified"}
-                      </span>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-1">
+                        {fac.nercRegion && (
+                          <Badge
+                            variant="sky"
+                            className="py-0 font-mono text-[10px]"
+                          >
+                            {fac.nercRegion}
+                          </Badge>
+                        )}
+                        {fac.controlledUnitsCount > 0 && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-0 text-[9px] font-medium text-emerald-400"
+                            title="Equipped with SO2 scrubbers or NOx catalytic control systems"
+                          >
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            CEMS Controls
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Primary Fuel Tags */}
+                      <div className="flex flex-wrap items-center gap-1">
+                        {fac.primaryFuels.length > 0 ? (
+                          fac.primaryFuels.map((fuel) => renderFuelBadge(fuel))
+                        ) : (
+                          <span className="text-[10px] text-zinc-500 italic">
+                            Fuel unlisted
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
 
+                  {/* Capacity & Homes Powered Scale */}
                   <TableCell className="text-center">
-                    <div className="font-medium text-zinc-100">
-                      {fac.totalCapacityMW > 0
-                        ? `${Number(fac.totalCapacityMW).toLocaleString()} MW`
-                        : "—"}
-                    </div>
-                    <div className="text-[11px] text-zinc-500">
-                      {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="text-right font-mono text-xs">
-                    {fac.totalCo2Tons > 0 ? (
-                      <span className="font-semibold text-zinc-100">
-                        {Number(fac.totalCo2Tons).toLocaleString()} t
+                    <div className="flex items-center justify-center gap-1 font-medium text-zinc-100">
+                      <Zap className="h-3 w-3 text-amber-400" />
+                      <span>
+                        {fac.totalCapacityMW > 0
+                          ? `${Number(fac.totalCapacityMW).toLocaleString()} MW`
+                          : "—"}
                       </span>
-                    ) : (
-                      <span className="text-zinc-600">—</span>
-                    )}
+                    </div>
+                    <div className="text-[11px] text-zinc-400">
+                      {homesPowered && (
+                        <span className="font-medium text-zinc-300">
+                          {homesPowered} •{" "}
+                        </span>
+                      )}
+                      <span>
+                        {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
+                      </span>
+                    </div>
                   </TableCell>
 
+                  {/* Annual CO2 & Carbon Intensity */}
+                  <TableCell className="text-right">
+                    <div className="font-mono text-xs font-semibold text-zinc-100">
+                      {fac.totalCo2Tons > 0 ? (
+                        `${Number(fac.totalCo2Tons).toLocaleString()} t`
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </div>
+                    <div className="pt-0.5">
+                      {renderIntensityBadge(fac.carbonIntensityLbsMWh)}
+                    </div>
+                  </TableCell>
+
+                  {/* Inspect Button */}
                   <TableCell className="text-right">
                     <Button
                       variant="secondary"
