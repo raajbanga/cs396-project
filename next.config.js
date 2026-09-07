@@ -7,7 +7,8 @@ import "./src/env.js";
 /** @type {import("next").NextConfig} */
 const config = {
   outputFileTracingIncludes: {
-    "/api/**/*": ["./db.sqlite"],
+    "/*": ["./db.sqlite"],
+    "/**/*": ["./db.sqlite"],
   },
 };
 
