@@ -1,0 +1,456 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "7edd80d1-12da-4b10-9c41-c501b54a9d53",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "annual_records": {
+      "name": "annual_records",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dataset_id": {
+          "name": "dataset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "unit_internal_id": {
+          "name": "unit_internal_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "operating_hours": {
+          "name": "operating_hours",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "gross_generation_mwh": {
+          "name": "gross_generation_mwh",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "heat_input_mmbtu": {
+          "name": "heat_input_mmbtu",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "co2_mass_tons": {
+          "name": "co2_mass_tons",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "so2_mass_tons": {
+          "name": "so2_mass_tons",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "nox_mass_tons": {
+          "name": "nox_mass_tons",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "co2_intensity_lbs_mwh": {
+          "name": "co2_intensity_lbs_mwh",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "heat_rate_mmbtu_mwh": {
+          "name": "heat_rate_mmbtu_mwh",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "annual_record_unit_year_idx": {
+          "name": "annual_record_unit_year_idx",
+          "columns": [
+            "unit_internal_id",
+            "year"
+          ],
+          "isUnique": true
+        },
+        "annual_record_year_co2_idx": {
+          "name": "annual_record_year_co2_idx",
+          "columns": [
+            "year",
+            "co2_mass_tons"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "annual_records_dataset_id_datasets_id_fk": {
+          "name": "annual_records_dataset_id_datasets_id_fk",
+          "tableFrom": "annual_records",
+          "tableTo": "datasets",
+          "columnsFrom": [
+            "dataset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "annual_records_unit_internal_id_units_id_fk": {
+          "name": "annual_records_unit_internal_id_units_id_fk",
+          "tableFrom": "annual_records",
+          "tableTo": "units",
+          "columnsFrom": [
+            "unit_internal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "data_audit_logs": {
+      "name": "data_audit_logs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "annual_record_id": {
+          "name": "annual_record_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "flag_type": {
+          "name": "flag_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "details": {
+          "name": "details",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch())"
+        }
+      },
+      "indexes": {
+        "audit_annual_record_idx": {
+          "name": "audit_annual_record_idx",
+          "columns": [
+            "annual_record_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "data_audit_logs_annual_record_id_annual_records_id_fk": {
+          "name": "data_audit_logs_annual_record_id_annual_records_id_fk",
+          "tableFrom": "data_audit_logs",
+          "tableTo": "annual_records",
+          "columnsFrom": [
+            "annual_record_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "datasets": {
+      "name": "datasets",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reporting_year": {
+          "name": "reporting_year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch())"
+        },
+        "raw_record_count": {
+          "name": "raw_record_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "valid_records": {
+          "name": "valid_records",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "flagged_records": {
+          "name": "flagged_records",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "facilities": {
+      "name": "facilities",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state_code": {
+          "name": "state_code",
+          "type": "text(2)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "county": {
+          "name": "county",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "latitude": {
+          "name": "latitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "longitude": {
+          "name": "longitude",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "facility_state_idx": {
+          "name": "facility_state_idx",
+          "columns": [
+            "state_code"
+          ],
+          "isUnique": false
+        },
+        "facility_name_idx": {
+          "name": "facility_name_idx",
+          "columns": [
+            "name"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "units": {
+      "name": "units",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unit_id": {
+          "name": "unit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "facility_id": {
+          "name": "facility_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "unit_type": {
+          "name": "unit_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "primary_fuel": {
+          "name": "primary_fuel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "unit_facility_unit_idx": {
+          "name": "unit_facility_unit_idx",
+          "columns": [
+            "facility_id",
+            "unit_id"
+          ],
+          "isUnique": true
+        },
+        "unit_facility_id_idx": {
+          "name": "unit_facility_id_idx",
+          "columns": [
+            "facility_id"
+          ],
+          "isUnique": false
+        },
+        "unit_primary_fuel_idx": {
+          "name": "unit_primary_fuel_idx",
+          "columns": [
+            "primary_fuel"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "units_facility_id_facilities_id_fk": {
+          "name": "units_facility_id_facilities_id_fk",
+          "tableFrom": "units",
+          "tableTo": "facilities",
+          "columnsFrom": [
+            "facility_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}
