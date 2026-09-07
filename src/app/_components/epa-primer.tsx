@@ -11,128 +11,102 @@ import {
   ShieldCheck,
   Zap,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 
 export function EpaPrimer() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 backdrop-blur-xs transition-all">
+    <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/30 transition-all">
       {/* Banner Header with Toggle */}
-      <div className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-emerald-500/20 bg-emerald-500/10 text-emerald-400">
-            <Lightbulb className="h-4 w-4" />
+      <div className="flex items-center justify-between gap-3 p-3 sm:px-4 sm:py-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-700/50 bg-zinc-800/50 text-zinc-400">
+            <Lightbulb className="h-3.5 w-3.5 text-amber-400/90" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white">
-                Demystifying EPA CAMPD & Electric Grid Data
+              <span className="text-sm font-medium text-zinc-200 truncate">
+                Power Grid & Emissions Reference Guide
               </span>
-              <Badge variant="outline" className="py-0 font-mono text-[10px]">
-                101 Primer
-              </Badge>
             </div>
-            <p className="text-[11px] text-zinc-400">
-              New to power generation data? Learn how ORISPL codes, NERC grids,
-              carbon intensity, and sanity checks work.
+            <p className="hidden text-xs text-zinc-400 sm:block truncate">
+              Key concepts: ORISPL plant IDs, NERC grids, capacity metrics, and sanity audits
             </p>
           </div>
         </div>
 
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={() => setIsOpen((prev) => !prev)}
-          className="h-7 gap-1.5 self-start text-xs sm:self-auto"
+          className="h-8 shrink-0 gap-1.5 px-3 text-xs text-zinc-400 hover:text-zinc-200"
         >
+          <span>{isOpen ? "Hide Guide" : "Reference Guide"}</span>
           {isOpen ? (
-            <>
-              <span>Hide Guide</span>
-              <ChevronUp className="h-3.5 w-3.5" />
-            </>
+            <ChevronUp className="h-3.5 w-3.5" />
           ) : (
-            <>
-              <span>Quick Data Guide</span>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </>
+            <ChevronDown className="h-3.5 w-3.5" />
           )}
         </Button>
       </div>
 
       {/* Expanded Educational Cards Grid */}
       {isOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 border-t border-zinc-800/80 p-4 pt-3 text-xs duration-200">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="animate-in fade-in slide-in-from-top-1 border-t border-zinc-800/80 p-3 sm:p-4.5 duration-150">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {/* Card 1: ORISPL */}
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
-                <Building2 className="h-3.5 w-3.5" />
-                <span>ORISPL Plant Code</span>
+            <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                <Building2 className="h-4 w-4" />
+                <span>ORISPL Plant Identifier</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-zinc-300">
-                A unique permanent federal facility identifier assigned by the
-                Department of Energy (DOE/EIA). It acts like a Social Security
-                Number for every power plant in the United States.
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Permanent federal facility ID issued by the DOE/EIA, uniquely indexing every commercial generation facility across all 50 states.
               </p>
             </div>
 
             {/* Card 2: NERC Grids */}
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="flex items-center gap-1.5 font-semibold text-sky-400">
-                <Globe className="h-3.5 w-3.5" />
-                <span>NERC Reliability Grids</span>
+            <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-sky-400">
+                <Globe className="h-4 w-4" />
+                <span>NERC Regional Grids</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-zinc-300">
-                Regional electric reliability councils (e.g.{" "}
-                <strong>ERCOT</strong> in Texas, <strong>WECC</strong> in the
-                West, <strong>SERC</strong> in Southeast, <strong>RFC</strong>{" "}
-                in Mid-Atlantic). Grids operate as independent synchronized
-                power pools.
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Independent reliability councils (such as ERCOT, WECC, SERC, RFC) managing synchronized transmission grids and reserve margins.
               </p>
             </div>
 
             {/* Card 3: Capacity & Scale */}
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="flex items-center gap-1.5 font-semibold text-amber-400">
-                <Zap className="h-3.5 w-3.5" />
+            <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-400">
+                <Zap className="h-4 w-4" />
                 <span>Nameplate Capacity (MW)</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-zinc-300">
-                The maximum continuous power output of the plant. As a rule of
-                thumb, <strong>1 Megawatt (MW)</strong> can power approximately{" "}
-                <strong>750 to 1,000 average homes</strong>. A 1,000 MW plant
-                powers ~750K homes.
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Maximum sustained electrical output rating. Roughly 1 Megawatt (MW) reliably powers approximately 750 to 1,000 homes.
               </p>
             </div>
 
             {/* Card 4: Carbon Intensity */}
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="flex items-center gap-1.5 font-semibold text-emerald-400">
-                <Activity className="h-3.5 w-3.5" />
-                <span>Carbon Intensity</span>
+            <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                <Activity className="h-4 w-4" />
+                <span>Carbon Intensity Rate</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-zinc-300">
-                Emissions efficiency: pounds of CO2 emitted per MWh generated (
-                <code className="font-mono text-[10px] text-emerald-300">
-                  lbs/MWh
-                </code>
-                ). Clean Gas CCGT = ~800, Peakers = ~1,200, Coal = ~2,100,
-                Solar/Nuclear = 0.
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Pounds of direct CO₂ emitted per MWh generated (<code className="rounded bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-200">lbs/MWh</code>). Gas CCGT ~800, Coal ~2,100, Renewables/Nuclear = 0.
               </p>
             </div>
 
             {/* Card 5: Sanity Auditing */}
-            <div className="space-y-1.5 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3">
-              <div className="flex items-center gap-1.5 font-semibold text-red-400">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                <span>Physical Sanity Audits</span>
+            <div className="space-y-2 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-3.5 sm:col-span-2 lg:col-span-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-rose-400">
+                <ShieldCheck className="h-4 w-4" />
+                <span>Automated Thermodynamic Auditing</span>
               </div>
-              <p className="text-[11px] leading-relaxed text-zinc-300">
-                Automated thermodynamic audits enforcing physical laws: flags
-                impossible reports like burning vast fuel with 0 CO2 emissions,
-                or claiming generation with 0 operating hours.
+              <p className="text-sm leading-relaxed text-zinc-300">
+                Continuous rule validation detecting thermodynamic discrepancies such as out-of-bounds heat rates, phantom power generation, or zero-emissions combustion flags.
               </p>
             </div>
           </div>

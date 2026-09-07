@@ -18,7 +18,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex w-full items-center justify-between rounded-lg border border-zinc-700/80 bg-zinc-950 text-xs text-zinc-200 transition-colors placeholder:text-zinc-500 hover:border-zinc-600 focus:ring-1 focus:ring-zinc-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex w-full items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 text-xs text-zinc-200 transition-colors placeholder:text-zinc-500 hover:border-zinc-700 focus:border-zinc-600 focus:ring-1 focus:ring-zinc-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       sizeVariant === "sm"
         ? "h-7 px-2.5 py-1 text-xs"
         : "h-9 px-3 py-2 text-xs",
@@ -28,7 +28,7 @@ const SelectTrigger = React.forwardRef<
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="ml-1.5 h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-70" />
+      <ChevronDown className="ml-1.5 h-3.5 w-3.5 shrink-0 text-zinc-400 opacity-60" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Database, Globe, RefreshCw, Scale } from "lucide-react";
+import { Globe, RefreshCw, Scale, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
@@ -173,67 +173,70 @@ export function DatabaseExplorer() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-zinc-800 selection:text-white">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-200">
-              <Database className="h-4 w-4 text-emerald-400" />
+      <header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
+          {/* Logo & Title */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-100 shadow-xs">
+              <Zap className="h-4 w-4 text-emerald-400" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold tracking-tight text-white">
-                  EPA CAMPD Management System
+                <span className="text-sm sm:text-base font-bold tracking-tight text-white truncate">
+                  GridPulse
                 </span>
-                <Badge variant="outline" className="py-0 font-mono text-[10px]">
-                  Phase 1 Core
+                <Badge variant="outline" className="hidden sm:inline-flex py-0 px-1.5 text-[10px] font-mono text-zinc-400 border-zinc-800">
+                  v1.0
                 </Badge>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                </span>
               </div>
-              <p className="text-[11px] text-zinc-400">
-                Continuous Emissions Monitoring & Relational Registry
-              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* View Tab Switcher */}
-            <div className="flex rounded-lg border border-zinc-800 bg-zinc-900 p-0.5 text-xs">
+          {/* Center/Right Actions */}
+          <div className="flex items-center gap-2">
+            {/* View Tab Switcher (shadcn/ui segmented control) */}
+            <div className="flex rounded-lg border border-zinc-800/80 bg-zinc-900/60 p-0.5 text-xs sm:text-sm">
               <button
                 type="button"
                 onClick={() => setActiveTab("explorer")}
-                className={`cursor-pointer rounded-md px-3 py-1 font-medium transition-all ${
+                className={`cursor-pointer rounded-md px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-medium transition-all ${
                   activeTab === "explorer"
                     ? "bg-zinc-800 text-white shadow-xs"
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                Facilities Explorer
+                Facilities
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("map")}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-all ${
+                className={`flex cursor-pointer items-center gap-1 sm:gap-1.5 rounded-md px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-medium transition-all ${
                   activeTab === "map"
                     ? "bg-zinc-800 text-white shadow-xs"
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
                 <Globe className="h-3.5 w-3.5 text-emerald-400" />
-                <span>3D Globe & Map</span>
+                <span>Map</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("audit")}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-all ${
+                className={`flex cursor-pointer items-center gap-1 sm:gap-1.5 rounded-md px-2.5 sm:px-3 py-1 text-xs sm:text-sm font-medium transition-all ${
                   activeTab === "audit"
                     ? "bg-zinc-800 text-white shadow-xs"
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                <span>Audit Logs</span>
+                <span>Audits</span>
                 {(stats?.totalAnomalies ?? 0) > 0 && (
                   <Badge
                     variant="warning"
-                    className="px-1 py-0 font-mono text-[10px]"
+                    className="px-1.5 py-0 font-mono text-[10px]"
                   >
                     {stats?.totalAnomalies}
                   </Badge>
@@ -246,42 +249,26 @@ export function DatabaseExplorer() {
               variant="outline"
               size="sm"
               onClick={() => setIsSyncModalOpen(true)}
-              className="gap-1.5"
+              className="h-8 w-8 sm:w-auto p-0 sm:px-3 gap-1.5 border-zinc-800 bg-zinc-900/60 text-xs text-zinc-300 hover:text-white"
+              title="Sync Data"
             >
               <RefreshCw className="h-3.5 w-3.5 text-emerald-400" />
-              <span>CAMPD Sync</span>
+              <span className="hidden sm:inline">Sync Data</span>
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-6 lg:px-8">
         {/* Header Action Bar */}
-        <div className="flex flex-col gap-4 border-b border-zinc-800 pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-              Power Generation & Emissions Explorer
+              US Power & Emissions Intelligence
             </h1>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-400">
-              Relational registry of power generation units across NERC
-              reliability grids, source categories, and utility operators.
-              Includes verified annual generation, gross carbon emissions, and
-              automated physical sanity auditing.
+            <p className="text-xs sm:text-sm text-zinc-400">
+              Continuous stack monitoring, regional grid reliability, and automated physical sanity audits.
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {compareIds.length >= 2 && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setIsCompareOpen(true)}
-                className="gap-1.5 shadow-md"
-              >
-                <Scale className="h-3.5 w-3.5" />
-                <span>Compare Plants ({compareIds.length})</span>
-              </Button>
-            )}
           </div>
         </div>
 
@@ -365,9 +352,6 @@ export function DatabaseExplorer() {
               setSelectedState(st);
               setPage(1);
             }}
-            states={filterOptions?.states}
-            searchQuery={search}
-            onSearchChange={setSearch}
           />
         )}
 
@@ -420,6 +404,48 @@ export function DatabaseExplorer() {
           })
         }
       />
+
+      {/* Unified Floating Benchmark Dock (Desktop & Mobile) */}
+      {compareIds.length > 0 && (
+        <aside
+          aria-label="Plant benchmark comparison dock"
+          className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-2.5 sm:gap-3 rounded-full border border-zinc-700/90 bg-zinc-900/95 px-3 sm:px-4 py-1.5 sm:py-2 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-200 select-none"
+        >
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-xs font-bold text-emerald-400 border border-emerald-500/40">
+              {compareIds.length}
+            </span>
+            <span className="text-xs sm:text-sm font-medium text-zinc-200 whitespace-nowrap">
+              {compareIds.length === 1 ? "1 plant" : `${compareIds.length} plants`}
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-zinc-800 shrink-0" />
+
+          {compareIds.length >= 2 ? (
+            <Button
+              size="sm"
+              onClick={() => setIsCompareOpen(true)}
+              className="h-7 sm:h-8 gap-1.5 rounded-full px-3 sm:px-3.5 text-xs sm:text-sm font-medium shadow-xs shrink-0"
+            >
+              <Scale className="h-3.5 w-3.5" />
+              <span>Compare</span>
+            </Button>
+          ) : (
+            <span className="hidden sm:inline text-xs text-zinc-400 italic shrink-0">
+              Select 1 more to compare
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setCompareIds([])}
+            className="cursor-pointer text-xs text-zinc-400 hover:text-white px-1.5 py-1 rounded transition-colors shrink-0"
+          >
+            Clear
+          </button>
+        </aside>
+      )}
     </div>
   );
 }

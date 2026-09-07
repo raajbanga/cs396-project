@@ -17,19 +17,19 @@ interface StatMetricsProps {
 
 export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
   return (
-    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <section className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <MetricCard
         title="Total Facilities"
-        icon={<Building2 className="h-4 w-4 text-zinc-400" />}
+        icon={<Building2 className="h-3.5 w-3.5 text-zinc-400" />}
         value={
           isLoading ? "..." : (stats?.totalFacilities.toLocaleString() ?? "0")
         }
-        subtext={`Across ${stats?.totalStates ?? 52} states & territories`}
+        subtext={`${stats?.totalStates ?? 52} states & territories`}
       />
 
       <MetricCard
         title="Tracked Capacity"
-        icon={<Zap className="h-4 w-4 text-amber-400" />}
+        icon={<Zap className="h-3.5 w-3.5 text-amber-400" />}
         value={
           isLoading
             ? "..."
@@ -38,43 +38,40 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
               : "0 GW"
         }
         subtext={
-          stats?.totalCapacityMW
-            ? `Powers ~${Math.round((stats.totalCapacityMW * 750) / 1_000_000)}M homes (${stats.totalUnits.toLocaleString()} units)`
-            : `${stats?.totalUnits.toLocaleString() ?? 0} generation units`
+          stats?.totalUnits
+            ? `${stats.totalUnits.toLocaleString()} generators`
+            : "Active units"
         }
       />
 
       <MetricCard
-        title="Reliability Councils"
-        icon={<Globe className="h-4 w-4 text-sky-400" />}
-        value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Grids`}
-        subtext="ERCOT, SERC, WECC, RFC, etc."
+        title="Reliability Grids"
+        icon={<Globe className="h-3.5 w-3.5 text-sky-400" />}
+        value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
+        subtext="ERCOT, SERC, WECC, etc."
       />
 
       <MetricCard
-        title="Reported Annual CO2"
-        icon={<Activity className="h-4 w-4 text-emerald-400" />}
+        title="Annual CO₂"
+        icon={<Activity className="h-3.5 w-3.5 text-emerald-400" />}
         value={
           isLoading
             ? "..."
             : stats?.totalCo2Tons && stats.totalCo2Tons > 0
-              ? `${(stats.totalCo2Tons / 1_000_000).toFixed(2)}M t`
+              ? `${(stats.totalCo2Tons / 1_000_000).toFixed(1)}M t`
               : "—"
         }
         valueClassName="font-mono text-emerald-400"
-        subtext={
-          stats?.totalCo2Tons && stats.totalCo2Tons > 0
-            ? `≈ ${((stats.totalCo2Tons * 0.217) / 1_000_000).toFixed(0)}M passenger cars/yr`
-            : "Continuous monitoring"
-        }
+        subtext="Monitored stack mass"
       />
 
       <MetricCard
-        title="Quality Audit Flags"
-        icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
+        title="Audit Flags"
+        icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-400" />}
         value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}
         valueClassName="font-mono text-amber-400"
-        subtext="Physical sanity violations"
+        subtext="Sanity violations"
+        className="col-span-2 sm:col-span-1"
       />
     </section>
   );
