@@ -372,6 +372,7 @@ export function DatabaseExplorer() {
         plants={compareData}
         isLoading={compareLoading}
         onClearSelection={() => setCompareIds([])}
+        onRemovePlant={(id) => setCompareIds(compareIds.filter((x) => x !== id))}
       />
 
       {/* Facility Detail Modal */}

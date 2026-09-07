@@ -97,7 +97,7 @@ export function getPlantRole(params: {
       role: "Standby / Reserve",
       badgeLabel: "Standby Reserve",
       badgeVariant: "secondary",
-      badgeClass: "bg-zinc-800 text-zinc-400 border-zinc-700",
+      badgeClass: "bg-surface-2 text-fg-muted border-edge",
       icon: "power",
       description:
         "Held in operational reserve or pending seasonal activation with minimal reported generation.",
@@ -142,7 +142,7 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
       tier: "unknown",
       label: "Zero / Unreported",
       badgeText: "Zero / Clean",
-      badgeClass: "bg-zinc-800 text-zinc-400 border-zinc-700",
+      badgeClass: "bg-surface-2 text-fg-muted border-edge",
       description: "No direct fossil carbon intensity reported.",
       narrativeDescription: "No direct annual carbon emissions were reported.",
     };

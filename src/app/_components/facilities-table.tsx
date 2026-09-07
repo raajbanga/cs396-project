@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Clock,
   Factory,
-  Flame,
   Power,
   Scale,
   ShieldCheck,
@@ -21,7 +20,9 @@ import {
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
 import { Card } from "~/components/ui/card";
+import { FuelBadge } from "~/components/ui/fuel-badge";
 import {
   Select,
   SelectContent,
@@ -38,11 +39,9 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
-  getCarbonIntensityTier,
   getHumanEquivalents,
   getPlantRole,
 } from "~/lib/plant-narrative";
-import { getFuelTheme } from "~/lib/map-utils";
 import { cn } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
@@ -112,35 +111,6 @@ export function FacilitiesTable({
       <ArrowUp className="ml-1 h-3 w-3 text-emerald-400" />
     ) : (
       <ArrowDown className="ml-1 h-3 w-3 text-emerald-400" />
-    );
-  };
-
-  const renderFuelBadge = (fuel: string) => {
-    const theme = getFuelTheme(fuel);
-    return (
-      <Badge
-        key={fuel}
-        variant={theme.variant}
-        className="gap-1 px-2 py-0.5 text-xs font-medium"
-      >
-        {theme.name === "Natural Gas" && (
-          <Flame className="h-3 w-3 shrink-0 text-sky-400" />
-        )}
-        <span>{fuel}</span>
-      </Badge>
-    );
-  };
-
-  const renderIntensityBadge = (intensity: number | null) => {
-    if (intensity === null || intensity === 0) return null;
-    const tier = getCarbonIntensityTier(intensity);
-    return (
-      <span
-        className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${tier.badgeClass}`}
-        title={tier.description}
-      >
-        {tier.badgeText}
-      </span>
     );
   };
 
@@ -380,9 +350,9 @@ export function FacilitiesTable({
                         </div>
                         <div className="flex flex-wrap items-center gap-1">
                           {fac.primaryFuels.length > 0 ? (
-                            fac.primaryFuels.map((fuel) =>
-                              renderFuelBadge(fuel),
-                            )
+                            fac.primaryFuels.map((fuel) => (
+                              <FuelBadge key={fuel} fuel={fuel} />
+                            ))
                           ) : (
                             <span className="italic text-xs text-fg-muted">
                               Fuel unlisted
@@ -430,7 +400,9 @@ export function FacilitiesTable({
                         </div>
                       )}
                       <div className="pt-0.5">
-                        {renderIntensityBadge(fac.carbonIntensityLbsMWh)}
+                        <CarbonIntensityBadge
+                          intensity={fac.carbonIntensityLbsMWh}
+                        />
                       </div>
                     </TableCell>
 
@@ -565,9 +537,9 @@ export function FacilitiesTable({
                     </Badge>
                   )}
 
-                  {fac.primaryFuels.slice(0, 2).map((fuel) =>
-                    renderFuelBadge(fuel),
-                  )}
+                  {fac.primaryFuels.slice(0, 2).map((fuel) => (
+                    <FuelBadge key={fuel} fuel={fuel} size="sm" />
+                  ))}
 
                   {fac.controlledUnitsCount > 0 && (
                     <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-400">
