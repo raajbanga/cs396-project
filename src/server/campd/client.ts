@@ -1,4 +1,5 @@
 import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import { env } from "~/env";
 import { db } from "~/server/db";
 import {
@@ -13,33 +14,131 @@ import {
 
 const CAMPD_BASE_URL = "https://api.epa.gov/easey";
 
-export interface CampdAnnualEmissionsItem {
-  stateCode: string;
-  facilityName: string;
-  facilityId: number;
-  unitId: string;
-  unit_id?: string;
-  year: number;
-  countOpTime?: number;
-  sumOpTime?: number | null;
-  grossLoad?: number | null; // MWh
-  heatInput?: number | null; // MMBtu
-  co2Mass?: number | null; // short tons
-  so2Mass?: number | null; // short tons
-  noxMass?: number | null; // short tons
-  primaryFuelInfo?: string | null;
-  secondaryFuelInfo?: string | null;
-  unitType?: string | null;
-  so2ControlInfo?: string | null;
-  noxControlInfo?: string | null;
-  pmControlInfo?: string | null;
-  hgControlInfo?: string | null;
-  programCodeInfo?: string | null;
-}
+/**
+ * Zod Ingestion & Normalization Schema (PRD Section 3.1):
+ * Resolves malalignment across CAMPD REST API (camelCase), snake_case,
+ * and bulk EPA Custom Data Download (CDD) CSV headers into unified internal fields.
+ */
+export const rawCampdRecordSchema = z
+  .record(z.unknown())
+  .transform((raw, ctx) => {
+    const get = (...keys: string[]): unknown => {
+      for (const k of keys) {
+        if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
+          return raw[k];
+        }
+      }
+      return undefined;
+    };
 
-export interface CampdApiResponse {
-  items: CampdAnnualEmissionsItem[];
-}
+    const toNum = (val: unknown, fallback = 0): number => {
+      if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
+      if (typeof val === "string") {
+        const n = Number.parseFloat(val.replace(/,/g, "").trim());
+        return Number.isNaN(n) ? fallback : n;
+      }
+      return fallback;
+    };
+
+    const toStr = (val: unknown): string | null => {
+      if (typeof val === "string") {
+        const s = val.trim();
+        return s.length > 0 ? s : null;
+      }
+      if (typeof val === "number" || typeof val === "boolean") {
+        return String(val);
+      }
+      return null;
+    };
+
+    const facIdVal = get(
+      "facilityId",
+      "facility_id",
+      "Facility ID (ORISPL)",
+      "Facility ID",
+    );
+    const facilityId = Math.round(toNum(facIdVal, 0));
+
+    const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
+    const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
+      .toUpperCase()
+      .slice(0, 2);
+    const facilityName =
+      toStr(get("facilityName", "facility_name", "Facility Name")) ??
+      `Facility #${facilityId}`;
+    const year = Math.round(toNum(get("year", "Year", "reportingYear"), 2022));
+
+    if (!facilityId || !unitId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Missing mandatory facilityId or unitId",
+      });
+      return z.NEVER;
+    }
+
+    return {
+      facilityId,
+      facilityName,
+      stateCode,
+      unitId,
+      year,
+      operatingHours: toNum(
+        get(
+          "sumOpTime",
+          "operatingTime",
+          "operatingHours",
+          "Operating Time",
+          "countOpTime",
+        ),
+        0,
+      ),
+      grossGenerationMWh: toNum(
+        get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
+        0,
+      ),
+      heatInputMMBtu: toNum(
+        get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
+        0,
+      ),
+      co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
+      so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
+      noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
+      primaryFuel: toStr(
+        get(
+          "primaryFuelInfo",
+          "primaryFuel",
+          "primary_fuel",
+          "Primary Fuel Type",
+        ),
+      ),
+      secondaryFuel: toStr(
+        get(
+          "secondaryFuelInfo",
+          "secondaryFuel",
+          "secondary_fuel",
+          "Secondary Fuel Type",
+        ),
+      ),
+      unitType: toStr(get("unitType", "unit_type", "Unit Type")),
+      so2Controls: toStr(
+        get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
+      ),
+      noxControls: toStr(
+        get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
+      ),
+      pmControls: toStr(
+        get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
+      ),
+      hgControls: toStr(
+        get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
+      ),
+      programCode: toStr(
+        get("programCodeInfo", "programCode", "program_code", "Program Code"),
+      ),
+    };
+  });
+
+export type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
 
 export interface SyncOptions {
   year: number;
@@ -49,9 +148,6 @@ export interface SyncOptions {
   maxPages?: number;
 }
 
-/**
- * Fetch raw annual apportioned emissions from EPA CAMPD API
- */
 export async function fetchCampdAnnualEmissions(
   params: {
     year: number;
@@ -61,7 +157,7 @@ export async function fetchCampdAnnualEmissions(
     perPage: number;
   },
   apiKey?: string,
-): Promise<{ items: CampdAnnualEmissionsItem[]; totalCount: number }> {
+): Promise<{ items: Record<string, unknown>[]; totalCount: number }> {
   const key = apiKey ?? env.CAMPD_API;
   if (!key) {
     throw new Error(
@@ -102,7 +198,7 @@ export async function fetchCampdAnnualEmissions(
   const totalCount = totalCountHeader
     ? Number.parseInt(totalCountHeader, 10)
     : 0;
-  const data = (await response.json()) as CampdApiResponse;
+  const data = (await response.json()) as { items?: Record<string, unknown>[] };
 
   return {
     items: data.items ?? [],
@@ -243,19 +339,26 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
     const newFacilitiesToInsert: Array<typeof facilities.$inferInsert> = [];
     const newUnitsToInsert: Array<typeof units.$inferInsert> = [];
 
-    for (const item of items) {
+    // 1. Zod normalization & in-memory composite natural key (facilityId, unitId, year) deduplication
+    const dedupedBatch = new Map<string, NormalizedCampdRecord>();
+    for (const rawItem of items) {
       totalRawProcessed++;
-      const facilityId = item.facilityId;
-      const unitId = item.unitId || item.unit_id;
-      if (!facilityId || !unitId) continue;
+      const res = rawCampdRecordSchema.safeParse(rawItem);
+      if (!res.success) continue;
+      const rec = res.data;
+      dedupedBatch.set(`${rec.facilityId}:${rec.unitId}:${rec.year}`, rec);
+    }
+
+    for (const item of dedupedBatch.values()) {
+      const { facilityId, unitId } = item;
 
       // Auto-create facility stub if missing
       if (!facilitySet.has(facilityId)) {
         facilitySet.add(facilityId);
         newFacilitiesToInsert.push({
           id: facilityId,
-          name: item.facilityName || `Facility #${facilityId}`,
-          stateCode: item.stateCode || "US",
+          name: item.facilityName,
+          stateCode: item.stateCode,
         });
       }
 
@@ -269,24 +372,26 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
           id: unitInternalId,
           unitId,
           facilityId,
-          unitType: item.unitType ?? null,
-          primaryFuel: item.primaryFuelInfo ?? null,
-          secondaryFuel: item.secondaryFuelInfo ?? null,
-          noxControls: item.noxControlInfo ?? null,
-          so2Controls: item.so2ControlInfo ?? null,
-          pmControls: item.pmControlInfo ?? null,
-          hgControls: item.hgControlInfo ?? null,
-          programCode: item.programCodeInfo ?? null,
+          unitType: item.unitType,
+          primaryFuel: item.primaryFuel,
+          secondaryFuel: item.secondaryFuel,
+          noxControls: item.noxControls,
+          so2Controls: item.so2Controls,
+          pmControls: item.pmControls,
+          hgControls: item.hgControls,
+          programCode: item.programCode,
         });
       }
 
-      // Metric normalization
-      const operatingHours = item.sumOpTime ?? 0.0;
-      const grossGenerationMWh = item.grossLoad ?? 0.0;
-      const heatInputMMBtu = item.heatInput ?? 0.0;
-      const co2MassTons = item.co2Mass ?? 0.0;
-      const so2MassTons = item.so2Mass ?? 0.0;
-      const noxMassTons = item.noxMass ?? 0.0;
+      // Normalized metrics from Zod output
+      const {
+        operatingHours,
+        grossGenerationMWh,
+        heatInputMMBtu,
+        co2MassTons,
+        so2MassTons,
+        noxMassTons,
+      } = item;
 
       // Derived Efficiency Metrics (PRD Section 1.2 & 3.3)
       const co2IntensityLbsMWh =

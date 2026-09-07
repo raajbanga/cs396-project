@@ -116,6 +116,67 @@ export function getPlantRole(params: {
   };
 }
 
+export function formatLargeNumber(num: number, suffix = "") {
+  if (num <= 0) return "0" + suffix;
+  if (num >= 1_000_000) {
+    return (num / 1_000_000).toFixed(1) + "M" + suffix;
+  }
+  if (num >= 1_000) {
+    return Math.round(num / 1_000).toLocaleString() + "K" + suffix;
+  }
+  return num.toLocaleString() + suffix;
+}
+
+export interface CarbonIntensityTier {
+  tier: "clean" | "intermediate" | "high" | "unknown";
+  label: string;
+  badgeText: string;
+  badgeClass: string;
+  description: string;
+  narrativeDescription: string;
+}
+
+export function getCarbonIntensityTier(intensity: number | null): CarbonIntensityTier {
+  if (intensity === null || intensity === 0) {
+    return {
+      tier: "unknown",
+      label: "Zero / Unreported",
+      badgeText: "Zero / Clean",
+      badgeClass: "bg-zinc-800 text-zinc-400 border-zinc-700",
+      description: "No direct fossil carbon intensity reported.",
+      narrativeDescription: "No direct annual carbon emissions were reported.",
+    };
+  }
+  if (intensity < 950) {
+    return {
+      tier: "clean",
+      label: "Low Carbon CCGT",
+      badgeText: `${intensity} lbs/MWh • Clean Gas`,
+      badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      description: `${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`,
+      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, typical of modern, high-efficiency combined-cycle natural gas generation.`,
+    };
+  }
+  if (intensity <= 1600) {
+    return {
+      tier: "intermediate",
+      label: "Intermediate Peaker",
+      badgeText: `${intensity} lbs/MWh • Peaker`,
+      badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      description: `${intensity} lbs CO2 emitted per MWh generated (Peaker / Intermediate)`,
+      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, indicative of load-following or simple-cycle gas peakers.`,
+    };
+  }
+  return {
+    tier: "high",
+    label: "High Carbon Coal",
+    badgeText: `${intensity} lbs/MWh • High Carbon`,
+    badgeClass: "bg-red-500/10 text-red-400 border-red-500/20",
+    description: `${intensity} lbs CO2 emitted per MWh generated (High-emission fossil / coal)`,
+    narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, characteristic of carbon-dense coal or older thermal generation.`,
+  };
+}
+
 /**
  * Translates megawatts and carbon tonnage into tangible, real-world human equivalents.
  * Formulas derived from EPA Greenhouse Gas Equivalencies Calculator:
@@ -127,17 +188,6 @@ export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
   const homes = Math.round(capacityMW * 750);
   const cars = Math.round(co2Tons * 0.217);
   const trees = Math.round(co2Tons * 16.5);
-
-  const formatLargeNumber = (num: number, suffix = "") => {
-    if (num <= 0) return "0" + suffix;
-    if (num >= 1_000_000) {
-      return (num / 1_000_000).toFixed(1) + "M" + suffix;
-    }
-    if (num >= 1_000) {
-      return Math.round(num / 1_000).toLocaleString() + "K" + suffix;
-    }
-    return num.toLocaleString() + suffix;
-  };
 
   return {
     homesPoweredRaw: homes,
@@ -224,13 +274,8 @@ export function generatePlantStory(params: {
   if (params.co2Tons > 0) {
     environmentalStory = `The plant emitted ${params.co2Tons.toLocaleString()} tons of carbon dioxide (CO2), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
     if (params.carbonIntensity) {
-      if (params.carbonIntensity < 950) {
-        environmentalStory += `Its emissions intensity is ${params.carbonIntensity.toLocaleString()} lbs CO2/MWh, typical of modern, high-efficiency combined-cycle natural gas generation. `;
-      } else if (params.carbonIntensity > 1600) {
-        environmentalStory += `Its emissions intensity is ${params.carbonIntensity.toLocaleString()} lbs CO2/MWh, characteristic of carbon-dense coal or older thermal generation. `;
-      } else {
-        environmentalStory += `Its emissions intensity is ${params.carbonIntensity.toLocaleString()} lbs CO2/MWh. `;
-      }
+      const tier = getCarbonIntensityTier(params.carbonIntensity);
+      environmentalStory += `${tier.narrativeDescription} `;
     }
   } else {
     environmentalStory =

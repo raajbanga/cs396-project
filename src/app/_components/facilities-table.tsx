@@ -39,30 +39,15 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
+  getCarbonIntensityTier,
   getHumanEquivalents,
   getPlantRole,
-  type PlantRoleInfo,
 } from "~/lib/plant-narrative";
+import { getFuelTheme } from "~/lib/map-utils";
+import { type RouterOutputs } from "~/trpc/react";
 
-export interface FacilityRow {
-  id: number;
-  name: string;
-  stateCode: string;
-  county: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  epaRegion: number | null;
-  nercRegion: string | null;
-  sourceCategory: string | null;
-  ownerOperator: string | null;
-  unitCount: number;
-  totalCapacityMW: number;
-  totalCo2Tons: number;
-  totalOperatingHours: number;
-  primaryFuels: string[];
-  carbonIntensityLbsMWh: number | null;
-  controlledUnitsCount: number;
-}
+export type FacilityRow =
+  RouterOutputs["facilities"]["getFacilities"]["items"][number];
 
 export type SortByField = "name" | "id" | "capacity" | "co2";
 export type SortDirection = "asc" | "desc";
@@ -130,131 +115,57 @@ export function FacilitiesTable({
     );
   };
 
-  // Fuel badge helper for clean, consistent one-line visual tags
+  // Fuel badge helper using unified getFuelTheme
   const renderFuelBadge = (fuel: string) => {
-    const f = fuel.toLowerCase();
-    if (f.includes("gas") || f.includes("methane")) {
-      return (
-        <Badge
-          key={fuel}
-          variant="sky"
-          className="gap-0.5 px-1.5 py-0 text-[10px] font-medium"
-        >
-          <Flame className="h-2.5 w-2.5 shrink-0 text-sky-400" />
-          <span>{fuel}</span>
-        </Badge>
-      );
-    }
-    if (f.includes("coal") || f.includes("lignite")) {
-      return (
-        <Badge
-          key={fuel}
-          variant="destructive"
-          className="gap-0.5 border-red-800/40 bg-red-950/40 px-1.5 py-0 text-[10px] font-medium text-red-300"
-        >
-          <span>{fuel}</span>
-        </Badge>
-      );
-    }
-    if (f.includes("oil") || f.includes("diesel")) {
-      return (
-        <Badge
-          key={fuel}
-          variant="warning"
-          className="gap-0.5 px-1.5 py-0 text-[10px] font-medium"
-        >
-          <span>{fuel}</span>
-        </Badge>
-      );
-    }
+    const theme = getFuelTheme(fuel);
     return (
       <Badge
         key={fuel}
-        variant="secondary"
-        className="px-1.5 py-0 text-[10px] font-medium"
+        variant={theme.variant}
+        className="gap-0.5 px-1.5 py-0 text-[10px] font-medium"
       >
+        {theme.name === "Natural Gas" && (
+          <Flame className="h-2.5 w-2.5 shrink-0 text-sky-400" />
+        )}
         <span>{fuel}</span>
       </Badge>
     );
   };
 
-  // Carbon Intensity badge helper
+  // Carbon Intensity badge helper using unified getCarbonIntensityTier
   const renderIntensityBadge = (intensity: number | null) => {
     if (intensity === null || intensity === 0) return null;
-    if (intensity < 950) {
-      return (
-        <span
-          className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
-          title={`${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`}
-        >
-          {intensity} lbs/MWh • Clean Gas
-        </span>
-      );
-    }
-    if (intensity <= 1600) {
-      return (
-        <span
-          className="inline-flex items-center gap-1 rounded border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-          title={`${intensity} lbs CO2 emitted per MWh generated (Peaker / Intermediate)`}
-        >
-          {intensity} lbs/MWh • Peaker
-        </span>
-      );
-    }
+    const tier = getCarbonIntensityTier(intensity);
     return (
       <span
-        className="inline-flex items-center gap-1 rounded border border-red-500/20 bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-        title={`${intensity} lbs CO2 emitted per MWh generated (High-emission fossil / coal)`}
+        className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-medium ${tier.badgeClass}`}
+        title={tier.description}
       >
-        {intensity} lbs/MWh • High Carbon
+        {tier.badgeText}
       </span>
     );
   };
 
   // Plain-English Role Icon helper
-  const renderRoleIcon = (icon: PlantRoleInfo["icon"]) => {
-    switch (icon) {
-      case "zap":
-        return <Zap className="h-2.5 w-2.5" />;
-      case "clock":
-        return <Clock className="h-2.5 w-2.5" />;
-      case "factory":
-        return <Factory className="h-2.5 w-2.5" />;
-      case "power":
-        return <Power className="h-2.5 w-2.5" />;
-      case "activity":
-      default:
-        return <Activity className="h-2.5 w-2.5" />;
-    }
+  const renderRoleIcon = (icon: string) => {
+    if (icon === "zap") return <Zap className="h-2.5 w-2.5" />;
+    if (icon === "clock") return <Clock className="h-2.5 w-2.5" />;
+    if (icon === "factory") return <Factory className="h-2.5 w-2.5" />;
+    if (icon === "power") return <Power className="h-2.5 w-2.5" />;
+    return <Activity className="h-2.5 w-2.5" />;
   };
 
-  // Generate windowed page numbers with ellipsis
+  // Windowed page numbers with ellipsis
   const getPageNumbers = () => {
-    const pages: (number | "ellipsis")[] = [];
-    const maxVisible = 5;
-
-    if (totalPages <= maxVisible + 2) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-      return pages;
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
     }
-
-    pages.push(1);
-
-    const start = Math.max(2, page - 1);
-    const end = Math.min(totalPages - 1, page + 1);
-
-    if (start > 2) {
-      pages.push("ellipsis");
-    }
-
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-
-    if (end < totalPages - 1) {
-      pages.push("ellipsis");
-    }
-
+    const left = Math.max(2, page - 1);
+    const right = Math.min(totalPages - 1, page + 1);
+    const pages: (number | "ellipsis")[] = [1];
+    if (left > 2) pages.push("ellipsis");
+    for (let i = left; i <= right; i++) pages.push(i);
+    if (right < totalPages - 1) pages.push("ellipsis");
     pages.push(totalPages);
     return pages;
   };
@@ -342,31 +253,17 @@ export function FacilitiesTable({
           {isLoading ? (
             Array.from({ length: pageSize }).map((_, i) => (
               <TableRow key={i} className="animate-pulse">
-                <TableCell className="text-center">
-                  <div className="mx-auto h-4 w-4 rounded bg-zinc-800" />
-                </TableCell>
-                <TableCell>
-                  <div className="h-4 w-12 rounded bg-zinc-800" />
-                </TableCell>
+                <TableCell className="text-center"><div className="mx-auto h-4 w-4 rounded bg-zinc-800" /></TableCell>
+                <TableCell><div className="h-4 w-12 rounded bg-zinc-800" /></TableCell>
                 <TableCell>
                   <div className="mb-1 h-4 w-48 rounded bg-zinc-800" />
                   <div className="h-3 w-32 rounded bg-zinc-800/60" />
                 </TableCell>
-                <TableCell>
-                  <div className="h-4 w-24 rounded bg-zinc-800" />
-                </TableCell>
-                <TableCell>
-                  <div className="h-4 w-32 rounded bg-zinc-800" />
-                </TableCell>
-                <TableCell className="text-center">
-                  <div className="mx-auto h-4 w-16 rounded bg-zinc-800" />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="ml-auto h-4 w-16 rounded bg-zinc-800" />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="ml-auto h-7 w-16 rounded bg-zinc-800" />
-                </TableCell>
+                <TableCell><div className="h-4 w-24 rounded bg-zinc-800" /></TableCell>
+                <TableCell><div className="h-4 w-32 rounded bg-zinc-800" /></TableCell>
+                <TableCell className="text-center"><div className="mx-auto h-4 w-16 rounded bg-zinc-800" /></TableCell>
+                <TableCell className="text-right"><div className="ml-auto h-4 w-16 rounded bg-zinc-800" /></TableCell>
+                <TableCell className="text-right"><div className="ml-auto h-7 w-16 rounded bg-zinc-800" /></TableCell>
               </TableRow>
             ))
           ) : facilities?.length === 0 ? (
