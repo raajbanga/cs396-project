@@ -284,6 +284,9 @@ export const facilitiesRouter = createTRPCRouter({
           controlledUnitsCount: sql<number>`(
             SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL)
           )`.as("controlled_units_count"),
+          totalOperatingHours: sql<number>`(
+            SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
+          )`.as("total_operating_hours"),
         })
         .from(facilities)
         .where(whereClause)
