@@ -5,6 +5,11 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  outputFileTracingIncludes: {
+    "/*": ["./db.sqlite"],
+    "/**/*": ["./db.sqlite"],
+  },
+};
 
 export default config;

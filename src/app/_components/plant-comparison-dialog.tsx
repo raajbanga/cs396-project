@@ -10,31 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { getCarbonIntensityTier } from "~/lib/plant-narrative";
+import { getFuelTheme } from "~/lib/map-utils";
+import { type RouterOutputs } from "~/trpc/react";
 
-export interface ComparedPlant {
-  id: number;
-  name: string;
-  stateCode: string;
-  county: string | null;
-  nercRegion: string | null;
-  sourceCategory: string | null;
-  ownerOperator: string | null;
-  unitCount: number;
-  operatingUnitsCount: number;
-  totalCapacityMW: number;
-  primaryFuels: (string | null)[];
-  secondaryFuels: (string | null)[];
-  totalOperatingHours: number;
-  totalGenerationMWh: number;
-  totalCo2Tons: number;
-  totalSo2Tons: number;
-  totalNoxTons: number;
-  carbonIntensityLbsMWh: number | null;
-  heatRateMMBtuMWh: number | null;
-  so2ControlledUnits: number;
-  noxControlledUnits: number;
-  pmControlledUnits: number;
-}
+export type ComparedPlant =
+  RouterOutputs["facilities"]["compareFacilities"][number];
 
 interface PlantComparisonDialogProps {
   open: boolean;
@@ -48,7 +29,6 @@ interface PlantComparisonDialogProps {
 export function PlantComparisonDialog({
   open,
   onOpenChange,
-  compareIds: _compareIds,
   plants = [],
   isLoading,
   onClearSelection,
@@ -67,27 +47,11 @@ export function PlantComparisonDialog({
   const maxCapacity = Math.max(...plants.map((p) => p.totalCapacityMW), 1);
   const maxCo2 = Math.max(...plants.map((p) => p.totalCo2Tons), 1);
 
-  const getFuelBadgeVariant = (fuel: string) => {
-    const f = fuel.toLowerCase();
-    if (f.includes("gas") || f.includes("methane")) return "sky";
-    if (f.includes("coal") || f.includes("lignite")) return "destructive";
-    if (f.includes("oil") || f.includes("diesel")) return "warning";
-    return "secondary";
-  };
-
   const getCarbonIntensityBadge = (intensity: number | null) => {
     if (intensity === null || intensity === 0) {
       return <span className="font-mono text-zinc-500">—</span>;
     }
-    let badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    let benchmarkText = "Low Carbon CCGT";
-    if (intensity > 1600) {
-      badgeClass = "bg-red-500/10 text-red-400 border-red-500/20";
-      benchmarkText = "High Carbon Coal";
-    } else if (intensity > 950) {
-      badgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-      benchmarkText = "Intermediate Peaker";
-    }
+    const tier = getCarbonIntensityTier(intensity);
 
     return (
       <div className="space-y-1">
@@ -96,9 +60,9 @@ export function PlantComparisonDialog({
           <span className="text-[11px] font-normal text-zinc-400">lbs/MWh</span>
         </div>
         <span
-          className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${badgeClass}`}
+          className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-medium ${tier.badgeClass}`}
         >
-          {benchmarkText}
+          {tier.label}
         </span>
       </div>
     );
@@ -324,7 +288,7 @@ export function PlantComparisonDialog({
                             .map((f) => (
                               <Badge
                                 key={f}
-                                variant={getFuelBadgeVariant(f)}
+                                variant={getFuelTheme(f).variant}
                                 className="text-[10px]"
                               >
                                 {f}
