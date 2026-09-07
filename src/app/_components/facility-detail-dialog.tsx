@@ -13,6 +13,7 @@ import {
   Leaf,
   MapPin,
   RefreshCw,
+  Scale,
   Sparkles,
   Zap,
 } from "lucide-react";
@@ -28,6 +29,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { FuelBadge } from "~/components/ui/fuel-badge";
+import { PlantRoleBadge } from "~/components/ui/plant-role-badge";
 import { StatTile } from "~/components/ui/stat-tile";
 import {
   Table,
@@ -37,7 +39,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { generatePlantStory } from "~/lib/plant-narrative";
+import {
+  cleanOwnerOperator,
+  formatCountyShort,
+  generatePlantStory,
+} from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
 export type FacilityDetailData = NonNullable<
@@ -55,6 +61,8 @@ interface FacilityDetailDialogProps {
   facilityId: number | null;
   facility?: FacilityDetailData | null;
   isLoading: boolean;
+  onToggleCompare?: (id: number) => void;
+  isInCompare?: boolean;
 }
 
 export function FacilityDetailDialog({
@@ -63,6 +71,8 @@ export function FacilityDetailDialog({
   facilityId,
   facility,
   isLoading,
+  onToggleCompare,
+  isInCompare,
 }: FacilityDetailDialogProps) {
   const [activeTab, setActiveTab] = useState<"units" | "emissions" | "audit">(
     "units",
@@ -116,24 +126,38 @@ export function FacilityDetailDialog({
         {/* Dialog Header */}
         <DialogHeader className="shrink-0 border-b border-edge pb-3 pr-10">
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-xs font-bold text-emerald-400">
-                ORISPL #{facility?.id ?? facilityId}
-              </span>
-              {facility?.nercRegion && (
-                <Badge variant="sky" className="font-mono text-[10px]">
-                  Grid: {facility.nercRegion}
-                </Badge>
-              )}
-              {facility?.epaRegion && (
-                <Badge variant="outline" className="font-mono text-[10px]">
-                  EPA Region {facility.epaRegion}
-                </Badge>
-              )}
-              {facility?.sourceCategory && (
-                <Badge variant="secondary" className="text-[10px]">
-                  {facility.sourceCategory}
-                </Badge>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono text-xs font-medium text-emerald-400">
+                  ORISPL #{facility?.id ?? facilityId}
+                </span>
+                {facility?.nercRegion && (
+                  <Badge variant="sky" className="font-mono text-xs">
+                    Grid: {facility.nercRegion}
+                  </Badge>
+                )}
+                {facility?.epaRegion && (
+                  <Badge variant="outline" className="font-mono text-xs">
+                    EPA Region {facility.epaRegion}
+                  </Badge>
+                )}
+                {facility?.sourceCategory && (
+                  <Badge variant="secondary">
+                    {facility.sourceCategory}
+                  </Badge>
+                )}
+              </div>
+
+              {onToggleCompare && facility && (
+                <Button
+                  variant={isInCompare ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => onToggleCompare(facility.id)}
+                  className="h-6 gap-1 px-2.5 text-xs"
+                >
+                  <Scale className="h-3 w-3 text-emerald-400" />
+                  <span>{isInCompare ? "In Comparison" : "Add to Compare"}</span>
+                </Button>
               )}
             </div>
 
@@ -142,11 +166,11 @@ export function FacilityDetailDialog({
             </DialogTitle>
 
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
-              <span>Owner: {facility?.ownerOperator ?? "Unlisted"}</span>
+              <span>Owner: {cleanOwnerOperator(facility?.ownerOperator ?? null)}</span>
               <span>•</span>
               <span className="flex items-center gap-1">
                 <MapPin className="h-3 w-3 text-fg-muted" />
-                {facility?.county ? `${facility.county} Co., ` : ""}
+                {facility?.county ? `${formatCountyShort(facility.county)}, ` : ""}
                 {facility?.stateCode}
               </span>
               {mapsUrl && (
@@ -252,15 +276,10 @@ export function FacilityDetailDialog({
                     Plant Overview & Role
                   </span>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${story.roleInfo.badgeClass}`}
-                  title={story.roleInfo.description}
-                >
-                  <span>{story.roleInfo.badgeLabel}</span>
-                </span>
+                <PlantRoleBadge roleInfo={story.roleInfo} />
               </div>
 
-              <p className="text-xs font-medium leading-relaxed text-fg sm:text-sm">
+              <p className="text-sm font-medium leading-relaxed text-fg">
                 {story.headline}
               </p>
 
@@ -270,7 +289,7 @@ export function FacilityDetailDialog({
                     <Zap className="h-3.5 w-3.5" />
                     Grid & Operational Dispatch
                   </span>
-                  <p className="text-xs leading-relaxed text-fg-2">
+                  <p className="text-sm leading-relaxed text-fg-2">
                     {story.gridStory}
                   </p>
                 </div>
@@ -280,7 +299,7 @@ export function FacilityDetailDialog({
                     <Leaf className="h-3.5 w-3.5" />
                     Environmental Footprint
                   </span>
-                  <p className="text-xs leading-relaxed text-fg-2">
+                  <p className="text-sm leading-relaxed text-fg-2">
                     {story.environmentalStory}
                   </p>
                 </div>
@@ -349,7 +368,7 @@ export function FacilityDetailDialog({
               {allAuditLogs.length > 0 && (
                 <Badge
                   variant="warning"
-                  className="px-1.5 py-0 font-mono text-[10px]"
+                  className="px-1.5 py-0 font-mono text-xs"
                 >
                   {allAuditLogs.length}
                 </Badge>
@@ -396,7 +415,7 @@ export function FacilityDetailDialog({
                           .includes("op");
                         return (
                           <TableRow key={unit.id} className="hover:bg-surface/40">
-                            <TableCell className="font-mono text-xs font-bold text-emerald-400">
+                            <TableCell className="font-mono text-xs font-medium text-emerald-400">
                               Unit {unit.unitId}
                             </TableCell>
 
@@ -406,13 +425,10 @@ export function FacilityDetailDialog({
                               </div>
                               <div className="flex flex-wrap items-center gap-1 pt-1">
                                 {unit.primaryFuel && (
-                                  <FuelBadge fuel={unit.primaryFuel} size="sm" />
+                                  <FuelBadge fuel={unit.primaryFuel} />
                                 )}
                                 {unit.secondaryFuel && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[10px]"
-                                  >
+                                  <Badge variant="secondary">
                                     Sec: {unit.secondaryFuel}
                                   </Badge>
                                 )}
@@ -420,10 +436,7 @@ export function FacilityDetailDialog({
                             </TableCell>
 
                             <TableCell>
-                              <Badge
-                                variant={isOperating ? "success" : "secondary"}
-                                className="text-[10px]"
-                              >
+                              <Badge variant={isOperating ? "success" : "secondary"}>
                                 {unit.operatingStatus ?? "Operating"}
                               </Badge>
                             </TableCell>
@@ -438,7 +451,7 @@ export function FacilityDetailDialog({
                               <div className="space-y-0.5 text-xs">
                                 {unit.noxControls && (
                                   <div className="truncate text-fg-2">
-                                    <span className="font-semibold text-fg-muted">
+                                    <span className="font-medium text-fg-muted">
                                       NOx:
                                     </span>{" "}
                                     {unit.noxControls}
@@ -446,14 +459,14 @@ export function FacilityDetailDialog({
                                 )}
                                 {unit.so2Controls && (
                                   <div className="truncate text-fg-2">
-                                    <span className="font-semibold text-fg-muted">
+                                    <span className="font-medium text-fg-muted">
                                       SO₂:
                                     </span>{" "}
                                     {unit.so2Controls}
                                   </div>
                                 )}
                                 {!unit.noxControls && !unit.so2Controls && (
-                                  <span className="text-fg-muted italic text-[11px]">
+                                  <span className="text-fg-muted italic text-xs">
                                     No controls listed
                                   </span>
                                 )}
@@ -502,7 +515,7 @@ export function FacilityDetailDialog({
                     <TableBody>
                       {facility?.annualRecords.map((rec) => (
                         <TableRow key={rec.id} className="hover:bg-surface/40">
-                          <TableCell className="font-mono font-bold text-fg">
+                          <TableCell className="font-mono font-medium text-fg">
                             {rec.year}
                           </TableCell>
                           <TableCell className="text-right font-mono text-fg-2">
@@ -519,7 +532,6 @@ export function FacilityDetailDialog({
                             <CarbonIntensityBadge
                               intensity={rec.co2IntensityLbsMWh}
                               showValue
-                              size="sm"
                             />
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs text-fg-muted">

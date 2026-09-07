@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Globe, RefreshCw, Scale, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
+import { useFacilityFilters } from "~/hooks/use-facility-filters";
+import { usePlantComparison } from "~/hooks/use-plant-comparison";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { CampdSyncDialog } from "./campd-sync-dialog";
@@ -21,23 +23,9 @@ export function DatabaseExplorer() {
     "explorer",
   );
 
-  // Search & Filter state
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedState, setSelectedState] = useState<string>("ALL");
-  const [selectedFuel, setSelectedFuel] = useState<string>("ALL");
-  const [selectedNerc, setSelectedNerc] = useState<string>("ALL");
-  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
-  const [sortBy, setSortBy] = useState<"name" | "id" | "capacity" | "co2">(
-    "name",
-  );
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-
-  // Benchmarking Selection (2–4 plants)
-  const [compareIds, setCompareIds] = useState<number[]>([]);
-  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  // Custom encapsulated state hooks
+  const filters = useFacilityFilters();
+  const comparison = usePlantComparison();
 
   // Unit inspector modal
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
@@ -49,25 +37,6 @@ export function DatabaseExplorer() {
   const [syncYear, setSyncYear] = useState<number>(2022);
   const [syncState, setSyncState] = useState<string>("ALL");
   const [syncLimit, setSyncLimit] = useState<number>(100);
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  const handleSortChange = (field: "name" | "id" | "capacity" | "co2") => {
-    if (sortBy === field) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortDir(field === "capacity" || field === "co2" ? "desc" : "asc");
-    }
-    setPage(1);
-  };
 
   // tRPC Client queries
   const utils = api.useUtils();
@@ -82,15 +51,14 @@ export function DatabaseExplorer() {
     isPlaceholderData,
   } = api.facilities.getFacilities.useQuery(
     {
-      page,
-      pageSize,
-      search: debouncedSearch,
-      stateCode: selectedState,
-      primaryFuel: selectedFuel,
-      nercRegion: selectedNerc,
-      sourceCategory: selectedCategory,
-      sortBy,
-      sortDir,
+      page: filters.page,
+      pageSize: filters.pageSize,
+      search: filters.debouncedSearch,
+      stateCode: filters.selectedState,
+      primaryFuel: filters.selectedFuel,
+      nercRegion: filters.selectedNerc,
+      sortBy: filters.sortBy,
+      sortDir: filters.sortDir,
     },
     {
       placeholderData: (prev) => prev,
@@ -100,11 +68,10 @@ export function DatabaseExplorer() {
   const { data: mapFacilities, isLoading: mapFacilitiesLoading } =
     api.facilities.getMapFacilities.useQuery(
       {
-        search: debouncedSearch,
-        stateCode: selectedState,
-        primaryFuel: selectedFuel,
-        nercRegion: selectedNerc,
-        sourceCategory: selectedCategory,
+        search: filters.debouncedSearch,
+        stateCode: filters.selectedState,
+        primaryFuel: filters.selectedFuel,
+        nercRegion: filters.selectedNerc,
       },
       {
         placeholderData: (prev) => prev,
@@ -119,8 +86,8 @@ export function DatabaseExplorer() {
 
   const { data: compareData, isLoading: compareLoading } =
     api.facilities.compareFacilities.useQuery(
-      { ids: compareIds },
-      { enabled: isCompareOpen && compareIds.length >= 2 },
+      { ids: comparison.compareIds },
+      { enabled: comparison.isCompareOpen && comparison.canCompare },
     );
 
   const { data: auditLogs, isLoading: auditLoading } =
@@ -139,38 +106,6 @@ export function DatabaseExplorer() {
     },
   });
 
-  const hasActiveFilters = useMemo(
-    () =>
-      search.trim() !== "" ||
-      selectedState !== "ALL" ||
-      selectedFuel !== "ALL" ||
-      selectedNerc !== "ALL" ||
-      selectedCategory !== "ALL",
-    [search, selectedState, selectedFuel, selectedNerc, selectedCategory],
-  );
-
-  const resetFilters = () => {
-    setSearch("");
-    setDebouncedSearch("");
-    setSelectedState("ALL");
-    setSelectedFuel("ALL");
-    setSelectedNerc("ALL");
-    setSelectedCategory("ALL");
-    setPage(1);
-  };
-
-  const toggleCompareId = (id: number) => {
-    if (compareIds.includes(id)) {
-      setCompareIds(compareIds.filter((x) => x !== id));
-    } else {
-      if (compareIds.length >= 4) {
-        alert("Maximum of 4 facilities can be compared simultaneously.");
-        return;
-      }
-      setCompareIds([...compareIds, id]);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-canvas text-fg antialiased selection:bg-surface-2 selection:text-fg">
       {/* Top Navigation Bar */}
@@ -183,12 +118,12 @@ export function DatabaseExplorer() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="truncate text-base font-bold tracking-tight text-fg">
+                <span className="truncate text-base font-semibold tracking-tight text-fg">
                   GridPulse
                 </span>
                 <Badge
                   variant="outline"
-                  className="hidden border-edge py-0 px-1.5 font-mono text-[10px] text-fg-muted sm:inline-flex"
+                  className="hidden border-edge py-0 px-1.5 font-mono text-xs text-fg-muted sm:inline-flex"
                 >
                   v1.0
                 </Badge>
@@ -240,7 +175,7 @@ export function DatabaseExplorer() {
                 {(stats?.totalAnomalies ?? 0) > 0 && (
                   <Badge
                     variant="warning"
-                    className="px-1.5 py-0 font-mono text-[10px]"
+                    className="px-1.5 py-0 font-mono text-xs"
                   >
                     {stats?.totalAnomalies}
                   </Badge>
@@ -290,51 +225,38 @@ export function DatabaseExplorer() {
         {activeTab === "explorer" && (
           <div className="space-y-4">
             <FacilityFilters
-              search={search}
-              onSearchChange={setSearch}
-              selectedState={selectedState}
-              onStateChange={(st) => {
-                setSelectedState(st);
-                setPage(1);
-              }}
-              selectedNerc={selectedNerc}
-              onNercChange={(n) => {
-                setSelectedNerc(n);
-                setPage(1);
-              }}
-              selectedFuel={selectedFuel}
-              onFuelChange={(f) => {
-                setSelectedFuel(f);
-                setPage(1);
-              }}
+              search={filters.search}
+              onSearchChange={filters.setSearch}
+              selectedState={filters.selectedState}
+              onStateChange={filters.setSelectedState}
+              selectedNerc={filters.selectedNerc}
+              onNercChange={filters.setSelectedNerc}
+              selectedFuel={filters.selectedFuel}
+              onFuelChange={filters.setSelectedFuel}
               filterOptions={filterOptions}
               totalMatching={facilitiesData?.totalCount}
               isLoading={facilitiesLoading}
-              hasActiveFilters={hasActiveFilters}
-              onResetFilters={resetFilters}
-              compareCount={compareIds.length}
+              hasActiveFilters={filters.hasActiveFilters}
+              onResetFilters={filters.resetFilters}
             />
 
             <FacilitiesTable
               facilities={facilitiesData?.items}
               totalCount={facilitiesData?.totalCount}
               totalPages={facilitiesData?.totalPages}
-              page={page}
-              pageSize={pageSize}
+              page={filters.page}
+              pageSize={filters.pageSize}
               isLoading={facilitiesLoading}
               isPlaceholderData={isPlaceholderData}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSortChange={handleSortChange}
-              compareIds={compareIds}
-              onToggleCompare={toggleCompareId}
+              sortBy={filters.sortBy}
+              sortDir={filters.sortDir}
+              onSortChange={filters.handleSortChange}
+              compareIds={comparison.compareIds}
+              onToggleCompare={comparison.toggleCompare}
               onInspect={(id) => setInspectFacilityId(id)}
-              onPageChange={setPage}
-              onPageSizeChange={(newSize) => {
-                setPageSize(newSize);
-                setPage(1);
-              }}
-              onResetFilters={resetFilters}
+              onPageChange={filters.setPage}
+              onPageSizeChange={filters.setPageSize}
+              onResetFilters={filters.resetFilters}
             />
           </div>
         )}
@@ -345,16 +267,10 @@ export function DatabaseExplorer() {
             facilities={mapFacilities}
             isLoading={mapFacilitiesLoading}
             onInspectFacility={(id) => setInspectFacilityId(id)}
-            selectedFuel={selectedFuel}
-            onFuelChange={(f) => {
-              setSelectedFuel(f);
-              setPage(1);
-            }}
-            selectedState={selectedState}
-            onStateChange={(st) => {
-              setSelectedState(st);
-              setPage(1);
-            }}
+            selectedFuel={filters.selectedFuel}
+            onFuelChange={filters.setSelectedFuel}
+            selectedState={filters.selectedState}
+            onStateChange={filters.setSelectedState}
           />
         )}
 
@@ -366,13 +282,13 @@ export function DatabaseExplorer() {
 
       {/* Head-to-Head Plant Benchmarking */}
       <PlantComparisonDialog
-        open={isCompareOpen}
-        onOpenChange={setIsCompareOpen}
-        compareIds={compareIds}
+        open={comparison.isCompareOpen}
+        onOpenChange={comparison.setIsCompareOpen}
         plants={compareData}
         isLoading={compareLoading}
-        onClearSelection={() => setCompareIds([])}
-        onRemovePlant={(id) => setCompareIds(compareIds.filter((x) => x !== id))}
+        onClearSelection={comparison.clearCompare}
+        onRemovePlant={comparison.removeCompare}
+        onInspectPlant={(id) => setInspectFacilityId(id)}
       />
 
       {/* Facility Detail Modal */}
@@ -382,6 +298,10 @@ export function DatabaseExplorer() {
         facilityId={inspectFacilityId}
         facility={selectedFacility}
         isLoading={facilityDetailLoading}
+        onToggleCompare={comparison.toggleCompare}
+        isInCompare={
+          inspectFacilityId !== null && comparison.isSelected(inspectFacilityId)
+        }
       />
 
       {/* CAMPD Sync Modal */}
@@ -410,28 +330,28 @@ export function DatabaseExplorer() {
       />
 
       {/* Floating Benchmark Dock */}
-      {compareIds.length > 0 && (
+      {comparison.count > 0 && (
         <aside
           aria-label="Plant benchmark comparison dock"
           className="fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 animate-in fade-in slide-in-from-bottom-4 items-center gap-2.5 rounded-full border border-edge bg-surface/95 px-3 py-1.5 shadow-2xl backdrop-blur-md duration-200 select-none sm:bottom-6 sm:gap-3 sm:px-4 sm:py-2"
         >
           <div className="flex shrink-0 items-center gap-2">
-            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/20 text-xs font-bold text-emerald-400">
-              {compareIds.length}
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+              {comparison.count}
             </span>
             <span className="whitespace-nowrap text-xs font-medium text-fg-2 sm:text-sm">
-              {compareIds.length === 1
+              {comparison.count === 1
                 ? "1 plant"
-                : `${compareIds.length} plants`}
+                : `${comparison.count} plants`}
             </span>
           </div>
 
           <div className="h-4 w-px shrink-0 bg-edge" />
 
-          {compareIds.length >= 2 ? (
+          {comparison.canCompare ? (
             <Button
               size="sm"
-              onClick={() => setIsCompareOpen(true)}
+              onClick={() => comparison.setIsCompareOpen(true)}
               className="h-7 shrink-0 gap-1.5 rounded-full px-3 text-xs font-medium shadow-xs sm:h-8 sm:px-3.5 sm:text-sm"
             >
               <Scale className="h-3.5 w-3.5" />
@@ -445,7 +365,7 @@ export function DatabaseExplorer() {
 
           <button
             type="button"
-            onClick={() => setCompareIds([])}
+            onClick={comparison.clearCompare}
             className="shrink-0 cursor-pointer rounded px-1.5 py-1 text-xs text-fg-muted transition-colors hover:text-fg"
           >
             Clear

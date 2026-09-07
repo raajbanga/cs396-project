@@ -8,7 +8,6 @@
 export interface PlantRoleInfo {
   role: string;
   badgeLabel: string;
-  badgeVariant: "sky" | "warning" | "success" | "secondary" | "destructive";
   badgeClass: string;
   icon: "zap" | "clock" | "activity" | "factory" | "power";
   description: string;
@@ -36,8 +35,8 @@ export function getPlantRole(params: {
     return {
       role: "Industrial Cogenerator",
       badgeLabel: "Industrial Cogen",
-      badgeVariant: "secondary",
-      badgeClass: "bg-purple-500/10 text-purple-300 border-purple-500/20",
+      badgeClass:
+        "bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300/60 dark:border-purple-500/20",
       icon: "factory",
       description:
         "Generates electricity while capturing waste heat to power on-site manufacturing, refining, or heating.",
@@ -57,8 +56,8 @@ export function getPlantRole(params: {
     return {
       role: "Zero-Carbon Generator",
       badgeLabel: "Zero-Carbon",
-      badgeVariant: "success",
-      badgeClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+      badgeClass:
+        "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-500/20",
       icon: "zap",
       description:
         "Generates clean, carbon-free electricity without direct fossil combustion.",
@@ -70,8 +69,8 @@ export function getPlantRole(params: {
     return {
       role: "On-Demand Peaker",
       badgeLabel: "On-Demand Peaker",
-      badgeVariant: "warning",
-      badgeClass: "bg-amber-500/10 text-amber-300 border-amber-500/20",
+      badgeClass:
+        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300/60 dark:border-amber-500/20",
       icon: "clock",
       description:
         "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
@@ -83,8 +82,8 @@ export function getPlantRole(params: {
     return {
       role: "Baseload Workhorse",
       badgeLabel: "Baseload Plant",
-      badgeVariant: "sky",
-      badgeClass: "bg-sky-500/10 text-sky-300 border-sky-500/20",
+      badgeClass:
+        "bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-300/60 dark:border-sky-500/20",
       icon: "zap",
       description:
         "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
@@ -96,7 +95,6 @@ export function getPlantRole(params: {
     return {
       role: "Standby / Reserve",
       badgeLabel: "Standby Reserve",
-      badgeVariant: "secondary",
       badgeClass: "bg-surface-2 text-fg-muted border-edge",
       icon: "power",
       description:
@@ -108,8 +106,8 @@ export function getPlantRole(params: {
   return {
     role: "Load-Following Plant",
     badgeLabel: "Load-Following",
-    badgeVariant: "success",
-    badgeClass: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    badgeClass:
+      "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-500/20",
     icon: "activity",
     description:
       "Ramps power output up and down throughout the day to match fluctuating consumer demand and balance solar/wind.",
@@ -130,7 +128,6 @@ export function formatLargeNumber(num: number, suffix = "") {
 export interface CarbonIntensityTier {
   tier: "clean" | "intermediate" | "high" | "unknown";
   label: string;
-  badgeText: string;
   badgeClass: string;
   description: string;
   narrativeDescription: string;
@@ -141,7 +138,6 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
     return {
       tier: "unknown",
       label: "Zero / Unreported",
-      badgeText: "Zero / Clean",
       badgeClass: "bg-surface-2 text-fg-muted border-edge",
       description: "No direct fossil carbon intensity reported.",
       narrativeDescription: "No direct annual carbon emissions were reported.",
@@ -151,8 +147,8 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
     return {
       tier: "clean",
       label: "Low Carbon CCGT",
-      badgeText: `${intensity} lbs/MWh • Clean Gas`,
-      badgeClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      badgeClass:
+        "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300/60 dark:border-emerald-500/20",
       description: `${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`,
       narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, typical of modern, high-efficiency combined-cycle natural gas generation.`,
     };
@@ -161,8 +157,8 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
     return {
       tier: "intermediate",
       label: "Intermediate Peaker",
-      badgeText: `${intensity} lbs/MWh • Peaker`,
-      badgeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      badgeClass:
+        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-300/60 dark:border-amber-500/20",
       description: `${intensity} lbs CO2 emitted per MWh generated (Peaker / Intermediate)`,
       narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, indicative of load-following or simple-cycle gas peakers.`,
     };
@@ -170,8 +166,8 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
   return {
     tier: "high",
     label: "High Carbon Coal",
-    badgeText: `${intensity} lbs/MWh • High Carbon`,
-    badgeClass: "bg-red-500/10 text-red-400 border-red-500/20",
+    badgeClass:
+      "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-300/60 dark:border-red-500/20",
     description: `${intensity} lbs CO2 emitted per MWh generated (High-emission fossil / coal)`,
     narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, characteristic of carbon-dense coal or older thermal generation.`,
   };
@@ -181,22 +177,61 @@ export function getCarbonIntensityTier(intensity: number | null): CarbonIntensit
  * Translates megawatts and carbon tonnage into tangible, real-world human equivalents.
  * Formulas derived from EPA Greenhouse Gas Equivalencies Calculator:
  * - 1 ton CO2 ≈ 0.217 passenger vehicles driven for 1 year
- * - 1 ton CO2 ≈ 16.5 tree seedlings grown for 10 years
  * - 1 MW capacity ≈ 750 average American homes powered
  */
 export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
   const homes = Math.round(capacityMW * 750);
   const cars = Math.round(co2Tons * 0.217);
-  const trees = Math.round(co2Tons * 16.5);
 
   return {
     homesPoweredRaw: homes,
     homesPoweredFormatted: formatLargeNumber(homes, " homes"),
     carsDrivenRaw: cars,
     carsDrivenFormatted: formatLargeNumber(cars, " cars/yr"),
-    treesNeededRaw: trees,
-    treesNeededFormatted: formatLargeNumber(trees, " trees"),
   };
+}
+
+export function formatCounty(county: string | null | undefined): string {
+  if (!county) return "";
+  const trimmed = county.trim();
+  return /\bcounty\b/i.test(trimmed) ? trimmed : `${trimmed} County`;
+}
+
+export function formatCountyShort(county: string | null | undefined): string {
+  if (!county) return "County N/A";
+  const trimmed = county.trim().replace(/\s+(?:county|co\.?)$/i, "");
+  return `${trimmed} Co.`;
+}
+
+/**
+ * Cleans raw EPA CAMPD owner/operator strings by stripping repetitive
+ * metadata tags like "(Owner)", "(Operator)", and deduplicating entities.
+ */
+export function cleanOwnerOperator(raw: string | null | undefined): string {
+  if (!raw) return "Owner unlisted";
+  const parts = raw.split("|").map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return "Owner unlisted";
+
+  const cleaned = parts.map((p) =>
+    p
+      .replace(
+        /\s*\((?:Owner|Operator|Holding Company|Parent|Subsidiary|Joint Owner|Managing Partner)\)/gi,
+        "",
+      )
+      .trim(),
+  );
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const item of cleaned) {
+    const lower = item.toLowerCase();
+    if (lower && !seen.has(lower)) {
+      seen.add(lower);
+      unique.push(item);
+    }
+  }
+
+  return unique.length > 0 ? unique.join(", ") : "Owner unlisted";
 }
 
 /**
@@ -236,15 +271,16 @@ export function generatePlantStory(params: {
       : "fossil fuel";
 
   const locationString = params.county
-    ? `${params.county} County, ${params.stateCode}`
+    ? `${formatCounty(params.county)}, ${params.stateCode}`
     : params.stateCode;
 
   // 1. Headline
+  const article = /^[aeiou]/i.test(roleInfo.role) ? "an" : "a";
   const headline = `${params.name} is a ${
     params.totalCapacityMW > 0
       ? `${params.totalCapacityMW.toLocaleString()} MW `
       : ""
-  }${fuelString} facility in ${locationString}, operating as a ${roleInfo.role}.`;
+  }${fuelString} facility in ${locationString}, operating as ${article} ${roleInfo.role}.`;
 
   // 2. What it does on the grid
   let gridStory = "";
@@ -265,7 +301,9 @@ export function generatePlantStory(params: {
     gridStory += `It operates as part of the ${
       params.nercRegion ?? "regional"
     } electric reliability network, managed by ${
-      params.ownerOperator ?? "its utility operator"
+      params.ownerOperator
+        ? cleanOwnerOperator(params.ownerOperator)
+        : "its utility operator"
     }.`;
   }
 

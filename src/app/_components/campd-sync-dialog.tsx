@@ -136,7 +136,7 @@ export function CampdSyncDialog({
         </div>
 
         {isSuccess && mutationData && (
-          <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-300">
+          <div className="space-y-1 rounded-lg border border-emerald-300/60 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
             <div className="flex items-center gap-1.5 font-semibold">
               <Check className="h-3.5 w-3.5" />
               <span>Ingestion Successful</span>
@@ -148,7 +148,7 @@ export function CampdSyncDialog({
         )}
 
         {isError && errorMessage && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+          <div className="flex items-center gap-2 rounded-lg border border-red-300/60 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Sync error: {errorMessage}</span>
           </div>

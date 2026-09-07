@@ -7,7 +7,6 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-import { z } from "zod";
 
 /**
  * Facilities: Master table representing power plants / generating facilities (EPA ORISPL).
@@ -190,103 +189,6 @@ export const dataAuditLogsRelations = relations(dataAuditLogs, ({ one }) => ({
   }),
 }));
 
-export type Facility = typeof facilities.$inferSelect;
-export type NewFacility = typeof facilities.$inferInsert;
-export type Unit = typeof units.$inferSelect;
-export type NewUnit = typeof units.$inferInsert;
-export type Dataset = typeof datasets.$inferSelect;
-export type NewDataset = typeof datasets.$inferInsert;
-export type AnnualRecord = typeof annualRecords.$inferSelect;
 export type NewAnnualRecord = typeof annualRecords.$inferInsert;
-export type DataAuditLog = typeof dataAuditLogs.$inferSelect;
 export type NewDataAuditLog = typeof dataAuditLogs.$inferInsert;
-
-// ==========================================
-// Zod Database Entity & Insertion Schemas
-// ==========================================
-
-export const facilitySchema = z.object({
-  id: z.number().int().positive(),
-  name: z.string().min(1),
-  stateCode: z.string().length(2),
-  county: z.string().nullable().optional(),
-  latitude: z.number().nullable().optional(),
-  longitude: z.number().nullable().optional(),
-  epaRegion: z.number().int().min(1).max(10).nullable().optional(),
-  nercRegion: z.string().nullable().optional(),
-  sourceCategory: z.string().nullable().optional(),
-  ownerOperator: z.string().nullable().optional(),
-});
-
-export const insertFacilitySchema = facilitySchema;
-
-export const unitSchema = z.object({
-  id: z.string(),
-  unitId: z.string().min(1),
-  facilityId: z.number().int().positive(),
-  unitType: z.string().nullable().optional(),
-  primaryFuel: z.string().nullable().optional(),
-  secondaryFuel: z.string().nullable().optional(),
-  operatingStatus: z.string().nullable().optional(),
-  commercialOpDate: z.string().nullable().optional(),
-  maxHourlyHIRate: z.number().nullable().optional(),
-  nameplateCapacityMW: z.number().nullable().optional(),
-  so2Controls: z.string().nullable().optional(),
-  noxControls: z.string().nullable().optional(),
-  pmControls: z.string().nullable().optional(),
-  hgControls: z.string().nullable().optional(),
-  programCode: z.string().nullable().optional(),
-});
-
-export const insertUnitSchema = unitSchema.extend({
-  id: z.string().optional(),
-});
-
-export const datasetSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1),
-  source: z.enum(["API", "BULK_CSV"]),
-  reportingYear: z.number().int(),
-  importedAt: z.union([z.date(), z.number()]).optional(),
-  rawRecordCount: z.number().int().default(0),
-  validRecords: z.number().int().default(0),
-  flaggedRecords: z.number().int().default(0),
-});
-
-export const insertDatasetSchema = datasetSchema.extend({
-  id: z.string().optional(),
-});
-
-export const annualRecordSchema = z.object({
-  id: z.string(),
-  datasetId: z.string().nullable().optional(),
-  facilityId: z.number().int().positive(),
-  unitInternalId: z.string(),
-  year: z.number().int(),
-  operatingHours: z.number().default(0),
-  grossGenerationMWh: z.number().default(0),
-  heatInputMMBtu: z.number().default(0),
-  co2MassTons: z.number().default(0),
-  so2MassTons: z.number().default(0),
-  noxMassTons: z.number().default(0),
-  co2IntensityLbsMWh: z.number().nullable().optional(),
-  heatRateMMBtuMWh: z.number().nullable().optional(),
-});
-
-export const insertAnnualRecordSchema = annualRecordSchema.extend({
-  id: z.string().optional(),
-});
-
-export const dataAuditLogSchema = z.object({
-  id: z.string(),
-  annualRecordId: z.string(),
-  flagType: z.string(),
-  severity: z.enum(["WARN", "ERROR"]),
-  details: z.string(),
-  createdAt: z.union([z.date(), z.number()]).optional(),
-});
-
-export const insertDataAuditLogSchema = dataAuditLogSchema.extend({
-  id: z.string().optional(),
-});
 

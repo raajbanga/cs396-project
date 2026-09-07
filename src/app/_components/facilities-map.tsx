@@ -11,7 +11,7 @@ import {
   FilterX,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import { Card } from "~/components/ui/card";
+import { StatTile } from "~/components/ui/stat-tile";
 import {
   FUEL_CATEGORIES,
   getFuelTheme,
@@ -26,8 +26,8 @@ const LeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[620px] w-full items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950">
-        <div className="flex items-center gap-2 text-xs text-zinc-400">
+      <div className="flex h-[620px] w-full items-center justify-center rounded-xl border border-edge/80 bg-surface/30">
+        <div className="flex items-center gap-2 text-xs text-fg-muted">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
           <span>Loading 2D Leaflet Map...</span>
         </div>
@@ -81,28 +81,28 @@ export function FacilitiesMap({
   return (
     <div className="space-y-4">
       {/* Top Map Action Bar */}
-      <div className="flex flex-col gap-2.5 rounded-lg border border-zinc-800/80 bg-zinc-900/30 p-3 sm:p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2.5 rounded-lg border border-edge/80 bg-surface/60 p-3 sm:p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-200">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface text-fg shadow-xs">
             {viewMode === "globe" ? (
-              <Globe className="h-4 w-4 text-emerald-400" />
+              <Globe className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
             ) : (
-              <MapIcon className="h-4 w-4 text-cyan-400" />
+              <MapIcon className="h-4 w-4 text-sky-500 dark:text-cyan-400" />
             )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-white sm:text-base">
+              <h2 className="text-sm font-semibold tracking-tight text-fg sm:text-base">
                 {viewMode === "globe" ? "3D Globe" : "2D Map"}
               </h2>
               <Badge
-                variant="outline"
-                className="font-mono text-[10px] text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                variant="success"
+                className="font-mono text-xs"
               >
                 {isLoading ? "..." : `${facilities.length.toLocaleString()} facilities`}
               </Badge>
             </div>
-            <p className="text-xs text-zinc-400 hidden sm:block">
+            <p className="text-xs text-fg-muted hidden sm:block">
               {viewMode === "globe"
                 ? "Interactive spherical orthographic globe"
                 : "Cartographic Mercator map with facility coordinates"}
@@ -113,17 +113,17 @@ export function FacilitiesMap({
         {/* View Mode Toggle & Metric Size Selector */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Mode Switcher */}
-          <div className="flex rounded-md border border-zinc-800 bg-zinc-950 p-0.5 text-xs">
+          <div className="flex rounded-md border border-edge/80 bg-surface/60 p-0.5 text-xs">
             <button
               type="button"
               onClick={() => setViewMode("globe")}
               className={`flex items-center gap-1 cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-all ${
                 viewMode === "globe"
-                  ? "bg-zinc-800 text-white shadow-xs"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-surface-2 text-fg shadow-xs"
+                  : "text-fg-muted hover:text-fg"
               }`}
             >
-              <Globe className="h-3 w-3 text-emerald-400" />
+              <Globe className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
               <span>3D Globe</span>
             </button>
             <button
@@ -131,28 +131,28 @@ export function FacilitiesMap({
               onClick={() => setViewMode("leaflet")}
               className={`flex items-center gap-1 cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-all ${
                 viewMode === "leaflet"
-                  ? "bg-zinc-800 text-white shadow-xs"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-surface-2 text-fg shadow-xs"
+                  : "text-fg-muted hover:text-fg"
               }`}
             >
-              <MapIcon className="h-3 w-3 text-cyan-400" />
+              <MapIcon className="h-3 w-3 text-sky-500 dark:text-cyan-400" />
               <span>2D Leaflet</span>
             </button>
           </div>
 
           {/* Metric Switcher */}
-          <div className="flex items-center rounded-md border border-zinc-800 bg-zinc-950 p-0.5 text-xs">
+          <div className="flex items-center rounded-md border border-edge/80 bg-surface/60 p-0.5 text-xs">
             <button
               type="button"
               onClick={() => setMetricMode("capacity")}
               className={`flex items-center gap-1 cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
                 metricMode === "capacity"
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-surface-2 text-fg shadow-xs"
+                  : "text-fg-muted hover:text-fg"
               }`}
               title="Scale dots by Capacity"
             >
-              <Zap className="h-3 w-3 text-amber-400" />
+              <Zap className="h-3 w-3 text-amber-500 dark:text-amber-400" />
               <span className="hidden sm:inline">Capacity</span>
               <span className="sm:hidden">MW</span>
             </button>
@@ -161,12 +161,12 @@ export function FacilitiesMap({
               onClick={() => setMetricMode("co2")}
               className={`flex items-center gap-1 cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
                 metricMode === "co2"
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-surface-2 text-fg shadow-xs"
+                  : "text-fg-muted hover:text-fg"
               }`}
               title="Scale dots by CO2"
             >
-              <Flame className="h-3 w-3 text-rose-400" />
+              <Flame className="h-3 w-3 text-rose-500 dark:text-rose-400" />
               <span>CO₂</span>
             </button>
             <button
@@ -174,8 +174,8 @@ export function FacilitiesMap({
               onClick={() => setMetricMode("uniform")}
               className={`cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
                 metricMode === "uniform"
-                  ? "bg-zinc-800 text-white"
-                  : "text-zinc-400 hover:text-zinc-200"
+                  ? "bg-surface-2 text-fg shadow-xs"
+                  : "text-fg-muted hover:text-fg"
               }`}
               title="Uniform dot size"
             >
@@ -192,8 +192,8 @@ export function FacilitiesMap({
           onClick={() => onFuelChange("ALL")}
           className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
             selectedFuel === "ALL"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-              : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+              ? "border-emerald-300/60 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-edge bg-surface/60 text-fg-muted hover:border-edge/80 hover:text-fg"
           }`}
         >
           All Fuels ({facilities.length})
@@ -211,8 +211,8 @@ export function FacilitiesMap({
               }
               className={`flex items-center gap-1.5 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
                 isSelected
-                  ? "border-zinc-600 bg-zinc-800 text-white"
-                  : "border-zinc-800 bg-zinc-900/40 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                  ? "border-edge bg-surface-2 text-fg shadow-xs"
+                  : "border-edge bg-surface/60 text-fg-muted hover:border-edge/80 hover:text-fg"
               }`}
             >
               <span
@@ -220,7 +220,7 @@ export function FacilitiesMap({
                 style={{ backgroundColor: cat.color }}
               />
               <span>{cat.label}</span>
-              <span className="font-mono text-[10px] text-zinc-500">
+              <span className="font-mono text-xs text-fg-muted">
                 ({count})
               </span>
             </button>
@@ -230,11 +230,11 @@ export function FacilitiesMap({
         {selectedState !== "ALL" && (
           <Badge
             variant="outline"
-            className="cursor-pointer gap-1 border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 shrink-0 text-xs py-0.5"
+            className="cursor-pointer gap-1 border-edge bg-surface-2 text-fg hover:bg-surface-2/80 shrink-0 text-xs py-0.5"
             onClick={() => onStateChange("ALL")}
           >
             <span>State: {selectedState}</span>
-            <FilterX className="h-3 w-3 text-zinc-400" />
+            <FilterX className="h-3 w-3 text-fg-muted" />
           </Badge>
         )}
       </div>
@@ -256,43 +256,37 @@ export function FacilitiesMap({
 
       {/* Bottom Summary Bar */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card className="border-zinc-800/80 bg-zinc-900/40 p-3.5">
-          <span className="text-xs font-medium text-zinc-400">
-            Visible Facilities
-          </span>
-          <p className="mt-1 font-mono text-xl font-bold text-white">
-            {facilities.length.toLocaleString()}
-          </p>
-        </Card>
-        <Card className="border-zinc-800/80 bg-zinc-900/40 p-3.5">
-          <span className="text-xs font-medium text-zinc-400">
-            Tracked Capacity
-          </span>
-          <p className="mt-1 font-mono text-xl font-bold text-emerald-400">
-            {Math.round(totalCapacity).toLocaleString()} MW
-          </p>
-        </Card>
-        <Card className="border-zinc-800/80 bg-zinc-900/40 p-3.5">
-          <span className="text-xs font-medium text-zinc-400">
-            Tracked Annual CO₂
-          </span>
-          <p className="mt-1 font-mono text-xl font-bold text-rose-400">
-            {Math.round(totalEmissions).toLocaleString()} tons
-          </p>
-        </Card>
-        <Card className="border-zinc-800/80 bg-zinc-900/40 p-3.5">
-          <span className="text-xs font-medium text-zinc-400">
-            Projection Engine
-          </span>
-          <p className="mt-1 flex items-center gap-1.5 font-semibold text-zinc-200 text-sm">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
-            <span>
-              {viewMode === "globe"
-                ? "D3 Orthographic (3D)"
-                : "Leaflet Dark (2D)"}
+        <StatTile
+          variant="card"
+          label="Visible Facilities"
+          value={facilities.length.toLocaleString()}
+          className="border-edge/80 bg-surface/30 p-3.5"
+        />
+        <StatTile
+          variant="card"
+          label="Tracked Capacity"
+          value={`${Math.round(totalCapacity).toLocaleString()} MW`}
+          valueClassName="text-emerald-600 dark:text-emerald-400"
+          className="border-edge/80 bg-surface/30 p-3.5"
+        />
+        <StatTile
+          variant="card"
+          label="Tracked Annual CO₂"
+          value={`${Math.round(totalEmissions).toLocaleString()} tons`}
+          valueClassName="text-rose-600 dark:text-rose-400"
+          className="border-edge/80 bg-surface/30 p-3.5"
+        />
+        <StatTile
+          variant="card"
+          label="Projection Engine"
+          value={
+            <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+              <Sparkles className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+              {viewMode === "globe" ? "D3 Orthographic (3D)" : "Leaflet Mercator (2D)"}
             </span>
-          </p>
-        </Card>
+          }
+          className="border-edge/80 bg-surface/30 p-3.5"
+        />
       </div>
     </div>
   );

@@ -12,13 +12,15 @@ import {
   RotateCcw,
   MapPin,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { FuelBadge } from "~/components/ui/fuel-badge";
+import { useTheme } from "next-themes";
 import {
   getFuelTheme,
   type MapFacility,
   type MetricMode,
 } from "~/lib/map-utils";
+import { formatCountyShort } from "~/lib/plant-narrative";
 import type { GeometryCollection, Topology } from "topojson-specification";
 
 interface D3GlobeProps {
@@ -37,11 +39,24 @@ export function D3Globe({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  // Next-themes hook for light/dark mode
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const isDark = mounted
+    ? resolvedTheme === "dark"
+    : typeof document !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : true;
+
   // Geographic topology data
   const [worldLand, setWorldLand] = useState<d3.GeoPermissibleObjects | null>(
     null,
   );
   const [usStates, setUsStates] = useState<d3.GeoPermissibleObjects | null>(
+    null,
+  );
+  const [usNation, setUsNation] = useState<d3.GeoPermissibleObjects | null>(
     null,
   );
   const [isLoadingGeo, setIsLoadingGeo] = useState(true);
@@ -87,6 +102,7 @@ export function D3Globe({
         }>;
         const statesTopo = (await statesRes.json()) as Topology<{
           states: GeometryCollection;
+          nation: GeometryCollection;
         }>;
 
         if (isMounted) {
@@ -99,9 +115,14 @@ export function D3Globe({
             statesTopo,
             statesTopo.objects.states,
           ) as unknown as d3.GeoPermissibleObjects;
+          const nationFeature = topojson.feature(
+            statesTopo,
+            statesTopo.objects.nation,
+          ) as unknown as d3.GeoPermissibleObjects;
 
           setWorldLand(landFeature);
           setUsStates(statesFeature);
+          setUsNation(nationFeature);
           setIsLoadingGeo(false);
         }
       } catch (err) {
@@ -159,17 +180,24 @@ export function D3Globe({
       cy,
       globeRadius * 1.06,
     );
-    rimGrad.addColorStop(0, "rgba(16, 185, 129, 0.0)");
-    rimGrad.addColorStop(0.7, "rgba(16, 185, 129, 0.04)");
-    rimGrad.addColorStop(0.95, "rgba(52, 211, 153, 0.12)");
-    rimGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+    if (isDark) {
+      rimGrad.addColorStop(0, "rgba(16, 185, 129, 0.0)");
+      rimGrad.addColorStop(0.7, "rgba(16, 185, 129, 0.04)");
+      rimGrad.addColorStop(0.95, "rgba(52, 211, 153, 0.12)");
+      rimGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+    } else {
+      rimGrad.addColorStop(0, "rgba(16, 185, 129, 0.0)");
+      rimGrad.addColorStop(0.7, "rgba(16, 185, 129, 0.03)");
+      rimGrad.addColorStop(0.95, "rgba(16, 185, 129, 0.10)");
+      rimGrad.addColorStop(1, "rgba(16, 185, 129, 0.0)");
+    }
 
     ctx.beginPath();
     ctx.arc(cx, cy, globeRadius * 1.06, 0, Math.PI * 2);
     ctx.fillStyle = rimGrad;
     ctx.fill();
 
-    // 2. Globe Sphere (Dark Slate Base)
+    // 2. Globe Sphere (Wireframe Base)
     ctx.beginPath();
     path({ type: "Sphere" });
     const sphereGrad = ctx.createRadialGradient(
@@ -180,15 +208,23 @@ export function D3Globe({
       cy,
       globeRadius,
     );
-    sphereGrad.addColorStop(0, "#18181b"); // zinc-900
-    sphereGrad.addColorStop(0.8, "#09090b"); // zinc-950
-    sphereGrad.addColorStop(1, "#040405");
+    if (isDark) {
+      sphereGrad.addColorStop(0, "#18181b"); // zinc-900
+      sphereGrad.addColorStop(0.8, "#09090b"); // zinc-950
+      sphereGrad.addColorStop(1, "#040405");
+    } else {
+      sphereGrad.addColorStop(0, "#ffffff"); // clean white
+      sphereGrad.addColorStop(0.8, "#f4f4f5"); // zinc-100 wireframe base
+      sphereGrad.addColorStop(1, "#e4e4e7"); // zinc-200 subtle limb depth
+    }
     ctx.fillStyle = sphereGrad;
     ctx.fill();
 
     // Sphere border wireframe ring
     ctx.lineWidth = 1.25;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.strokeStyle = isDark
+      ? "rgba(255, 255, 255, 0.15)"
+      : "rgba(24, 24, 27, 0.2)";
     ctx.stroke();
 
     // 3. Wireframe Graticules (Latitude & Longitude Grid Lines)
@@ -196,7 +232,9 @@ export function D3Globe({
     ctx.beginPath();
     path(graticule);
     ctx.lineWidth = 0.5;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.strokeStyle = isDark
+      ? "rgba(255, 255, 255, 0.08)"
+      : "rgba(24, 24, 27, 0.08)";
     ctx.stroke();
 
     // Highlight Equator & Prime Meridian
@@ -209,26 +247,45 @@ export function D3Globe({
       ],
     });
     ctx.lineWidth = 0.75;
-    ctx.strokeStyle = "rgba(52, 211, 153, 0.2)";
+    ctx.strokeStyle = isDark
+      ? "rgba(52, 211, 153, 0.2)"
+      : "rgba(16, 185, 129, 0.25)";
     ctx.stroke();
 
     // 4. World Landmass Wireframe Outlines
     if (worldLand) {
       ctx.beginPath();
       path(worldLand);
-      ctx.fillStyle = "rgba(24, 24, 27, 0.75)";
+      ctx.fillStyle = isDark
+        ? "rgba(24, 24, 27, 0.75)"
+        : "rgba(228, 228, 231, 0.75)";
       ctx.fill();
       ctx.lineWidth = 0.75;
-      ctx.strokeStyle = "rgba(161, 161, 170, 0.3)"; // zinc-400 subtle wireframe
+      ctx.strokeStyle = isDark
+        ? "rgba(161, 161, 170, 0.3)"
+        : "rgba(113, 113, 122, 0.4)";
       ctx.stroke();
     }
 
-    // 5. US State Boundaries
+    // 5. US State Boundaries (internal borders)
     if (usStates) {
       ctx.beginPath();
       path(usStates);
       ctx.lineWidth = 0.6;
-      ctx.strokeStyle = "rgba(52, 211, 153, 0.35)"; // subtle emerald state borders
+      ctx.strokeStyle = isDark
+        ? "rgba(52, 211, 153, 0.35)"
+        : "rgba(16, 185, 129, 0.45)"; // emerald state borders
+      ctx.stroke();
+    }
+
+    // 5b. Thicker US National Outline Border (for all versions)
+    if (usNation) {
+      ctx.beginPath();
+      path(usNation);
+      ctx.lineWidth = 2.4; // Prominent national boundary outline
+      ctx.strokeStyle = isDark
+        ? "rgba(52, 211, 153, 0.95)"
+        : "rgba(5, 150, 105, 0.95)";
       ctx.stroke();
     }
 
@@ -268,7 +325,9 @@ export function D3Globe({
       // Glow halo
       ctx.beginPath();
       ctx.arc(px, py, r + (isHovered || isSelected ? 3 : 1), 0, Math.PI * 2);
-      ctx.fillStyle = isHovered ? "rgba(255, 255, 255, 0.5)" : fuelTheme.glow;
+      ctx.fillStyle = isHovered
+        ? (isDark ? "rgba(255, 255, 255, 0.5)" : "rgba(15, 23, 42, 0.25)")
+        : fuelTheme.glow;
       ctx.fill();
 
       // Core point
@@ -276,16 +335,18 @@ export function D3Globe({
       ctx.arc(px, py, isHovered ? r + 1.5 : r, 0, Math.PI * 2);
       ctx.fillStyle = fuelTheme.color;
       ctx.fill();
-      ctx.lineWidth = 0.75;
-      ctx.strokeStyle = "#09090b";
+      ctx.lineWidth = isDark ? 0.75 : 1;
+      ctx.strokeStyle = isDark ? "#09090b" : "#ffffff";
       ctx.stroke();
 
       // Pulsing highlight ring on hover or selection
       if (isHovered || isSelected) {
         ctx.beginPath();
         ctx.arc(px, py, r + 5, 0, Math.PI * 2);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = isHovered ? "#ffffff" : "#34d399";
+        ctx.lineWidth = 1.75;
+        ctx.strokeStyle = isHovered
+          ? (isDark ? "#ffffff" : "#0f172a")
+          : (isDark ? "#34d399" : "#059669");
         ctx.stroke();
       }
     }
@@ -295,6 +356,8 @@ export function D3Globe({
     rotation,
     worldLand,
     usStates,
+    usNation,
+    isDark,
     hoveredPlant,
     selectedFacilityId,
     metricMode,
@@ -528,12 +591,12 @@ export function D3Globe({
   return (
     <div
       ref={containerRef}
-      className="relative flex h-[420px] sm:h-[520px] lg:h-[620px] w-full flex-col overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-950 select-none shadow-xs"
+      className="relative flex h-[420px] sm:h-[520px] lg:h-[620px] w-full flex-col overflow-hidden rounded-xl border border-edge/80 bg-canvas select-none shadow-xs transition-colors"
     >
       {/* Loading Overlay */}
       {isLoadingGeo && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-zinc-950/80 backdrop-blur-xs">
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-canvas/80 backdrop-blur-xs">
+          <div className="flex items-center gap-2 text-xs text-fg-muted">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
             <span>Rendering Wireframe Projections...</span>
           </div>
@@ -552,15 +615,15 @@ export function D3Globe({
 
       {/* Top Floating HUD: Controls & Camera Presets */}
       <div className="pointer-events-none absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-xs">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-edge/80 bg-surface/90 p-1 backdrop-blur-md shadow-xs">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setAutoRotate(!autoRotate)}
             className={`h-7 px-2 text-xs gap-1.5 ${
               autoRotate
-                ? "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/25"
+                : "text-fg-muted hover:text-fg hover:bg-surface-2/60"
             }`}
           >
             {autoRotate ? (
@@ -571,15 +634,15 @@ export function D3Globe({
             <span className="hidden sm:inline">{autoRotate ? "Spinning" : "Auto-Rotate"}</span>
           </Button>
 
-          <div className="h-3.5 w-px bg-zinc-800" />
+          <div className="h-3.5 w-px bg-edge" />
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPreset(98, -38, 380)}
-            className="h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
           >
-            <Compass className="h-3 w-3 mr-1 text-emerald-400" />
+            <Compass className="h-3 w-3 mr-1 text-emerald-500 dark:text-emerald-400" />
             <span>US</span>
           </Button>
 
@@ -587,7 +650,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(78, -38, 560)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
           >
             <span>East</span>
           </Button>
@@ -596,7 +659,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(99, -31, 720)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
           >
             <span>Texas</span>
           </Button>
@@ -605,19 +668,19 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(118, -38, 560)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-zinc-300 hover:text-white"
+            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
           >
             <span>West</span>
           </Button>
         </div>
 
         {/* Zoom & Reset Controls */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-zinc-800/80 bg-zinc-900/90 p-1 backdrop-blur-md shadow-xs">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-edge/80 bg-surface/90 p-1 backdrop-blur-md shadow-xs">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setScale((s) => Math.min(10000, s * 1.35))}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
             title="Zoom in"
           >
             <Maximize2 className="h-3.5 w-3.5" />
@@ -626,7 +689,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setScale((s) => Math.max(160, s * 0.72))}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
             title="Zoom out"
           >
             <Minimize2 className="h-3.5 w-3.5" />
@@ -635,7 +698,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(98, -38, 380)}
-            className="h-7 w-7 p-0 text-zinc-400 hover:text-white"
+            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
             title="Reset position"
           >
             <RotateCcw className="h-3 w-3" />
@@ -644,8 +707,8 @@ export function D3Globe({
       </div>
 
       {/* Bottom Floating Legend / Instructions */}
-      <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-[11px] text-zinc-500">
-        <div className="rounded-md border border-zinc-800/80 bg-zinc-900/80 px-2.5 py-1 backdrop-blur-md">
+      <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-xs text-fg-muted">
+        <div className="rounded-md border border-edge/80 bg-surface/90 px-2.5 py-1 backdrop-blur-md">
           <span>Click & drag to rotate globe • Scroll to zoom • Click dot for plant profile</span>
         </div>
       </div>
@@ -669,54 +732,49 @@ export function D3Globe({
               ),
             ),
           }}
-          className="pointer-events-none absolute z-30 w-64 rounded-lg border border-zinc-700 bg-zinc-900/95 p-3 shadow-2xl backdrop-blur-md transition-all duration-75 animate-in fade-in zoom-in-95"
+          className="pointer-events-none absolute z-30 w-64 rounded-lg border border-edge bg-surface/95 p-3 shadow-2xl backdrop-blur-md transition-all duration-75 animate-in fade-in zoom-in-95"
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h4 className="text-sm font-semibold tracking-tight text-white">
+              <h4 className="text-sm font-semibold tracking-tight text-fg">
                 {hoveredPlant.name}
               </h4>
-              <p className="text-[11px] text-zinc-400">
-                {hoveredPlant.county ? `${hoveredPlant.county} Co., ` : ""}
+              <p className="text-xs text-fg-muted">
+                {hoveredPlant.county ? `${formatCountyShort(hoveredPlant.county)}, ` : ""}
                 {hoveredPlant.stateCode} • ORISPL #{hoveredPlant.id}
               </p>
             </div>
-            <Badge
-              variant="outline"
-              className={`py-0 text-[10px] ${getFuelTheme(hoveredPlant.primaryFuel).badgeClass}`}
-            >
-              {hoveredPlant.primaryFuel}
-            </Badge>
+            <FuelBadge fuel={hoveredPlant.primaryFuel} />
           </div>
 
-          <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-zinc-800 pt-2 text-[11px]">
+          <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-edge pt-2 text-xs">
             <div>
-              <span className="text-zinc-500">Capacity:</span>
-              <p className="font-mono font-medium text-zinc-200">
+              <span className="text-fg-muted">Capacity:</span>
+              <p className="font-mono font-medium text-fg">
                 {hoveredPlant.totalCapacityMW.toLocaleString()} MW
               </p>
             </div>
             <div>
-              <span className="text-zinc-500">Annual CO₂:</span>
-              <p className="font-mono font-medium text-emerald-400">
+              <span className="text-fg-muted">Annual CO₂:</span>
+              <p className="font-mono font-medium text-emerald-600 dark:text-emerald-400">
                 {Math.round(hoveredPlant.totalCo2Tons).toLocaleString()} tons
               </p>
             </div>
             <div>
-              <span className="text-zinc-500">NERC Grid:</span>
-              <p className="text-zinc-200">
+              <span className="text-fg-muted">NERC Grid:</span>
+              <p className="text-fg">
                 {hoveredPlant.nercRegion ?? "Unassigned"}
               </p>
             </div>
             <div>
-              <span className="text-zinc-500">Generators:</span>
-              <p className="text-zinc-200">{hoveredPlant.unitCount} units</p>
+              <span className="text-fg-muted">Generators:</span>
+              <p className="text-fg">{hoveredPlant.unitCount} units</p>
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between border-t border-zinc-800/80 pt-2 text-[10px] text-zinc-400">
-            <span className="text-emerald-400 font-medium">Click dot to open profile</span>
-            <MapPin className="h-3 w-3 text-zinc-500" />
+          <div className="mt-2.5 flex items-center justify-between border-t border-edge/80 pt-2 text-xs text-fg-muted">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Click dot to open profile</span>
+            <MapPin className="h-3 w-3 text-fg-muted" />
           </div>
         </div>
       )}

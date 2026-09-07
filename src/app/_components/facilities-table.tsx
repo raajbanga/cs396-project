@@ -2,18 +2,13 @@
 
 import { useState } from "react";
 import {
-  Activity,
   ArrowDown,
-  ArrowRight,
   ArrowUp,
   ArrowUpDown,
   ChevronsLeft,
   ChevronsRight,
   ChevronLeft,
   ChevronRight,
-  Clock,
-  Factory,
-  Power,
   Scale,
   ShieldCheck,
   Zap,
@@ -23,6 +18,7 @@ import { Button } from "~/components/ui/button";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
 import { Card } from "~/components/ui/card";
 import { FuelBadge } from "~/components/ui/fuel-badge";
+import { PlantRoleBadge } from "~/components/ui/plant-role-badge";
 import {
   Select,
   SelectContent,
@@ -39,6 +35,8 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
+  cleanOwnerOperator,
+  formatCountyShort,
   getHumanEquivalents,
   getPlantRole,
 } from "~/lib/plant-narrative";
@@ -68,6 +66,230 @@ interface FacilitiesTableProps {
   onPageChange: (newPage: number) => void;
   onPageSizeChange: (newPageSize: number) => void;
   onResetFilters: () => void;
+}
+
+function EmptyTableState({ onReset }: { onReset: () => void }) {
+  return (
+    <div className="py-14 text-center text-fg-muted">
+      <p className="text-sm font-medium text-fg-2">
+        No facilities match the active filter criteria.
+      </p>
+      <Button variant="outline" size="sm" onClick={onReset} className="mt-3">
+        Clear All Filters
+      </Button>
+    </div>
+  );
+}
+
+interface FacilityItemProps {
+  fac: FacilityRow;
+  isSelected: boolean;
+  onToggleCompare: (id: number) => void;
+  onInspect: (id: number) => void;
+}
+
+function FacilityTableRowDesktop({
+  fac,
+  isSelected,
+  onToggleCompare,
+  onInspect,
+}: FacilityItemProps) {
+  const equivalents = getHumanEquivalents(fac.totalCapacityMW, fac.totalCo2Tons);
+  const plantRole = getPlantRole({
+    operatingHours: fac.totalOperatingHours,
+    capacityMW: fac.totalCapacityMW,
+    sourceCategory: fac.sourceCategory,
+    primaryFuels: fac.primaryFuels,
+  });
+
+  return (
+    <TableRow
+      className={cn(
+        "group cursor-pointer transition-colors",
+        isSelected
+          ? "bg-emerald-500/10 hover:bg-emerald-500/15 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30"
+          : "hover:bg-surface-2/30",
+      )}
+      onClick={() => onInspect(fac.id)}
+    >
+      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleCompare(fac.id)}
+          className="h-3.5 w-3.5 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
+          aria-label={`Select ${fac.name} for comparison`}
+        />
+      </TableCell>
+
+      <TableCell className="font-mono text-xs text-fg-muted">#{fac.id}</TableCell>
+
+      <TableCell className="min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="truncate text-base font-semibold text-fg transition-colors group-hover:text-emerald-400"
+            title={fac.name}
+          >
+            {fac.name}
+          </span>
+          <PlantRoleBadge roleInfo={plantRole} className="shrink-0" />
+        </div>
+        <div
+          className="truncate text-xs text-fg-muted pt-0.5"
+          title={cleanOwnerOperator(fac.ownerOperator)}
+        >
+          {cleanOwnerOperator(fac.ownerOperator)}
+        </div>
+      </TableCell>
+
+      <TableCell className="min-w-0">
+        <div className="text-sm font-semibold text-fg-2">{fac.stateCode}</div>
+        <div className="truncate text-xs text-fg-muted" title={formatCountyShort(fac.county)}>
+          {formatCountyShort(fac.county)}
+        </div>
+      </TableCell>
+
+      <TableCell className="min-w-0">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-1">
+            {fac.nercRegion && (
+              <Badge variant="sky" className="px-2 py-0.5 font-mono text-xs">
+                {fac.nercRegion}
+              </Badge>
+            )}
+            {fac.controlledUnitsCount > 0 && (
+              <Badge variant="success" className="gap-1 font-medium text-xs py-0.5" title="Equipped with SO2 scrubbers or NOx catalytic control systems">
+                <ShieldCheck className="h-3 w-3" />
+                Scrubbed
+              </Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {fac.primaryFuels.length > 0 ? (
+              fac.primaryFuels.map((fuel) => <FuelBadge key={fuel} fuel={fuel} />)
+            ) : (
+              <span className="italic text-xs text-fg-muted">Fuel unlisted</span>
+            )}
+          </div>
+        </div>
+      </TableCell>
+
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1 text-base font-semibold text-fg">
+          <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+          <span>{fac.totalCapacityMW > 0 ? `${Number(fac.totalCapacityMW).toLocaleString()} MW` : "—"}</span>
+        </div>
+        <div className="text-xs text-fg-muted">
+          {equivalents.homesPoweredRaw > 0 && (
+            <span className="font-medium text-fg-2">{equivalents.homesPoweredFormatted} • </span>
+          )}
+          <span>{fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}</span>
+        </div>
+      </TableCell>
+
+      <TableCell className="text-right pr-4">
+        <div className="font-mono text-base font-semibold text-fg">
+          {fac.totalCo2Tons > 0 ? `${Number(fac.totalCo2Tons).toLocaleString()} t` : <span className="text-fg-muted">—</span>}
+        </div>
+        {equivalents.carsDrivenRaw > 0 && (
+          <div className="text-xs text-fg-muted">≈ {equivalents.carsDrivenFormatted}</div>
+        )}
+        <div className="flex justify-end pt-0.5">
+          <CarbonIntensityBadge intensity={fac.carbonIntensityLbsMWh} />
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function FacilityCardMobile({
+  fac,
+  isSelected,
+  onToggleCompare,
+  onInspect,
+}: FacilityItemProps) {
+  const plantRole = getPlantRole({
+    operatingHours: fac.totalOperatingHours,
+    capacityMW: fac.totalCapacityMW,
+    sourceCategory: fac.sourceCategory,
+    primaryFuels: fac.primaryFuels,
+  });
+
+  return (
+    <div
+      onClick={() => onInspect(fac.id)}
+      className={cn(
+        "cursor-pointer space-y-2.5 p-3.5 transition-colors active:bg-surface-2/40",
+        isSelected
+          ? "bg-emerald-500/10 hover:bg-emerald-500/15 dark:bg-emerald-950/20"
+          : "hover:bg-surface/40",
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleCompare(fac.id)}
+              className="h-4 w-4 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
+              aria-label={`Select ${fac.name} for comparison`}
+            />
+          </div>
+          <div className="min-w-0">
+            <h4 className="truncate text-base font-semibold tracking-tight text-fg">{fac.name}</h4>
+            <div className="flex items-center gap-1.5 truncate text-xs text-fg-muted">
+              <span className="font-mono">#{fac.id}</span>
+              <span>•</span>
+              <span>{fac.county ? `${formatCountyShort(fac.county)}, ` : ""}{fac.stateCode}</span>
+            </div>
+          </div>
+        </div>
+        <Badge variant="outline" className="shrink-0 px-2 py-0.5 font-mono text-xs">
+          {fac.stateCode}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        <PlantRoleBadge roleInfo={plantRole} />
+        {fac.nercRegion && (
+          <Badge variant="sky" className="px-2 py-0.5 font-mono text-xs">{fac.nercRegion}</Badge>
+        )}
+        {fac.primaryFuels.slice(0, 2).map((fuel) => (
+          <FuelBadge key={fuel} fuel={fuel} />
+        ))}
+        {fac.controlledUnitsCount > 0 && (
+          <Badge variant="success" className="gap-1 font-medium text-xs py-0.5" title="Equipped with SO2 scrubbers or NOx catalytic control systems">
+            <ShieldCheck className="h-3 w-3" />
+            Scrubbed
+          </Badge>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 rounded-lg border border-edge/60 bg-canvas/60 p-3 text-xs">
+        <div>
+          <span className="block text-xs text-fg-muted">Nameplate</span>
+          <span className="text-base font-semibold text-fg">
+            {fac.totalCapacityMW > 0 ? `${Number(fac.totalCapacityMW).toLocaleString()} MW` : "—"}
+          </span>
+          <span className="mt-0.5 block text-xs text-fg-muted">
+            {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
+          </span>
+        </div>
+        <div className="text-right">
+          <span className="block text-xs text-fg-muted">Annual CO₂</span>
+          <span className="font-mono text-base font-semibold text-emerald-400">
+            {fac.totalCo2Tons > 0 ? `${Number(fac.totalCo2Tons).toLocaleString()} t` : "—"}
+          </span>
+          {fac.carbonIntensityLbsMWh && fac.carbonIntensityLbsMWh > 0 ? (
+            <span className="mt-0.5 block font-mono text-xs text-fg-muted">
+              {Math.round(fac.carbonIntensityLbsMWh)} lbs/MWh
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function FacilitiesTable({
@@ -114,14 +336,6 @@ export function FacilitiesTable({
     );
   };
 
-  const renderRoleIcon = (icon: string) => {
-    if (icon === "zap") return <Zap className="h-2.5 w-2.5" />;
-    if (icon === "clock") return <Clock className="h-2.5 w-2.5" />;
-    if (icon === "factory") return <Factory className="h-2.5 w-2.5" />;
-    if (icon === "power") return <Power className="h-2.5 w-2.5" />;
-    return <Activity className="h-2.5 w-2.5" />;
-  };
-
   const getPageNumbers = () => {
     if (totalPages <= 7) {
       return Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -143,10 +357,10 @@ export function FacilitiesTable({
     <Card className="overflow-hidden border-edge/80 bg-surface/20 shadow-xs">
       {/* Desktop Table (>= md) */}
       <div className="hidden md:block">
-        <Table>
+        <Table className="w-full table-fixed">
           <TableHeader>
             <TableRow className="border-b border-edge/80 bg-surface/50 hover:bg-surface/50">
-              <TableHead className="w-10 text-center">
+              <TableHead className="w-12 text-center">
                 <Scale className="mx-auto h-3.5 w-3.5 text-fg-muted" />
               </TableHead>
 
@@ -162,7 +376,7 @@ export function FacilitiesTable({
               </TableHead>
 
               <TableHead
-                className="cursor-pointer select-none transition-colors hover:text-fg"
+                className="w-[40%] cursor-pointer select-none transition-colors hover:text-fg"
                 onClick={() => onSortChange("name")}
                 title="Sort by Facility Name"
               >
@@ -172,22 +386,22 @@ export function FacilitiesTable({
                 </div>
               </TableHead>
 
-              <TableHead>Location</TableHead>
-              <TableHead>Grid & Fuels</TableHead>
+              <TableHead className="w-[12%]">Location</TableHead>
+              <TableHead className="w-[18%]">Grid & Fuels</TableHead>
 
               <TableHead
-                className="cursor-pointer select-none text-center transition-colors hover:text-fg"
+                className="w-[15%] cursor-pointer select-none text-right transition-colors hover:text-fg"
                 onClick={() => onSortChange("capacity")}
                 title="Sort by Capacity (MW)"
               >
-                <div className="flex items-center justify-center gap-1">
+                <div className="flex items-center justify-end gap-1">
                   <span>Capacity</span>
                   {getSortIcon("capacity")}
                 </div>
               </TableHead>
 
               <TableHead
-                className="cursor-pointer select-none text-right transition-colors hover:text-fg"
+                className="w-[15%] cursor-pointer select-none text-right pr-4 transition-colors hover:text-fg"
                 onClick={() => onSortChange("co2")}
                 title="Sort by Annual CO2 Tonnage"
               >
@@ -196,8 +410,6 @@ export function FacilitiesTable({
                   {getSortIcon("co2")}
                 </div>
               </TableHead>
-
-              <TableHead className="w-20 text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,222 +420,42 @@ export function FacilitiesTable({
                     <div className="mx-auto h-4 w-4 rounded bg-surface-2" />
                   </TableCell>
                   <TableCell>
-                    <div className="h-4 w-12 rounded bg-surface-2" />
+                    <div className="h-4 w-10 rounded bg-surface-2" />
                   </TableCell>
                   <TableCell>
-                    <div className="mb-1 h-4 w-48 rounded bg-surface-2" />
-                    <div className="h-3 w-32 rounded bg-surface-2/60" />
+                    <div className="mb-1 h-4 w-64 rounded bg-surface-2" />
+                    <div className="h-3 w-44 rounded bg-surface-2/60" />
                   </TableCell>
                   <TableCell>
-                    <div className="h-4 w-24 rounded bg-surface-2" />
+                    <div className="h-4 w-16 rounded bg-surface-2" />
                   </TableCell>
                   <TableCell>
-                    <div className="h-4 w-32 rounded bg-surface-2" />
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="mx-auto h-4 w-16 rounded bg-surface-2" />
+                    <div className="h-4 w-28 rounded bg-surface-2" />
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="ml-auto h-4 w-16 rounded bg-surface-2" />
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="ml-auto h-7 w-16 rounded bg-surface-2" />
+                  <TableCell className="text-right pr-4">
+                    <div className="ml-auto h-4 w-16 rounded bg-surface-2" />
                   </TableCell>
                 </TableRow>
               ))
             ) : facilities?.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-16 text-center text-fg-muted"
-                >
-                  <p className="text-sm font-medium text-fg-2">
-                    No facilities match the active filter criteria.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onResetFilters}
-                    className="mt-3"
-                  >
-                    Clear All Filters
-                  </Button>
+                <TableCell colSpan={7} className="p-0">
+                  <EmptyTableState onReset={onResetFilters} />
                 </TableCell>
               </TableRow>
             ) : (
-              facilities?.map((fac) => {
-                const isSelected = compareIds.includes(fac.id);
-                const equivalents = getHumanEquivalents(
-                  fac.totalCapacityMW,
-                  fac.totalCo2Tons,
-                );
-                const plantRole = getPlantRole({
-                  operatingHours: fac.totalOperatingHours,
-                  capacityMW: fac.totalCapacityMW,
-                  sourceCategory: fac.sourceCategory,
-                  primaryFuels: fac.primaryFuels,
-                });
-
-                return (
-                  <TableRow
-                    key={fac.id}
-                    className={cn(
-                      "group cursor-pointer transition-colors",
-                      isSelected
-                        ? "bg-emerald-950/20 hover:bg-emerald-950/30"
-                        : "hover:bg-surface-2/30",
-                    )}
-                    onClick={() => onInspect(fac.id)}
-                  >
-                    {/* Compare Checkbox */}
-                    <TableCell
-                      className="text-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => onToggleCompare(fac.id)}
-                        className="h-3.5 w-3.5 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
-                        aria-label={`Select ${fac.name} for comparison`}
-                      />
-                    </TableCell>
-
-                    {/* ORISPL ID */}
-                    <TableCell className="font-mono text-xs text-fg-muted">
-                      #{fac.id}
-                    </TableCell>
-
-                    {/* Facility Name & Role */}
-                    <TableCell>
-                      <div className="text-base font-semibold text-fg transition-colors group-hover:text-emerald-400">
-                        {fac.name}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium",
-                            plantRole.badgeClass,
-                          )}
-                          title={plantRole.description}
-                        >
-                          {renderRoleIcon(plantRole.icon)}
-                          <span>{plantRole.badgeLabel}</span>
-                        </span>
-                        <span className="max-w-[200px] truncate text-xs text-fg-muted">
-                          {fac.ownerOperator ?? "Owner unlisted"}
-                        </span>
-                      </div>
-                    </TableCell>
-
-                    {/* Location */}
-                    <TableCell>
-                      <div className="text-sm font-semibold text-fg-2">
-                        {fac.stateCode}
-                      </div>
-                      <div className="text-xs text-fg-muted">
-                        {fac.county ? `${fac.county} Co.` : "County N/A"}
-                      </div>
-                    </TableCell>
-
-                    {/* Grid & Fuel */}
-                    <TableCell>
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-1">
-                          {fac.nercRegion && (
-                            <Badge
-                              variant="sky"
-                              className="px-2 py-0.5 font-mono text-xs"
-                            >
-                              {fac.nercRegion}
-                            </Badge>
-                          )}
-                          {fac.controlledUnitsCount > 0 && (
-                            <span
-                              className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-400"
-                              title="Equipped with SO2 scrubbers or NOx catalytic control systems"
-                            >
-                              <ShieldCheck className="h-3 w-3" />
-                              Scrubbed
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {fac.primaryFuels.length > 0 ? (
-                            fac.primaryFuels.map((fuel) => (
-                              <FuelBadge key={fuel} fuel={fuel} />
-                            ))
-                          ) : (
-                            <span className="italic text-xs text-fg-muted">
-                              Fuel unlisted
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    {/* Capacity */}
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1 text-base font-semibold text-fg">
-                        <Zap className="h-3.5 w-3.5 text-amber-400" />
-                        <span>
-                          {fac.totalCapacityMW > 0
-                            ? `${Number(fac.totalCapacityMW).toLocaleString()} MW`
-                            : "—"}
-                        </span>
-                      </div>
-                      <div className="text-xs text-fg-muted">
-                        {equivalents.homesPoweredRaw > 0 && (
-                          <span className="font-medium text-fg-2">
-                            {equivalents.homesPoweredFormatted} •{" "}
-                          </span>
-                        )}
-                        <span>
-                          {fac.unitCount}{" "}
-                          {fac.unitCount === 1 ? "unit" : "units"}
-                        </span>
-                      </div>
-                    </TableCell>
-
-                    {/* Annual CO2 */}
-                    <TableCell className="text-right">
-                      <div className="font-mono text-base font-semibold text-fg">
-                        {fac.totalCo2Tons > 0 ? (
-                          `${Number(fac.totalCo2Tons).toLocaleString()} t`
-                        ) : (
-                          <span className="text-fg-muted">—</span>
-                        )}
-                      </div>
-                      {equivalents.carsDrivenRaw > 0 && (
-                        <div className="text-xs text-fg-muted">
-                          ≈ {equivalents.carsDrivenFormatted}
-                        </div>
-                      )}
-                      <div className="pt-0.5">
-                        <CarbonIntensityBadge
-                          intensity={fac.carbonIntensityLbsMWh}
-                        />
-                      </div>
-                    </TableCell>
-
-                    {/* Inspect */}
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-3 text-xs font-normal text-fg-muted hover:text-fg"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onInspect(fac.id);
-                        }}
-                      >
-                        <span>Inspect</span>
-                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
+              facilities?.map((fac) => (
+                <FacilityTableRowDesktop
+                  key={fac.id}
+                  fac={fac}
+                  isSelected={compareIds.includes(fac.id)}
+                  onToggleCompare={onToggleCompare}
+                  onInspect={onInspect}
+                />
+              ))
             )}
           </TableBody>
         </Table>
@@ -446,145 +478,17 @@ export function FacilitiesTable({
             </div>
           ))
         ) : facilities?.length === 0 ? (
-          <div className="px-4 py-12 text-center text-fg-muted">
-            <p className="text-sm font-medium text-fg-2">
-              No facilities match the active filter criteria.
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onResetFilters}
-              className="mt-3"
-            >
-              Clear All Filters
-            </Button>
-          </div>
+          <EmptyTableState onReset={onResetFilters} />
         ) : (
-          facilities?.map((fac) => {
-            const isSelected = compareIds.includes(fac.id);
-            const plantRole = getPlantRole({
-              operatingHours: fac.totalOperatingHours,
-              capacityMW: fac.totalCapacityMW,
-              sourceCategory: fac.sourceCategory,
-              primaryFuels: fac.primaryFuels,
-            });
-
-            return (
-              <div
-                key={fac.id}
-                onClick={() => onInspect(fac.id)}
-                className={cn(
-                  "cursor-pointer space-y-2.5 p-3.5 transition-colors active:bg-surface-2/40",
-                  isSelected ? "bg-emerald-950/20" : "hover:bg-surface/40",
-                )}
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex min-w-0 items-start gap-2.5">
-                    <div
-                      className="shrink-0 pt-0.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => onToggleCompare(fac.id)}
-                        className="h-4 w-4 cursor-pointer rounded border-edge bg-canvas text-emerald-500 accent-emerald-500 focus:ring-0"
-                        aria-label={`Select ${fac.name} for comparison`}
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="truncate text-base font-semibold tracking-tight text-fg">
-                        {fac.name}
-                      </h4>
-                      <div className="flex items-center gap-1.5 truncate text-xs text-fg-muted">
-                        <span className="font-mono">#{fac.id}</span>
-                        <span>•</span>
-                        <span>
-                          {fac.county ? `${fac.county} Co., ` : ""}
-                          {fac.stateCode}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Badge
-                    variant="outline"
-                    className="shrink-0 px-2 py-0.5 font-mono text-xs"
-                  >
-                    {fac.stateCode}
-                  </Badge>
-                </div>
-
-                {/* Tags */}
-                <div className="flex flex-wrap items-center gap-1">
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium",
-                      plantRole.badgeClass,
-                    )}
-                  >
-                    {renderRoleIcon(plantRole.icon)}
-                    <span>{plantRole.badgeLabel}</span>
-                  </span>
-
-                  {fac.nercRegion && (
-                    <Badge
-                      variant="sky"
-                      className="px-2 py-0.5 font-mono text-xs"
-                    >
-                      {fac.nercRegion}
-                    </Badge>
-                  )}
-
-                  {fac.primaryFuels.slice(0, 2).map((fuel) => (
-                    <FuelBadge key={fuel} fuel={fuel} size="sm" />
-                  ))}
-
-                  {fac.controlledUnitsCount > 0 && (
-                    <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-400">
-                      <ShieldCheck className="h-3 w-3" />
-                      Scrubbed
-                    </span>
-                  )}
-                </div>
-
-                {/* Metrics Strip */}
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-edge/60 bg-canvas/60 p-3 text-xs">
-                  <div>
-                    <span className="block text-xs text-fg-muted">
-                      Nameplate
-                    </span>
-                    <span className="text-base font-bold text-fg">
-                      {fac.totalCapacityMW > 0
-                        ? `${Number(fac.totalCapacityMW).toLocaleString()} MW`
-                        : "—"}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-fg-muted">
-                      {fac.unitCount} {fac.unitCount === 1 ? "unit" : "units"}
-                    </span>
-                  </div>
-
-                  <div className="text-right">
-                    <span className="block text-xs text-fg-muted">
-                      Annual CO₂
-                    </span>
-                    <span className="font-mono text-base font-bold text-emerald-400">
-                      {fac.totalCo2Tons > 0
-                        ? `${Number(fac.totalCo2Tons).toLocaleString()} t`
-                        : "—"}
-                    </span>
-                    {fac.carbonIntensityLbsMWh &&
-                    fac.carbonIntensityLbsMWh > 0 ? (
-                      <span className="mt-0.5 block font-mono text-xs text-fg-muted">
-                        {Math.round(fac.carbonIntensityLbsMWh)} lbs/MWh
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          facilities?.map((fac) => (
+            <FacilityCardMobile
+              key={fac.id}
+              fac={fac}
+              isSelected={compareIds.includes(fac.id)}
+              onToggleCompare={onToggleCompare}
+              onInspect={onInspect}
+            />
+          ))
         )}
       </div>
 

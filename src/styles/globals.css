@@ -6,6 +6,8 @@
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
 }
 
 /* Expose semantic tokens as Tailwind utility classes */
@@ -26,8 +28,8 @@
   --surface-2: #e4e4e7;   /* zinc-200 — hover/elevated surfaces */
   --edge: #d4d4d8;        /* zinc-300 — borders */
   --fg: #18181b;          /* zinc-900 — primary text */
-  --fg-2: #52525b;        /* zinc-600 — secondary text */
-  --fg-muted: #71717a;    /* zinc-500 — muted/placeholder text */
+  --fg-2: #3f3f46;        /* zinc-700 — secondary text */
+  --fg-muted: #52525b;    /* zinc-600 — muted/placeholder text with higher contrast */
 }
 
 /* ─── Dark Theme ──────────────────────────────────────────── */
@@ -38,17 +40,17 @@
   --edge: #27272a;        /* zinc-800 */
   --fg: #f4f4f5;          /* zinc-100 */
   --fg-2: #d4d4d8;        /* zinc-300 */
-  --fg-muted: #71717a;    /* zinc-500 */
+  --fg-muted: #a1a1aa;    /* zinc-400 — clearly legible muted text */
 }
 
 /* ─── Leaflet Map (adapts to theme variables) ─────────────── */
 .leaflet-dark-tooltip {
   background-color: var(--surface) !important;
   border: 1px solid var(--edge) !important;
-  color: #f43f5e !important;
+  color: var(--fg) !important;
   border-radius: 6px !important;
   padding: 6px 10px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2) !important;
 }
 
 .leaflet-dark-tooltip::before {

@@ -6,13 +6,11 @@ export interface CarbonIntensityBadgeProps
   extends React.HTMLAttributes<HTMLSpanElement> {
   intensity: number | null | undefined;
   showValue?: boolean;
-  size?: "sm" | "default";
 }
 
 export function CarbonIntensityBadge({
   intensity,
   showValue = false,
-  size = "default",
   className,
   ...props
 }: CarbonIntensityBadgeProps) {
@@ -25,9 +23,8 @@ export function CarbonIntensityBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded border font-medium transition-colors select-none",
+        "inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium transition-colors select-none",
         tier.badgeClass,
-        size === "sm" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-xs",
         className,
       )}
       title={tier.description}
