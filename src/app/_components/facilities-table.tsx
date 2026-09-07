@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Activity,
   ArrowDown,
   ArrowRight,
   ArrowUp,
@@ -10,8 +11,11 @@ import {
   ChevronsRight,
   ChevronLeft,
   ChevronRight,
+  Clock,
+  Factory,
   Flame,
   HelpCircle,
+  Power,
   Scale,
   ShieldCheck,
   Zap,
@@ -34,6 +38,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  getHumanEquivalents,
+  getPlantRole,
+  type PlantRoleInfo,
+} from "~/lib/plant-narrative";
 
 export interface FacilityRow {
   id: number;
@@ -49,6 +58,7 @@ export interface FacilityRow {
   unitCount: number;
   totalCapacityMW: number;
   totalCo2Tons: number;
+  totalOperatingHours: number;
   primaryFuels: string[];
   carbonIntensityLbsMWh: number | null;
   controlledUnitsCount: number;
@@ -177,7 +187,7 @@ export function FacilitiesTable({
           className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400"
           title={`${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`}
         >
-          {intensity} lbs/MWh • Clean CCGT
+          {intensity} lbs/MWh • Clean Gas
         </span>
       );
     }
@@ -201,14 +211,21 @@ export function FacilitiesTable({
     );
   };
 
-  // Calculate human-scale homes powered equivalent (~750 homes per 1 MW)
-  const formatHomesPowered = (mw: number) => {
-    if (mw <= 0) return null;
-    const homes = mw * 750;
-    if (homes >= 1_000_000) {
-      return `~${(homes / 1_000_000).toFixed(1)}M homes`;
+  // Plain-English Role Icon helper
+  const renderRoleIcon = (icon: PlantRoleInfo["icon"]) => {
+    switch (icon) {
+      case "zap":
+        return <Zap className="h-2.5 w-2.5" />;
+      case "clock":
+        return <Clock className="h-2.5 w-2.5" />;
+      case "factory":
+        return <Factory className="h-2.5 w-2.5" />;
+      case "power":
+        return <Power className="h-2.5 w-2.5" />;
+      case "activity":
+      default:
+        return <Activity className="h-2.5 w-2.5" />;
     }
-    return `~${Math.round(homes / 1_000)}K homes`;
   };
 
   // Generate windowed page numbers with ellipsis
@@ -269,14 +286,14 @@ export function FacilitiesTable({
               </div>
             </TableHead>
 
-            {/* Facility Name Column */}
+            {/* Facility Name & Role Column */}
             <TableHead
               className="cursor-pointer transition-colors select-none hover:text-zinc-200"
               onClick={() => onSortChange("name")}
               title="Click to sort by Facility Name"
             >
               <div className="flex items-center">
-                <span>Facility Name & Utility</span>
+                <span>Facility & Grid Role</span>
                 {getSortIcon("name")}
               </div>
             </TableHead>
@@ -310,7 +327,7 @@ export function FacilitiesTable({
               title="Click to sort by Annual CO2 Tonnage"
             >
               <div className="flex items-center justify-end gap-1">
-                <span>Annual CO2 & Intensity</span>
+                <span>Annual CO2 & Impact</span>
                 <span title="Annual stack carbon emissions monitored by CEMS and carbon intensity (lbs CO2/MWh)">
                   <HelpCircle className="h-3 w-3 text-zinc-500" />
                 </span>
@@ -374,7 +391,16 @@ export function FacilitiesTable({
           ) : (
             facilities?.map((fac) => {
               const isSelected = compareIds.includes(fac.id);
-              const homesPowered = formatHomesPowered(fac.totalCapacityMW);
+              const equivalents = getHumanEquivalents(
+                fac.totalCapacityMW,
+                fac.totalCo2Tons,
+              );
+              const plantRole = getPlantRole({
+                operatingHours: fac.totalOperatingHours,
+                capacityMW: fac.totalCapacityMW,
+                sourceCategory: fac.sourceCategory,
+                primaryFuels: fac.primaryFuels,
+              });
 
               return (
                 <TableRow
@@ -405,13 +431,22 @@ export function FacilitiesTable({
                     #{fac.id}
                   </TableCell>
 
-                  {/* Facility Name & Utility */}
+                  {/* Facility Name & Plain-English Grid Role */}
                   <TableCell>
                     <div className="font-medium text-zinc-100 transition-colors group-hover:text-emerald-300">
                       {fac.name}
                     </div>
-                    <div className="max-w-xs truncate text-[11px] text-zinc-400">
-                      {fac.ownerOperator ?? "Owner unlisted"}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded border px-1.5 py-0 text-[10px] font-medium ${plantRole.badgeClass}`}
+                        title={plantRole.description}
+                      >
+                        {renderRoleIcon(plantRole.icon)}
+                        <span>{plantRole.badgeLabel}</span>
+                      </span>
+                      <span className="max-w-[180px] truncate text-[11px] text-zinc-400">
+                        {fac.ownerOperator ?? "Owner unlisted"}
+                      </span>
                     </div>
                   </TableCell>
 
@@ -443,7 +478,7 @@ export function FacilitiesTable({
                             title="Equipped with SO2 scrubbers or NOx catalytic control systems"
                           >
                             <ShieldCheck className="h-2.5 w-2.5" />
-                            CEMS Controls
+                            Scrubbed
                           </span>
                         )}
                       </div>
@@ -472,9 +507,9 @@ export function FacilitiesTable({
                       </span>
                     </div>
                     <div className="text-[11px] text-zinc-400">
-                      {homesPowered && (
+                      {equivalents.homesPoweredRaw > 0 && (
                         <span className="font-medium text-zinc-300">
-                          {homesPowered} •{" "}
+                          {equivalents.homesPoweredFormatted} •{" "}
                         </span>
                       )}
                       <span>
@@ -492,6 +527,11 @@ export function FacilitiesTable({
                         <span className="text-zinc-600">—</span>
                       )}
                     </div>
+                    {equivalents.carsDrivenRaw > 0 && (
+                      <div className="text-[10px] text-zinc-400">
+                        ≈ {equivalents.carsDrivenFormatted}
+                      </div>
+                    )}
                     <div className="pt-0.5">
                       {renderIntensityBadge(fac.carbonIntensityLbsMWh)}
                     </div>

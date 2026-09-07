@@ -4,17 +4,22 @@ import { useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  Car,
   CheckCircle2,
   ExternalLink,
   Flame,
   Gauge,
+  Home,
   MapPin,
   RefreshCw,
+  Sparkles,
+  Trees,
   X,
   Zap,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { generatePlantStory } from "~/lib/plant-narrative";
 import {
   Dialog,
   DialogContent,
@@ -111,6 +116,33 @@ export function FacilityDetailDialog({
   const latestRecord = facility?.annualRecords?.[0];
   const allAuditLogs =
     facility?.annualRecords.flatMap((r) => r.auditLogs ?? []) ?? [];
+
+  const primaryFuels = Array.from(
+    new Set(facility?.units.map((u) => u.primaryFuel).filter(Boolean)),
+  ) as string[];
+
+  const hasControls =
+    facility?.units.some((u) => Boolean(u.so2Controls ?? u.noxControls)) ??
+    false;
+
+  const story = facility
+    ? generatePlantStory({
+        name: facility.name,
+        county: facility.county,
+        stateCode: facility.stateCode,
+        nercRegion: facility.nercRegion,
+        sourceCategory: facility.sourceCategory,
+        ownerOperator: facility.ownerOperator,
+        totalCapacityMW,
+        unitCount: facility.units.length,
+        primaryFuels,
+        co2Tons: latestRecord?.co2MassTons ?? 0,
+        operatingHours: latestRecord?.operatingHours ?? 0,
+        grossGenerationMWh: latestRecord?.grossGenerationMWh ?? 0,
+        carbonIntensity: latestRecord?.co2IntensityLbsMWh ?? null,
+        hasControls,
+      })
+    : null;
 
   const mapsUrl =
     facility?.latitude && facility?.longitude
@@ -266,6 +298,85 @@ export function FacilityDetailDialog({
               <span className="text-[10px] text-zinc-400">
                 PRD 3.3 Rule Engine
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* What is Happening at This Plant? - Plain-English Storytelling Card */}
+        {story && (
+          <div className="space-y-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span className="text-xs font-bold tracking-wider text-white uppercase">
+                  What is Happening at This Plant?
+                </span>
+              </div>
+              <span
+                className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${story.roleInfo.badgeClass}`}
+                title={story.roleInfo.description}
+              >
+                <span>{story.roleInfo.badgeLabel}</span>
+              </span>
+            </div>
+
+            <p className="text-xs leading-relaxed font-medium text-zinc-100">
+              {story.headline}
+            </p>
+
+            <div className="grid grid-cols-1 gap-3 pt-1 text-[11px] md:grid-cols-2">
+              <div className="space-y-1 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3">
+                <span className="mb-1 block font-semibold text-sky-400">
+                  ⚡ Grid & Operational Role
+                </span>
+                <p className="leading-relaxed text-zinc-300">
+                  {story.gridStory}
+                </p>
+              </div>
+
+              <div className="space-y-1 rounded-lg border border-zinc-800/60 bg-zinc-950/60 p-3">
+                <span className="mb-1 block font-semibold text-emerald-400">
+                  🌱 Emissions & Environmental Footprint
+                </span>
+                <p className="leading-relaxed text-zinc-300">
+                  {story.environmentalStory}
+                </p>
+              </div>
+            </div>
+
+            {/* Tangible Real-World Equivalents Bar */}
+            <div className="flex flex-wrap items-center gap-4 border-t border-zinc-800/60 pt-1 text-[11px]">
+              <div className="flex items-center gap-1.5 text-zinc-300">
+                <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>
+                  Powers{" "}
+                  <strong className="text-white">
+                    {story.equivalents.homesPoweredFormatted}
+                  </strong>
+                </span>
+              </div>
+              {story.equivalents.carsDrivenRaw > 0 && (
+                <div className="flex items-center gap-1.5 text-zinc-300">
+                  <Car className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                  <span>
+                    Emissions equal{" "}
+                    <strong className="text-white">
+                      {story.equivalents.carsDrivenFormatted}
+                    </strong>
+                  </span>
+                </div>
+              )}
+              {story.equivalents.treesNeededRaw > 0 && (
+                <div className="flex items-center gap-1.5 text-zinc-300">
+                  <Trees className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                  <span>
+                    Offset requires{" "}
+                    <strong className="text-white">
+                      {story.equivalents.treesNeededFormatted}
+                    </strong>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         )}

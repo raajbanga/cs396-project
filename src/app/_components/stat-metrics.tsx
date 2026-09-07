@@ -37,7 +37,11 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
               ? `${(stats.totalCapacityMW / 1000).toFixed(1)} GW`
               : "0 GW"
         }
-        subtext={`${stats?.totalUnits.toLocaleString() ?? 0} generation units`}
+        subtext={
+          stats?.totalCapacityMW
+            ? `Powers ~${Math.round((stats.totalCapacityMW * 750) / 1_000_000)}M homes (${stats.totalUnits.toLocaleString()} units)`
+            : `${stats?.totalUnits.toLocaleString() ?? 0} generation units`
+        }
       />
 
       <MetricCard
@@ -59,9 +63,9 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
         }
         valueClassName="font-mono text-emerald-400"
         subtext={
-          stats?.totalGenerationMWh
-            ? `${(stats.totalGenerationMWh / 1_000_000).toFixed(1)}M MWh generation`
-            : "Sync required"
+          stats?.totalCo2Tons && stats.totalCo2Tons > 0
+            ? `≈ ${((stats.totalCo2Tons * 0.217) / 1_000_000).toFixed(0)}M passenger cars/yr`
+            : "Continuous monitoring"
         }
       />
 
