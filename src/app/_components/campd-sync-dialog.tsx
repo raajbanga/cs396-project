@@ -1,9 +1,10 @@
 "use client";
 
-import { AlertCircle, Check, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Check, RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -59,35 +60,25 @@ export function CampdSyncDialog({
 }: CampdSyncDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md space-y-4">
-        <DialogHeader>
+      <DialogContent className="relative max-w-md space-y-4 p-4 sm:p-6">
+        <DialogClose onClose={() => onOpenChange(false)} />
+
+        <DialogHeader className="pr-8">
           <div className="flex items-center gap-2">
             <RefreshCw className="h-4 w-4 text-emerald-400" />
-            <DialogTitle className="text-base">
-              EPA CAMPD API Live Ingestion
-            </DialogTitle>
+            <DialogTitle>EPA CAMPD Live Sync</DialogTitle>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onOpenChange(false)}
-            className="h-7 w-7"
-            aria-label="Close dialog"
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
         <DialogDescription>
-          Connect to the official EPA Clean Air Markets Program API using your
-          server <code className="text-emerald-400">CAMPD_API</code> key. Pulls
-          apportioned emissions, calculates derived carbon intensity, and
-          executes physical sanity audits.
+          Ingest apportioned annual emissions and heat rates from the official
+          EPA CAMPD API, calculate unit-level carbon intensity, and execute
+          physical sanity checks.
         </DialogDescription>
 
-        <div className="space-y-3 text-xs">
+        <div className="space-y-3 text-sm">
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               Reporting Year
             </label>
             <Select
@@ -106,7 +97,7 @@ export function CampdSyncDialog({
           </div>
 
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               State Scope
             </label>
             <Select value={syncState} onValueChange={onSyncStateChange}>
@@ -125,7 +116,7 @@ export function CampdSyncDialog({
           </div>
 
           <div>
-            <label className="mb-1 block font-medium text-zinc-300">
+            <label className="mb-1 block font-medium text-fg-2">
               Batch Size
             </label>
             <Select
@@ -145,7 +136,7 @@ export function CampdSyncDialog({
         </div>
 
         {isSuccess && mutationData && (
-          <div className="space-y-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+          <div className="space-y-1 rounded-lg border border-emerald-300/60 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-300">
             <div className="flex items-center gap-1.5 font-semibold">
               <Check className="h-3.5 w-3.5" />
               <span>Ingestion Successful</span>
@@ -157,7 +148,7 @@ export function CampdSyncDialog({
         )}
 
         {isError && errorMessage && (
-          <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+          <div className="flex items-center gap-2 rounded-lg border border-red-300/60 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">
             <AlertCircle className="h-4 w-4 shrink-0" />
             <span>Sync error: {errorMessage}</span>
           </div>

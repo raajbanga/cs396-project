@@ -2,13 +2,14 @@ import "~/styles/globals.css";
 
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
+import { ThemeProvider } from "next-themes";
 
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
-  title: "EPA CAMPD Data Management System | Phase 1",
+  title: "GridPulse | US Power & Emissions Intelligence",
   description:
-    "EPA Clean Air Markets Program Data management, normalization, and relational explorer.",
+    "Real-time US power grid, generation capacity, and continuous emissions monitoring platform.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
@@ -21,9 +22,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable}`}>
+    <html
+      lang="en"
+      className={`${geist.variable}`}
+      suppressHydrationWarning
+    >
       <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <TRPCReactProvider>{children}</TRPCReactProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

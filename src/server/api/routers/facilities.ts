@@ -42,16 +42,11 @@ function buildFacilityFilterConditions(filter?: {
 
   if (filter?.search && filter.search.trim() !== "") {
     const term = `%${filter.search.trim().toLowerCase()}%`;
-    const numericSearch = Number.parseInt(filter.search.trim(), 10);
-    if (!Number.isNaN(numericSearch)) {
-      conditions.push(
-        sql`(${facilities.id} = ${numericSearch} OR lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-      );
-    } else {
-      conditions.push(
-        sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`,
-      );
-    }
+    const num = Number.parseInt(filter.search.trim(), 10);
+    const textCond = sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`;
+    conditions.push(
+      !Number.isNaN(num) ? sql`(${facilities.id} = ${num} OR ${textCond})` : textCond,
+    );
   }
 
   if (filter?.primaryFuel && filter.primaryFuel !== "ALL") {
@@ -176,14 +171,6 @@ export const facilitiesRouter = createTRPCRouter({
       )
       .orderBy(asc(facilities.nercRegion));
 
-    const categoryRows = await ctx.db
-      .selectDistinct({ sourceCategory: facilities.sourceCategory })
-      .from(facilities)
-      .where(
-        sql`${facilities.sourceCategory} IS NOT NULL AND ${facilities.sourceCategory} != ''`,
-      )
-      .orderBy(asc(facilities.sourceCategory));
-
     return {
       states: stateRows.map((r) => r.stateCode).filter(Boolean),
       fuels: fuelRows
@@ -192,9 +179,6 @@ export const facilitiesRouter = createTRPCRouter({
       nercRegions: nercRows
         .map((r) => r.nercRegion)
         .filter((n): n is string => Boolean(n)),
-      sourceCategories: categoryRows
-        .map((r) => r.sourceCategory)
-        .filter((c): c is string => Boolean(c)),
     };
   }),
 
@@ -239,24 +223,15 @@ export const facilitiesRouter = createTRPCRouter({
       const totalCount = countResult?.total ?? 0;
       const totalPages = Math.ceil(totalCount / pageSize);
 
-      let orderClause;
-      if (sortBy === "capacity") {
-        orderClause =
-          sortDir === "asc"
-            ? asc(sql`total_capacity_mw`)
-            : desc(sql`total_capacity_mw`);
-      } else if (sortBy === "co2") {
-        orderClause =
-          sortDir === "asc"
-            ? asc(sql`total_co2_tons`)
-            : desc(sql`total_co2_tons`);
-      } else if (sortBy === "id") {
-        orderClause =
-          sortDir === "asc" ? asc(facilities.id) : desc(facilities.id);
-      } else {
-        orderClause =
-          sortDir === "asc" ? asc(facilities.name) : desc(facilities.name);
-      }
+      const orderCol =
+        sortBy === "capacity"
+          ? sql`total_capacity_mw`
+          : sortBy === "co2"
+            ? sql`total_co2_tons`
+            : sortBy === "id"
+              ? facilities.id
+              : facilities.name;
+      const orderClause = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
 
       const facilityRows = await ctx.db
         .select({

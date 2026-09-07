@@ -18,19 +18,22 @@ export function Badge({
   ...props
 }: BadgeProps) {
   const variantStyles = {
-    default: "bg-zinc-800 text-zinc-200 border-zinc-700/60",
-    secondary: "bg-zinc-900 text-zinc-400 border-zinc-800",
-    outline: "text-zinc-300 border-zinc-700/80",
-    success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    destructive: "bg-red-500/10 text-red-400 border-red-500/20",
-    sky: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+    default: "bg-surface-2 text-fg border-edge",
+    secondary: "bg-surface/90 text-fg-muted border-edge",
+    outline: "text-fg-2 border-edge bg-transparent",
+    success:
+      "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300/60 dark:border-emerald-500/20",
+    warning:
+      "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-300/60 dark:border-amber-500/20",
+    destructive:
+      "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-300/60 dark:border-red-500/20",
+    sky: "bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-300/60 dark:border-sky-500/20",
   }[variant];
 
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors",
+        "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium tracking-tight transition-colors",
         variantStyles,
         className,
       )}

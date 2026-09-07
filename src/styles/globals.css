@@ -1,25 +1,78 @@
 @import "tailwindcss";
 
+/* Class-based dark mode variant for next-themes */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.125rem;
 }
 
-/* Custom dark styling for Leaflet popups and tooltips */
+/* Expose semantic tokens as Tailwind utility classes */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-edge: var(--edge);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-muted: var(--fg-muted);
+}
+
+/* ─── Light Theme ─────────────────────────────────────────── */
+:root {
+  --canvas: #f4f4f5;      /* zinc-100 — page background */
+  --surface: #ffffff;     /* white — card/panel background */
+  --surface-2: #e4e4e7;   /* zinc-200 — hover/elevated surfaces */
+  --edge: #d4d4d8;        /* zinc-300 — borders */
+  --fg: #18181b;          /* zinc-900 — primary text */
+  --fg-2: #3f3f46;        /* zinc-700 — secondary text */
+  --fg-muted: #52525b;    /* zinc-600 — muted/placeholder text with higher contrast */
+}
+
+/* ─── Dark Theme ──────────────────────────────────────────── */
+.dark {
+  --canvas: #09090b;      /* zinc-950 */
+  --surface: #18181b;     /* zinc-900 */
+  --surface-2: #27272a;   /* zinc-800 */
+  --edge: #27272a;        /* zinc-800 */
+  --fg: #f4f4f5;          /* zinc-100 */
+  --fg-2: #d4d4d8;        /* zinc-300 */
+  --fg-muted: #a1a1aa;    /* zinc-400 — clearly legible muted text */
+}
+
+/* ─── Leaflet Map (adapts to theme variables) ─────────────── */
 .leaflet-dark-tooltip {
-  background-color: #18181b !important;
-  border: 1px solid #3f3f46 !important;
-  color: #f43f5e !important;
+  background-color: var(--surface) !important;
+  border: 1px solid var(--edge) !important;
+  color: var(--fg) !important;
   border-radius: 6px !important;
   padding: 6px 10px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2) !important;
 }
 
 .leaflet-dark-tooltip::before {
-  border-top-color: #3f3f46 !important;
+  border-top-color: var(--edge) !important;
 }
 
 .leaflet-container {
-  background-color: #09090b !important;
+  background-color: var(--canvas) !important;
 }
 
+/* ─── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--surface-2);
+}
