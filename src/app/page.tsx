@@ -16,6 +16,7 @@ export default async function Home() {
     nercRegion: "ALL",
     sourceCategory: "ALL",
   });
+  void api.facilities.getMapFacilities.prefetch({});
 
   return (
     <HydrateClient>

@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Database, RefreshCw, Scale } from "lucide-react";
+import { Database, Globe, RefreshCw, Scale } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { CampdSyncDialog } from "./campd-sync-dialog";
 import { EpaPrimer } from "./epa-primer";
+import { FacilitiesMap } from "./facilities-map";
 import { FacilitiesTable } from "./facilities-table";
 import { FacilityDetailDialog } from "./facility-detail-dialog";
 import { FacilityFilters } from "./facility-filters";
@@ -15,7 +16,9 @@ import { PlantComparisonDialog } from "./plant-comparison-dialog";
 import { StatMetrics } from "./stat-metrics";
 
 export function DatabaseExplorer() {
-  const [activeTab, setActiveTab] = useState<"explorer" | "audit">("explorer");
+  const [activeTab, setActiveTab] = useState<"explorer" | "map" | "audit">(
+    "explorer",
+  );
 
   // Search & Filter state
   const [search, setSearch] = useState("");
@@ -93,6 +96,20 @@ export function DatabaseExplorer() {
     },
   );
 
+  const { data: mapFacilities, isLoading: mapFacilitiesLoading } =
+    api.facilities.getMapFacilities.useQuery(
+      {
+        search: debouncedSearch,
+        stateCode: selectedState,
+        primaryFuel: selectedFuel,
+        nercRegion: selectedNerc,
+        sourceCategory: selectedCategory,
+      },
+      {
+        placeholderData: (prev) => prev,
+      },
+    );
+
   const { data: selectedFacility, isLoading: facilityDetailLoading } =
     api.facilities.getFacility.useQuery(
       { id: inspectFacilityId! },
@@ -116,6 +133,7 @@ export function DatabaseExplorer() {
     onSuccess: () => {
       void utils.facilities.getStats.invalidate();
       void utils.facilities.getFacilities.invalidate();
+      void utils.facilities.getMapFacilities.invalidate();
       void utils.facilities.getAuditLogs.invalidate();
     },
   });
@@ -189,6 +207,18 @@ export function DatabaseExplorer() {
                 }`}
               >
                 Facilities Explorer
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("map")}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 font-medium transition-all ${
+                  activeTab === "map"
+                    ? "bg-zinc-800 text-white shadow-xs"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Globe className="h-3.5 w-3.5 text-emerald-400" />
+                <span>3D Globe & Map</span>
               </button>
               <button
                 type="button"
@@ -319,7 +349,29 @@ export function DatabaseExplorer() {
           </div>
         )}
 
-        {/* Tab 2: Audit Logs */}
+        {/* Tab 2: 3D Globe & Map */}
+        {activeTab === "map" && (
+          <FacilitiesMap
+            facilities={mapFacilities}
+            isLoading={mapFacilitiesLoading}
+            onInspectFacility={(id) => setInspectFacilityId(id)}
+            selectedFuel={selectedFuel}
+            onFuelChange={(f) => {
+              setSelectedFuel(f);
+              setPage(1);
+            }}
+            selectedState={selectedState}
+            onStateChange={(st) => {
+              setSelectedState(st);
+              setPage(1);
+            }}
+            states={filterOptions?.states}
+            searchQuery={search}
+            onSearchChange={setSearch}
+          />
+        )}
+
+        {/* Tab 3: Audit Logs */}
         {activeTab === "audit" && (
           <AuditLogsTable logs={auditLogs} isLoading={auditLoading} />
         )}
