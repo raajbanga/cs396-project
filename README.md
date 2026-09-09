@@ -50,6 +50,8 @@ Built for **CS396 Phase 1 Core**.
 
 ## Database Architecture
 
+> 📖 **Comprehensive Breakdown**: For an in-depth, plain-language walkthrough of what the data is, how every column is used, and how data is split across each front-end view with architecture diagrams, read [**DATABASE_BREAKDOWN.md**](./DATABASE_BREAKDOWN.md).
+
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
