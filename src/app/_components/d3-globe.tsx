@@ -26,14 +26,51 @@ import type { GeometryCollection, Topology } from "topojson-specification";
 
 interface D3GlobeProps {
   facilities: MapFacility[];
-  selectedFacilityId?: number | null;
   onInspectFacility: (id: number) => void;
   metricMode: MetricMode;
 }
 
+function createProjection(
+  width: number,
+  height: number,
+  scale: number,
+  rotation: [number, number, number],
+) {
+  return d3
+    .geoOrthographic()
+    .scale(scale)
+    .translate([width / 2, height / 2])
+    .rotate(rotation)
+    .clipAngle(90);
+}
+
+function findPlantAt(
+  facilities: MapFacility[],
+  projection: ReturnType<typeof createProjection>,
+  rotation: [number, number, number],
+  x: number,
+  y: number,
+  tolerance: number,
+) {
+  const center: [number, number] = [-rotation[0], -rotation[1]];
+  let closest: MapFacility | null = null;
+  let minDistance = tolerance;
+  for (const plant of facilities) {
+    if (d3.geoDistance([plant.longitude, plant.latitude], center) > Math.PI / 2)
+      continue;
+    const point = projection([plant.longitude, plant.latitude]);
+    if (!point) continue;
+    const distance = Math.hypot(point[0] - x, point[1] - y);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = plant;
+    }
+  }
+  return closest;
+}
+
 export function D3Globe({
   facilities,
-  selectedFacilityId,
   onInspectFacility,
   metricMode,
 }: D3GlobeProps) {
@@ -161,13 +198,12 @@ export function D3Globe({
     const cy = displayHeight / 2;
 
     // Create D3 Orthographic Projection
-    const projection = d3
-      .geoOrthographic()
-      .scale(scale)
-      .translate([cx, cy])
-      .rotate(rotation)
-      .clipAngle(90) // Cull back-face geometries
-      .precision(0.3);
+    const projection = createProjection(
+      displayWidth,
+      displayHeight,
+      scale,
+      rotation,
+    ).precision(0.3);
 
     const path = d3.geoPath(projection, ctx);
 
@@ -322,13 +358,13 @@ export function D3Globe({
       });
 
       const isHovered = hoveredPlant?.id === plant.id;
-      const isSelected = selectedFacilityId === plant.id;
-
       // Glow halo
       ctx.beginPath();
-      ctx.arc(px, py, r + (isHovered || isSelected ? 3 : 1), 0, Math.PI * 2);
+      ctx.arc(px, py, r + (isHovered ? 3 : 1), 0, Math.PI * 2);
       ctx.fillStyle = isHovered
-        ? (isDark ? "rgba(255, 255, 255, 0.5)" : "rgba(15, 23, 42, 0.25)")
+        ? isDark
+          ? "rgba(255, 255, 255, 0.5)"
+          : "rgba(15, 23, 42, 0.25)"
         : fuelTheme.glow;
       ctx.fill();
 
@@ -342,13 +378,11 @@ export function D3Globe({
       ctx.stroke();
 
       // Pulsing highlight ring on hover or selection
-      if (isHovered || isSelected) {
+      if (isHovered) {
         ctx.beginPath();
         ctx.arc(px, py, r + 5, 0, Math.PI * 2);
         ctx.lineWidth = 1.75;
-        ctx.strokeStyle = isHovered
-          ? (isDark ? "#ffffff" : "#0f172a")
-          : (isDark ? "#34d399" : "#059669");
+        ctx.strokeStyle = isDark ? "#ffffff" : "#0f172a";
         ctx.stroke();
       }
     }
@@ -361,7 +395,6 @@ export function D3Globe({
     usNation,
     isDark,
     hoveredPlant,
-    selectedFacilityId,
     metricMode,
   ]);
 
@@ -391,11 +424,6 @@ export function D3Globe({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [renderGlobe]);
-
-  // Redraw whenever state changes
-  useEffect(() => {
-    renderGlobe();
   }, [renderGlobe]);
 
   // Auto-rotation animation loop
@@ -469,38 +497,13 @@ export function D3Globe({
       });
     } else {
       // Hover hit detection against front-facing facilities
-      const cx = rect.width / 2;
-      const cy = rect.height / 2;
-      const projection = d3
-        .geoOrthographic()
-        .scale(scale)
-        .translate([cx, cy])
-        .rotate(rotation)
-        .clipAngle(90);
-
-      const centerLon = -rotation[0];
-      const centerLat = -rotation[1];
-
-      let closest: MapFacility | null = null;
-      let minDistance = 16; // pixels hit radius for desktop hover
-
-      for (const p of facilities) {
-        if (
-          d3.geoDistance([p.longitude, p.latitude], [centerLon, centerLat]) >
-          Math.PI / 2
-        ) {
-          continue; // cull
-        }
-
-        const projected = projection([p.longitude, p.latitude]);
-        if (!projected) continue;
-
-        const dist = Math.hypot(projected[0] - x, projected[1] - y);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closest = p;
-        }
-      }
+      const projection = createProjection(
+        rect.width,
+        rect.height,
+        scale,
+        rotation,
+      );
+      const closest = findPlantAt(facilities, projection, rotation, x, y, 16);
 
       setHoveredPlant(closest);
       if (closest) {
@@ -535,37 +538,14 @@ export function D3Globe({
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-        const cx = rect.width / 2;
-        const cy = rect.height / 2;
-
-        const projection = d3
-          .geoOrthographic()
-          .scale(scale)
-          .translate([cx, cy])
-          .rotate(rotation)
-          .clipAngle(90);
-
-        const centerLon = -rotation[0];
-        const centerLat = -rotation[1];
-        let minDistance = 22; // generous touch tolerance
-
-        for (const p of facilities) {
-          if (
-            d3.geoDistance([p.longitude, p.latitude], [centerLon, centerLat]) >
-            Math.PI / 2
-          ) {
-            continue;
-          }
-
-          const coords = projection([p.longitude, p.latitude]);
-          if (!coords) continue;
-
-          const dist = Math.hypot(coords[0] - x, coords[1] - y);
-          if (dist < minDistance) {
-            minDistance = dist;
-            targetPlant = p;
-          }
-        }
+        targetPlant = findPlantAt(
+          facilities,
+          createProjection(rect.width, rect.height, scale, rotation),
+          rotation,
+          x,
+          y,
+          22,
+        );
       }
 
       if (targetPlant) {
@@ -593,12 +573,12 @@ export function D3Globe({
   return (
     <div
       ref={containerRef}
-      className="relative flex h-[420px] sm:h-[520px] lg:h-[620px] w-full flex-col overflow-hidden rounded-xl border border-edge/80 bg-canvas select-none shadow-xs transition-colors"
+      className="border-edge/80 bg-canvas relative flex h-[420px] w-full flex-col overflow-hidden rounded-xl border shadow-xs transition-colors select-none sm:h-[520px] lg:h-[620px]"
     >
       {/* Loading Overlay */}
       {isLoadingGeo && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-canvas/80 backdrop-blur-xs">
-          <div className="flex items-center gap-2 text-xs text-fg-muted">
+        <div className="bg-canvas/80 absolute inset-0 z-20 flex items-center justify-center backdrop-blur-xs">
+          <div className="text-fg-muted flex items-center gap-2 text-xs">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
             <span>Rendering Wireframe Projections...</span>
           </div>
@@ -616,15 +596,15 @@ export function D3Globe({
       />
 
       {/* Top Floating HUD: Controls & Camera Presets */}
-      <div className="pointer-events-none absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-edge/80 bg-surface/90 p-1 backdrop-blur-md shadow-xs">
+      <div className="pointer-events-none absolute top-3 right-3 left-3 flex items-center justify-between gap-2">
+        <div className="border-edge/80 bg-surface/90 pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-xs backdrop-blur-md">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setAutoRotate(!autoRotate)}
-            className={`h-7 px-2 text-xs gap-1.5 ${
+            className={`h-7 gap-1.5 px-2 text-xs ${
               autoRotate
-                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/25"
+                ? "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-300"
                 : "text-fg-muted hover:text-fg hover:bg-surface-2/60"
             }`}
           >
@@ -633,18 +613,20 @@ export function D3Globe({
             ) : (
               <Play className="h-3 w-3" />
             )}
-            <span className="hidden sm:inline">{autoRotate ? "Spinning" : "Auto-Rotate"}</span>
+            <span className="hidden sm:inline">
+              {autoRotate ? "Spinning" : "Auto-Rotate"}
+            </span>
           </Button>
 
-          <div className="h-3.5 w-px bg-edge" />
+          <div className="bg-edge h-3.5 w-px" />
 
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPreset(98, -38, 380)}
-            className="h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-2 hover:text-fg hover:bg-surface-2/60 h-7 px-2 text-xs"
           >
-            <Compass className="h-3 w-3 mr-1 text-emerald-500 dark:text-emerald-400" />
+            <Compass className="mr-1 h-3 w-3 text-emerald-500 dark:text-emerald-400" />
             <span>US</span>
           </Button>
 
@@ -652,7 +634,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(78, -38, 560)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-2 hover:text-fg hover:bg-surface-2/60 hidden h-7 px-2 text-xs md:inline-flex"
           >
             <span>East</span>
           </Button>
@@ -661,7 +643,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(99, -31, 720)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-2 hover:text-fg hover:bg-surface-2/60 hidden h-7 px-2 text-xs md:inline-flex"
           >
             <span>Texas</span>
           </Button>
@@ -670,19 +652,19 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(118, -38, 560)}
-            className="hidden md:inline-flex h-7 px-2 text-xs text-fg-2 hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-2 hover:text-fg hover:bg-surface-2/60 hidden h-7 px-2 text-xs md:inline-flex"
           >
             <span>West</span>
           </Button>
         </div>
 
         {/* Zoom & Reset Controls */}
-        <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-edge/80 bg-surface/90 p-1 backdrop-blur-md shadow-xs">
+        <div className="border-edge/80 bg-surface/90 pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-xs backdrop-blur-md">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setScale((s) => Math.min(10000, s * 1.35))}
-            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-muted hover:text-fg hover:bg-surface-2/60 h-7 w-7 p-0"
             title="Zoom in"
           >
             <Maximize2 className="h-3.5 w-3.5" />
@@ -691,7 +673,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setScale((s) => Math.max(160, s * 0.72))}
-            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-muted hover:text-fg hover:bg-surface-2/60 h-7 w-7 p-0"
             title="Zoom out"
           >
             <Minimize2 className="h-3.5 w-3.5" />
@@ -700,7 +682,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setPreset(98, -38, 380)}
-            className="h-7 w-7 p-0 text-fg-muted hover:text-fg hover:bg-surface-2/60"
+            className="text-fg-muted hover:text-fg hover:bg-surface-2/60 h-7 w-7 p-0"
             title="Reset position"
           >
             <RotateCcw className="h-3 w-3" />
@@ -709,9 +691,12 @@ export function D3Globe({
       </div>
 
       {/* Bottom Floating Legend / Instructions */}
-      <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-xs text-fg-muted">
-        <div className="rounded-md border border-edge/80 bg-surface/90 px-2.5 py-1 backdrop-blur-md">
-          <span>Click & drag to rotate globe • Scroll to zoom • Click dot for plant profile</span>
+      <div className="text-fg-muted pointer-events-none absolute bottom-4 left-4 flex items-center gap-2 text-xs">
+        <div className="border-edge/80 bg-surface/90 rounded-md border px-2.5 py-1 backdrop-blur-md">
+          <span>
+            Click & drag to rotate globe • Scroll to zoom • Click dot for plant
+            profile
+          </span>
         </div>
       </div>
 
@@ -734,25 +719,27 @@ export function D3Globe({
               ),
             ),
           }}
-          className="pointer-events-none absolute z-30 w-64 rounded-lg border border-edge bg-surface/95 p-3 shadow-2xl backdrop-blur-md transition-all duration-75 animate-in fade-in zoom-in-95"
+          className="border-edge bg-surface/95 animate-in fade-in zoom-in-95 pointer-events-none absolute z-30 w-64 rounded-lg border p-3 shadow-2xl backdrop-blur-md transition-all duration-75"
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h4 className="text-sm font-semibold tracking-tight text-fg">
+              <h4 className="text-fg text-sm font-semibold tracking-tight">
                 {hoveredPlant.name}
               </h4>
-              <p className="text-xs text-fg-muted">
-                {hoveredPlant.county ? `${formatCountyShort(hoveredPlant.county)}, ` : ""}
+              <p className="text-fg-muted text-xs">
+                {hoveredPlant.county
+                  ? `${formatCountyShort(hoveredPlant.county)}, `
+                  : ""}
                 {hoveredPlant.stateCode} • ORISPL #{hoveredPlant.id}
               </p>
             </div>
             <FuelBadge fuel={hoveredPlant.primaryFuel} />
           </div>
 
-          <div className="mt-2.5 grid grid-cols-2 gap-1.5 border-t border-edge pt-2 text-xs">
+          <div className="border-edge mt-2.5 grid grid-cols-2 gap-1.5 border-t pt-2 text-xs">
             <div>
               <span className="text-fg-muted">Capacity:</span>
-              <p className="font-mono font-medium text-fg">
+              <p className="text-fg font-mono font-medium">
                 {hoveredPlant.totalCapacityMW.toLocaleString()} MW
               </p>
             </div>
@@ -774,9 +761,11 @@ export function D3Globe({
             </div>
           </div>
 
-          <div className="mt-2.5 flex items-center justify-between border-t border-edge/80 pt-2 text-xs text-fg-muted">
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Click dot to open profile</span>
-            <MapPin className="h-3 w-3 text-fg-muted" />
+          <div className="border-edge/80 text-fg-muted mt-2.5 flex items-center justify-between border-t pt-2 text-xs">
+            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+              Click dot to open profile
+            </span>
+            <MapPin className="text-fg-muted h-3 w-3" />
           </div>
         </div>
       )}

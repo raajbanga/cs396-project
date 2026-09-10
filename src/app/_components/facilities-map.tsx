@@ -11,6 +11,7 @@ import {
   FilterX,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { StatTile } from "~/components/ui/stat-tile";
 import {
   FUEL_CATEGORIES,
@@ -26,8 +27,8 @@ const LeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-[620px] w-full items-center justify-center rounded-xl border border-edge/80 bg-surface/30">
-        <div className="flex items-center gap-2 text-xs text-fg-muted">
+      <div className="border-edge/80 bg-surface/30 flex h-[620px] w-full items-center justify-center rounded-xl border">
+        <div className="text-fg-muted flex items-center gap-2 text-xs">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
           <span>Loading 2D Leaflet Map...</span>
         </div>
@@ -58,32 +59,36 @@ export function FacilitiesMap({
   const [viewMode, setViewMode] = useState<"globe" | "leaflet">("globe");
   const [metricMode, setMetricMode] = useState<MetricMode>("capacity");
 
-  // Fuel counts for the legend
-  const fuelCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    facilities.forEach((f) => {
-      const theme = getFuelTheme(f.primaryFuel);
-      counts[theme.name] = (counts[theme.name] ?? 0) + 1;
-    });
-    return counts;
-  }, [facilities]);
-
-  const totalCapacity = useMemo(
-    () => facilities.reduce((sum, f) => sum + f.totalCapacityMW, 0),
-    [facilities],
-  );
-
-  const totalEmissions = useMemo(
-    () => facilities.reduce((sum, f) => sum + f.totalCo2Tons, 0),
+  const summary = useMemo(
+    () =>
+      facilities.reduce<{
+        fuelCounts: Record<string, number>;
+        totalCapacity: number;
+        totalEmissions: number;
+      }>(
+        (result, f) => {
+          const theme = getFuelTheme(f.primaryFuel);
+          result.fuelCounts[theme.name] =
+            (result.fuelCounts[theme.name] ?? 0) + 1;
+          result.totalCapacity += f.totalCapacityMW;
+          result.totalEmissions += f.totalCo2Tons;
+          return result;
+        },
+        {
+          fuelCounts: {},
+          totalCapacity: 0,
+          totalEmissions: 0,
+        },
+      ),
     [facilities],
   );
 
   return (
     <div className="space-y-4">
       {/* Top Map Action Bar */}
-      <div className="flex flex-col gap-2.5 rounded-lg border border-edge/80 bg-surface/60 p-3 sm:p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-edge/80 bg-surface/60 flex flex-col gap-2.5 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-edge bg-surface text-fg shadow-xs">
+          <div className="border-edge bg-surface text-fg flex h-8 w-8 shrink-0 items-center justify-center rounded-md border shadow-xs">
             {viewMode === "globe" ? (
               <Globe className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
             ) : (
@@ -92,17 +97,16 @@ export function FacilitiesMap({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold tracking-tight text-fg sm:text-base">
+              <h2 className="text-fg text-sm font-semibold tracking-tight sm:text-base">
                 {viewMode === "globe" ? "3D Globe" : "2D Map"}
               </h2>
-              <Badge
-                variant="success"
-                className="font-mono text-xs"
-              >
-                {isLoading ? "..." : `${facilities.length.toLocaleString()} facilities`}
+              <Badge variant="success" className="font-mono text-xs">
+                {isLoading
+                  ? "..."
+                  : `${facilities.length.toLocaleString()} facilities`}
               </Badge>
             </div>
-            <p className="text-xs text-fg-muted hidden sm:block">
+            <p className="text-fg-muted hidden text-xs sm:block">
               {viewMode === "globe"
                 ? "Interactive spherical orthographic globe"
                 : "Cartographic Mercator map with facility coordinates"}
@@ -112,76 +116,46 @@ export function FacilitiesMap({
 
         {/* View Mode Toggle & Metric Size Selector */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Mode Switcher */}
-          <div className="flex rounded-md border border-edge/80 bg-surface/60 p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setViewMode("globe")}
-              className={`flex items-center gap-1 cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-all ${
-                viewMode === "globe"
-                  ? "bg-surface-2 text-fg shadow-xs"
-                  : "text-fg-muted hover:text-fg"
-              }`}
-            >
-              <Globe className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
-              <span>3D Globe</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("leaflet")}
-              className={`flex items-center gap-1 cursor-pointer rounded px-2.5 py-1 text-xs font-medium transition-all ${
-                viewMode === "leaflet"
-                  ? "bg-surface-2 text-fg shadow-xs"
-                  : "text-fg-muted hover:text-fg"
-              }`}
-            >
-              <MapIcon className="h-3 w-3 text-sky-500 dark:text-cyan-400" />
-              <span>2D Leaflet</span>
-            </button>
-          </div>
-
-          {/* Metric Switcher */}
-          <div className="flex items-center rounded-md border border-edge/80 bg-surface/60 p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setMetricMode("capacity")}
-              className={`flex items-center gap-1 cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
-                metricMode === "capacity"
-                  ? "bg-surface-2 text-fg shadow-xs"
-                  : "text-fg-muted hover:text-fg"
-              }`}
-              title="Scale dots by Capacity"
-            >
-              <Zap className="h-3 w-3 text-amber-500 dark:text-amber-400" />
-              <span className="hidden sm:inline">Capacity</span>
-              <span className="sm:hidden">MW</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetricMode("co2")}
-              className={`flex items-center gap-1 cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
-                metricMode === "co2"
-                  ? "bg-surface-2 text-fg shadow-xs"
-                  : "text-fg-muted hover:text-fg"
-              }`}
-              title="Scale dots by CO2"
-            >
-              <Flame className="h-3 w-3 text-rose-500 dark:text-rose-400" />
-              <span>CO₂</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMetricMode("uniform")}
-              className={`cursor-pointer rounded px-2 py-1 text-xs font-medium transition-all ${
-                metricMode === "uniform"
-                  ? "bg-surface-2 text-fg shadow-xs"
-                  : "text-fg-muted hover:text-fg"
-              }`}
-              title="Uniform dot size"
-            >
-              <span>Fixed</span>
-            </button>
-          </div>
+          <SegmentedControl
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              {
+                value: "globe",
+                label: "3D Globe",
+                icon: <Globe className="h-3 w-3 text-emerald-500" />,
+              },
+              {
+                value: "leaflet",
+                label: "2D Leaflet",
+                icon: <MapIcon className="h-3 w-3 text-sky-500" />,
+              },
+            ]}
+          />
+          <SegmentedControl
+            value={metricMode}
+            onChange={setMetricMode}
+            options={[
+              {
+                value: "capacity",
+                label: (
+                  <>
+                    <span className="hidden sm:inline">Capacity</span>
+                    <span className="sm:hidden">MW</span>
+                  </>
+                ),
+                icon: <Zap className="h-3 w-3 text-amber-500" />,
+                title: "Scale dots by capacity",
+              },
+              {
+                value: "co2",
+                label: "CO₂",
+                icon: <Flame className="h-3 w-3 text-rose-500" />,
+                title: "Scale dots by CO₂",
+              },
+              { value: "uniform", label: "Fixed", title: "Uniform dot size" },
+            ]}
+          />
         </div>
       </div>
 
@@ -190,9 +164,9 @@ export function FacilitiesMap({
         <button
           type="button"
           onClick={() => onFuelChange("ALL")}
-          className={`cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
+          className={`shrink-0 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
             selectedFuel === "ALL"
-              ? "border-emerald-300/60 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              ? "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
               : "border-edge bg-surface/60 text-fg-muted hover:border-edge/80 hover:text-fg"
           }`}
         >
@@ -201,15 +175,13 @@ export function FacilitiesMap({
 
         {FUEL_CATEGORIES.map((cat) => {
           const isSelected = selectedFuel === cat.query;
-          const count = fuelCounts[cat.label] ?? 0;
+          const count = summary.fuelCounts[cat.label] ?? 0;
           return (
             <button
               key={cat.label}
               type="button"
-              onClick={() =>
-                onFuelChange(isSelected ? "ALL" : cat.query)
-              }
-              className={`flex items-center gap-1.5 cursor-pointer rounded-md border px-2.5 py-1 text-xs font-medium transition-colors shrink-0 ${
+              onClick={() => onFuelChange(isSelected ? "ALL" : cat.query)}
+              className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
                 isSelected
                   ? "border-edge bg-surface-2 text-fg shadow-xs"
                   : "border-edge bg-surface/60 text-fg-muted hover:border-edge/80 hover:text-fg"
@@ -220,9 +192,7 @@ export function FacilitiesMap({
                 style={{ backgroundColor: cat.color }}
               />
               <span>{cat.label}</span>
-              <span className="font-mono text-xs text-fg-muted">
-                ({count})
-              </span>
+              <span className="text-fg-muted font-mono text-xs">({count})</span>
             </button>
           );
         })}
@@ -230,11 +200,11 @@ export function FacilitiesMap({
         {selectedState !== "ALL" && (
           <Badge
             variant="outline"
-            className="cursor-pointer gap-1 border-edge bg-surface-2 text-fg hover:bg-surface-2/80 shrink-0 text-xs py-0.5"
+            className="border-edge bg-surface-2 text-fg hover:bg-surface-2/80 shrink-0 cursor-pointer gap-1 py-0.5 text-xs"
             onClick={() => onStateChange("ALL")}
           >
             <span>State: {selectedState}</span>
-            <FilterX className="h-3 w-3 text-fg-muted" />
+            <FilterX className="text-fg-muted h-3 w-3" />
           </Badge>
         )}
       </div>
@@ -265,14 +235,14 @@ export function FacilitiesMap({
         <StatTile
           variant="card"
           label="Tracked Capacity"
-          value={`${Math.round(totalCapacity).toLocaleString()} MW`}
+          value={`${Math.round(summary.totalCapacity).toLocaleString()} MW`}
           valueClassName="text-emerald-600 dark:text-emerald-400"
           className="border-edge/80 bg-surface/30 p-3.5"
         />
         <StatTile
           variant="card"
           label="Tracked Annual CO₂"
-          value={`${Math.round(totalEmissions).toLocaleString()} tons`}
+          value={`${Math.round(summary.totalEmissions).toLocaleString()} tons`}
           valueClassName="text-rose-600 dark:text-rose-400"
           className="border-edge/80 bg-surface/30 p-3.5"
         />
@@ -280,9 +250,11 @@ export function FacilitiesMap({
           variant="card"
           label="Projection Engine"
           value={
-            <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+            <span className="text-fg flex items-center gap-1.5 text-sm font-semibold">
               <Sparkles className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-              {viewMode === "globe" ? "D3 Orthographic (3D)" : "Leaflet Mercator (2D)"}
+              {viewMode === "globe"
+                ? "D3 Orthographic (3D)"
+                : "Leaflet Mercator (2D)"}
             </span>
           }
           className="border-edge/80 bg-surface/30 p-3.5"

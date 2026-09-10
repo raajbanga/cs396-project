@@ -45,7 +45,7 @@ Built for **CS396 Phase 1 Core**.
 
 ## Tech Stack
 
-- **Framework**: [Next.js 15 (App Router)](https://nextjs.org) + [React 19](https://react.dev)
+- **Framework**: [Next.js 16 (App Router)](https://nextjs.org) + [React 19](https://react.dev)
 - **API & RPC**: [tRPC v11](https://trpc.io) with [TanStack Query v5](https://tanstack.com/query)
 - **Database & ORM**: [Drizzle ORM](https://orm.drizzle.team) with [LibSQL / SQLite](https://github.com/tursodatabase/libsql-client-ts)
 - **Geospatial & 2D Mapping**: [Leaflet](https://leafletjs.com) with CARTO / OpenStreetMap basemap tiles
@@ -54,11 +54,13 @@ Built for **CS396 Phase 1 Core**.
 - **UI Primitives**: [shadcn/ui](https://ui.shadcn.com) style design system + [Lucide React](https://lucide.dev)
 - **Validation**: [Zod](https://zod.dev)
 
+Bundled TopoJSON assets come from the BSD-licensed
+[world-atlas](https://github.com/topojson/world-atlas) and
+[us-atlas](https://github.com/topojson/us-atlas) datasets.
+
 ---
 
 ## Database Architecture
-
-> 📖 **Comprehensive Breakdown**: For an in-depth, plain-language walkthrough of what the data is, how every column is used, and how data is split across each front-end view with architecture diagrams, read [**DATABASE_BREAKDOWN.md**](./DATABASE_BREAKDOWN.md).
 
 ```mermaid
 erDiagram
@@ -125,8 +127,8 @@ erDiagram
 
 ### Prerequisites
 
-- Node.js 20+
-- npm or pnpm
+- Node.js 20.9+
+- npm
 
 ### 1. Environment Setup
 
@@ -151,23 +153,20 @@ npm install
 
 ### 3. Database Migrations
 
-Generate or apply Drizzle migrations:
+Apply the committed Drizzle migrations:
 
 ```bash
-npx drizzle-kit generate
+npm run db:migrate
 ```
 
 ### 4. Seed / Ingest Data
 
-Apply migrations, seed facilities/units from CAMPD CSVs, then sync annual emissions:
+Seed facilities/units from CAMPD CSVs, then sync annual emissions:
 
 ```bash
-npm run db:migrate
-npx tsx scripts/seed-facilities-from-csv.ts --csv-dir "../CAMPD DATA"
-npx tsx scripts/sync_campd.ts
+npm run db:seed -- --csv-dir "../CAMPD DATA"
+npm run sync:campd
 ```
-
-Opening a facility detail dialog can also trigger an automatic CAMPD refresh when stored emissions data is stale.
 
 ### 5. Run the Development Server
 
@@ -179,80 +178,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Project Structure
-
-```
-├── drizzle/                     # Drizzle SQL migration files
-├── public/                      # Static assets
-│   └── geo/                     # TopoJSON for 3D globe (us-states-10m.json, world-land-110m.json)
-├── scripts/                     # Data seeding & sync scripts
-│   ├── seed-facilities-from-csv.ts  # Seed facilities/units from CAMPD CSVs
-│   └── sync_campd.ts            # CLI CAMPD API annual emissions sync
-├── src/
-│   ├── app/                     # Next.js App Router
-│   │   ├── _components/         # Application feature components
-│   │   │   ├── audit-logs-table.tsx       # Sanity audit logs table
-│   │   │   ├── d3-globe.tsx               # 3D D3 orthographic canvas globe
-│   │   │   ├── database-explorer.tsx      # Explorer orchestrator (filters, tabs, compare)
-│   │   │   ├── epa-primer.tsx             # EPA CAMPD domain primer & guide
-│   │   │   ├── facilities-map.tsx         # Map & globe view container with metric controls
-│   │   │   ├── facilities-table.tsx       # Paginated plant table
-│   │   │   ├── facility-detail-dialog.tsx # Facility & unit inspector
-│   │   │   ├── facility-filters.tsx       # Filter controls & search
-│   │   │   ├── leaflet-map.tsx            # 2D Leaflet map with fuel-colored markers
-│   │   │   ├── plant-comparison-dialog.tsx# Head-to-head benchmarking
-│   │   │   └── stat-metrics.tsx           # High-level system KPI cards
-│   │   ├── api/trpc/[trpc]/route.ts       # tRPC HTTP handler
-│   │   ├── layout.tsx           # Root application layout
-│   │   └── page.tsx             # Main page (server-side prefetch)
-│   ├── components/ui/           # Reusable DRY shadcn/ui primitives
-│   │   ├── badge.tsx
-│   │   ├── button.tsx
-│   │   ├── carbon-intensity-badge.tsx
-│   │   ├── card.tsx
-│   │   ├── dialog.tsx
-│   │   ├── fuel-badge.tsx
-│   │   ├── input.tsx
-│   │   ├── metric-bar.tsx
-│   │   ├── plant-role-badge.tsx
-│   │   ├── select.tsx
-│   │   ├── stat-tile.tsx
-│   │   ├── table.tsx
-│   │   └── theme-toggle.tsx
-│   ├── env.js                   # Type-safe environment validation (t3-env)
-│   ├── lib/                     # Client & server utilities
-│   │   ├── map-utils.ts         # Fuel categorization, marker radii & colors
-│   │   ├── plant-narrative.ts   # Plant summary narrative generators
-│   │   └── utils.ts             # Tailwind class merging (cn)
-│   ├── server/
-│   │   ├── api/
-│   │   │   ├── routers/facilities.ts  # tRPC facilities & stats procedures
-│   │   │   ├── root.ts                # App router root
-│   │   │   └── trpc.ts                # tRPC context & procedures
-│   │   ├── campd/
-│   │   │   └── client.ts              # EPA CAMPD API client & audit engine
-│   │   └── db/
-│   │       ├── index.ts               # LibSQL client instance
-│   │       └── schema.ts              # Drizzle relational schema
-│   ├── styles/                  # Tailwind CSS styling
-│   │   └── globals.css
-│   └── trpc/                    # tRPC client React & server helpers
-├── DATABASE_BREAKDOWN.md        # Comprehensive database & column usage guide
-└── README.md                    # Project overview & documentation
-```
-
----
-
 ## Verification & Testing
 
-Run linting and TypeScript checks:
+Run formatting, linting, type checks, tests, and a production build:
 
 ```bash
-npm run check
-```
-
-Run production build:
-
-```bash
-npm run build
+npm run validate
 ```

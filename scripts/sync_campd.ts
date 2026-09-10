@@ -1,12 +1,13 @@
 import { syncCampdAnnualEmissions } from "~/server/campd/client";
 
 async function main() {
-  console.log("Syncing full 2022 annual emissions from EPA CAMPD API...");
+  const year = new Date().getFullYear() - 1;
+  console.log(`Syncing ${year} annual emissions from EPA CAMPD API...`);
   const start = Date.now();
   const result = await syncCampdAnnualEmissions({
-    year: 2022,
+    year,
     perPage: 500,
-    maxPages: 9, // Will fetch all ~4,131 records
+    maxPages: 10,
   });
 
   const duration = ((Date.now() - start) / 1000).toFixed(1);

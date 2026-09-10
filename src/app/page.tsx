@@ -14,9 +14,13 @@ export default async function Home() {
     stateCode: "ALL",
     primaryFuel: "ALL",
     nercRegion: "ALL",
-    sourceCategory: "ALL",
   });
-  void api.facilities.getMapFacilities.prefetch({});
+  void api.facilities.getMapFacilities.prefetch({
+    search: "",
+    stateCode: "ALL",
+    primaryFuel: "ALL",
+    nercRegion: "ALL",
+  });
 
   return (
     <HydrateClient>

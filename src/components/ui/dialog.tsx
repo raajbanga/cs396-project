@@ -28,7 +28,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <div
-      className="animate-in fade-in fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-canvas/80 p-0 sm:p-4 backdrop-blur-xs duration-150"
+      className="animate-in fade-in bg-canvas/80 fixed inset-0 z-[9999] flex items-end justify-center p-0 backdrop-blur-xs duration-150 sm:items-center sm:p-4"
       onClick={() => onOpenChange(false)}
     >
       {children}
@@ -44,7 +44,7 @@ export function DialogContent({
   return (
     <div
       className={cn(
-        "animate-in zoom-in-95 relative flex h-[90dvh] max-h-[90dvh] sm:h-auto sm:max-h-[90vh] w-full max-w-4xl flex-col rounded-t-2xl sm:rounded-xl border border-edge bg-surface p-3.5 sm:p-6 shadow-2xl backdrop-blur-md duration-150 overflow-hidden",
+        "animate-in zoom-in-95 border-edge bg-surface relative flex h-[90dvh] max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border p-3.5 shadow-2xl backdrop-blur-md duration-150 sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:p-6",
         className,
       )}
       onClick={(e) => e.stopPropagation()}
@@ -62,7 +62,7 @@ export function DialogHeader({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-start justify-between border-b border-edge pb-3",
+        "border-edge flex shrink-0 items-start justify-between border-b pb-3",
         className,
       )}
       {...props}
@@ -77,7 +77,7 @@ export function DialogTitle({
   return (
     <h2
       className={cn(
-        "text-xl font-bold tracking-tight text-fg sm:text-2xl",
+        "text-fg text-xl font-bold tracking-tight sm:text-2xl",
         className,
       )}
       {...props}
@@ -92,7 +92,7 @@ export function DialogFooter({
   return (
     <div
       className={cn(
-        "mt-auto flex shrink-0 items-center justify-end gap-2 border-t border-edge pt-3",
+        "border-edge mt-auto flex shrink-0 items-center justify-end gap-2 border-t pt-3",
         className,
       )}
       {...props}
@@ -112,7 +112,7 @@ export function DialogClose({
       type="button"
       onClick={onClose}
       className={cn(
-        "absolute right-3.5 top-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg sm:right-5 sm:top-5",
+        "text-fg-muted hover:bg-surface-2 hover:text-fg absolute top-3.5 right-3.5 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md transition-colors sm:top-5 sm:right-5",
         className,
       )}
       aria-label="Close dialog"

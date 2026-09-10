@@ -2,8 +2,7 @@ import * as React from "react";
 import { getCarbonIntensityTier } from "~/lib/plant-narrative";
 import { cn } from "~/lib/utils";
 
-export interface CarbonIntensityBadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement> {
+export interface CarbonIntensityBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   intensity: number | null | undefined;
   showValue?: boolean;
 }
@@ -15,7 +14,7 @@ export function CarbonIntensityBadge({
   ...props
 }: CarbonIntensityBadgeProps) {
   if (intensity === null || intensity === undefined) {
-    return <span className="font-mono text-xs text-fg-muted">—</span>;
+    return <span className="text-fg-muted font-mono text-xs">—</span>;
   }
 
   if (intensity === 0) {
@@ -28,7 +27,9 @@ export function CarbonIntensityBadge({
         title="Zero direct stack CO₂ emissions per MWh generated"
         {...props}
       >
-        {showValue && <span className="font-mono font-semibold">0 lbs/MWh</span>}
+        {showValue && (
+          <span className="font-mono font-semibold">0 lbs/MWh</span>
+        )}
         <span>Zero-Carbon</span>
       </span>
     );

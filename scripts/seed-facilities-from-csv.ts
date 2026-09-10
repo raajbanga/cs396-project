@@ -1,18 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@libsql/client";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "~/server/db/schema";
 import { facilities, units } from "~/server/db/schema";
+import { resolveDatabaseUrl } from "~/server/db/url";
 
 function createSeedDb() {
-  const rawUrl = process.env.DATABASE_URL ?? "file:./db.sqlite";
-  const url = rawUrl.startsWith("file:")
-    ? `file:${path.resolve(process.cwd(), rawUrl.slice(5))}`
-    : rawUrl;
-  return drizzle(createClient({ url }), { schema });
+  return drizzle(
+    createClient({
+      url: resolveDatabaseUrl(process.env.DATABASE_URL ?? "file:./db.sqlite"),
+      authToken: process.env.DATABASE_AUTH_TOKEN,
+    }),
+    { schema },
+  );
 }
 
 const DEFAULT_CSV_DIR = "../CAMPD DATA";
@@ -31,8 +34,7 @@ function parseCsvLine(line: string): string[] {
   let current = "";
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]!;
+  for (const char of line) {
     if (char === '"') {
       inQuotes = !inQuotes;
       continue;
@@ -149,7 +151,8 @@ function mergeFacility(existing: FacilitySeed, incoming: FacilitySeed) {
 }
 
 function mergeUnit(existing: UnitSeed, incoming: UnitSeed) {
-  if (!existing.unitType && incoming.unitType) existing.unitType = incoming.unitType;
+  if (!existing.unitType && incoming.unitType)
+    existing.unitType = incoming.unitType;
   if (!existing.primaryFuel && incoming.primaryFuel) {
     existing.primaryFuel = incoming.primaryFuel;
   }
@@ -165,7 +168,10 @@ function mergeUnit(existing: UnitSeed, incoming: UnitSeed) {
   if (existing.maxHourlyHIRate === null && incoming.maxHourlyHIRate !== null) {
     existing.maxHourlyHIRate = incoming.maxHourlyHIRate;
   }
-  if (existing.nameplateCapacityMW === null && incoming.nameplateCapacityMW !== null) {
+  if (
+    existing.nameplateCapacityMW === null &&
+    incoming.nameplateCapacityMW !== null
+  ) {
     existing.nameplateCapacityMW = incoming.nameplateCapacityMW;
   }
   if (!existing.so2Controls && incoming.so2Controls) {
@@ -191,7 +197,9 @@ async function main() {
 
   if (!fs.existsSync(csvDir)) {
     console.error(`CSV directory not found: ${csvDir}`);
-    console.error('Usage: npx tsx scripts/seed-facilities-from-csv.ts --csv-dir "../CAMPD DATA"');
+    console.error(
+      'Usage: npx tsx scripts/seed-facilities-from-csv.ts --csv-dir "../CAMPD DATA"',
+    );
     process.exit(1);
   }
 
@@ -211,12 +219,17 @@ async function main() {
     const rows = readCsvFile(csvPath);
 
     for (const row of rows) {
-      const stateCode = cleanStr(row["State"]);
+      const stateCode = cleanStr(row.State);
       const facilityName = cleanStr(row["Facility Name"]);
       const facilityIdRaw = cleanStr(row["Facility ID"]);
       const unitId = cleanStr(row["Unit ID"]);
 
-      if (!stateCode || !facilityIdRaw || !unitId || facilityIdRaw === "Facility ID") {
+      if (
+        !stateCode ||
+        !facilityIdRaw ||
+        !unitId ||
+        facilityIdRaw === "Facility ID"
+      ) {
         continue;
       }
 
@@ -227,9 +240,9 @@ async function main() {
         id: facilityId,
         name: facilityName ?? `Facility #${facilityId}`,
         stateCode: stateCode.toUpperCase().slice(0, 2),
-        county: cleanStr(row["County"]),
-        latitude: parseFloatVal(row["Latitude"]),
-        longitude: parseFloatVal(row["Longitude"]),
+        county: cleanStr(row.County),
+        latitude: parseFloatVal(row.Latitude),
+        longitude: parseFloatVal(row.Longitude),
         epaRegion: parseIntVal(row["EPA Region"]),
         nercRegion: cleanStr(row["NERC Region"]),
         sourceCategory: cleanStr(row["Source Category"]),
@@ -298,34 +311,28 @@ async function main() {
   }
 
   console.log("Upserting units...");
-  for (const unit of unitsMap.values()) {
-    const existing = await db.query.units.findFirst({
-      where: (u, { and, eq: eqFn }) =>
-        and(eqFn(u.facilityId, unit.facilityId), eqFn(u.unitId, unit.unitId)),
-    });
-
-    if (existing) {
-      await db
-        .update(units)
-        .set({
-          unitType: unit.unitType ?? existing.unitType,
-          primaryFuel: unit.primaryFuel ?? existing.primaryFuel,
-          secondaryFuel: unit.secondaryFuel ?? existing.secondaryFuel,
-          operatingStatus: unit.operatingStatus ?? existing.operatingStatus,
-          commercialOpDate: unit.commercialOpDate ?? existing.commercialOpDate,
-          maxHourlyHIRate: unit.maxHourlyHIRate ?? existing.maxHourlyHIRate,
-          nameplateCapacityMW:
-            unit.nameplateCapacityMW ?? existing.nameplateCapacityMW,
-          so2Controls: unit.so2Controls ?? existing.so2Controls,
-          noxControls: unit.noxControls ?? existing.noxControls,
-          pmControls: unit.pmControls ?? existing.pmControls,
-          hgControls: unit.hgControls ?? existing.hgControls,
-          programCode: unit.programCode ?? existing.programCode,
-        })
-        .where(eq(units.id, existing.id));
-    } else {
-      await db.insert(units).values(unit);
-    }
+  const unitRows = Array.from(unitsMap.values());
+  for (let i = 0; i < unitRows.length; i += 50) {
+    await db
+      .insert(units)
+      .values(unitRows.slice(i, i + 50))
+      .onConflictDoUpdate({
+        target: [units.facilityId, units.unitId],
+        set: {
+          unitType: sql`COALESCE(excluded.unit_type, ${units.unitType})`,
+          primaryFuel: sql`COALESCE(excluded.primary_fuel, ${units.primaryFuel})`,
+          secondaryFuel: sql`COALESCE(excluded.secondary_fuel, ${units.secondaryFuel})`,
+          operatingStatus: sql`COALESCE(excluded.operating_status, ${units.operatingStatus})`,
+          commercialOpDate: sql`COALESCE(excluded.commercial_op_date, ${units.commercialOpDate})`,
+          maxHourlyHIRate: sql`COALESCE(excluded.max_hourly_hi_rate, ${units.maxHourlyHIRate})`,
+          nameplateCapacityMW: sql`COALESCE(excluded.nameplate_capacity_mw, ${units.nameplateCapacityMW})`,
+          so2Controls: sql`COALESCE(excluded.so2_controls, ${units.so2Controls})`,
+          noxControls: sql`COALESCE(excluded.nox_controls, ${units.noxControls})`,
+          pmControls: sql`COALESCE(excluded.pm_controls, ${units.pmControls})`,
+          hgControls: sql`COALESCE(excluded.hg_controls, ${units.hgControls})`,
+          programCode: sql`COALESCE(excluded.program_code, ${units.programCode})`,
+        },
+      });
   }
 
   console.log("Seed completed successfully.");

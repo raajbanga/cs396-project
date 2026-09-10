@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "~/env";
 import {
@@ -23,126 +23,124 @@ const CAMPD_BASE_URL = "https://api.epa.gov/easey";
  * Resolves malalignment across CAMPD REST API (camelCase), snake_case,
  * and bulk EPA Custom Data Download (CDD) CSV headers into unified internal fields.
  */
-const rawCampdRecordSchema = z
-  .record(z.unknown())
-  .transform((raw, ctx) => {
-    const get = (...keys: string[]): unknown => {
-      for (const k of keys) {
-        if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
-          return raw[k];
-        }
+const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
+  const get = (...keys: string[]): unknown => {
+    for (const k of keys) {
+      if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
+        return raw[k];
       }
-      return undefined;
-    };
-
-    const toNum = (val: unknown, fallback = 0): number => {
-      if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
-      if (typeof val === "string") {
-        const n = Number.parseFloat(val.replace(/,/g, "").trim());
-        return Number.isNaN(n) ? fallback : n;
-      }
-      return fallback;
-    };
-
-    const toStr = (val: unknown): string | null => {
-      if (typeof val === "string") {
-        const s = val.trim();
-        return s.length > 0 ? s : null;
-      }
-      if (typeof val === "number" || typeof val === "boolean") {
-        return String(val);
-      }
-      return null;
-    };
-
-    const facIdVal = get(
-      "facilityId",
-      "facility_id",
-      "Facility ID (ORISPL)",
-      "Facility ID",
-    );
-    const facilityId = Math.round(toNum(facIdVal, 0));
-
-    const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
-    const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
-      .toUpperCase()
-      .slice(0, 2);
-    const facilityName =
-      toStr(get("facilityName", "facility_name", "Facility Name")) ??
-      `Facility #${facilityId}`;
-    const year = Math.round(
-      toNum(get("year", "Year", "reportingYear", "opYear", "calendarYear"), 0),
-    );
-
-    if (!facilityId || !unitId || !year) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Missing mandatory facilityId, unitId, or year",
-      });
-      return z.NEVER;
     }
+    return undefined;
+  };
 
-    return {
-      facilityId,
-      facilityName,
-      stateCode,
-      unitId,
-      year,
-      operatingHours: toNum(
-        get(
-          "sumOpTime",
-          "operatingTime",
-          "operatingHours",
-          "Operating Time",
-          "countOpTime",
-        ),
-        0,
+  const toNum = (val: unknown, fallback = 0): number => {
+    if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
+    if (typeof val === "string") {
+      const n = Number.parseFloat(val.replace(/,/g, "").trim());
+      return Number.isNaN(n) ? fallback : n;
+    }
+    return fallback;
+  };
+
+  const toStr = (val: unknown): string | null => {
+    if (typeof val === "string") {
+      const s = val.trim();
+      return s.length > 0 ? s : null;
+    }
+    if (typeof val === "number" || typeof val === "boolean") {
+      return String(val);
+    }
+    return null;
+  };
+
+  const facIdVal = get(
+    "facilityId",
+    "facility_id",
+    "Facility ID (ORISPL)",
+    "Facility ID",
+  );
+  const facilityId = Math.round(toNum(facIdVal, 0));
+
+  const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
+  const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
+    .toUpperCase()
+    .slice(0, 2);
+  const facilityName =
+    toStr(get("facilityName", "facility_name", "Facility Name")) ??
+    `Facility #${facilityId}`;
+  const year = Math.round(
+    toNum(get("year", "Year", "reportingYear", "opYear", "calendarYear"), 0),
+  );
+
+  if (!facilityId || !unitId || !year) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Missing mandatory facilityId, unitId, or year",
+    });
+    return z.NEVER;
+  }
+
+  return {
+    facilityId,
+    facilityName,
+    stateCode,
+    unitId,
+    year,
+    operatingHours: toNum(
+      get(
+        "sumOpTime",
+        "operatingTime",
+        "operatingHours",
+        "Operating Time",
+        "countOpTime",
       ),
-      grossGenerationMWh: toNum(
-        get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
-        0,
+      0,
+    ),
+    grossGenerationMWh: toNum(
+      get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
+      0,
+    ),
+    heatInputMMBtu: toNum(
+      get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
+      0,
+    ),
+    co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
+    so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
+    noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
+    primaryFuel: toStr(
+      get(
+        "primaryFuelInfo",
+        "primaryFuel",
+        "primary_fuel",
+        "Primary Fuel Type",
       ),
-      heatInputMMBtu: toNum(
-        get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
-        0,
+    ),
+    secondaryFuel: toStr(
+      get(
+        "secondaryFuelInfo",
+        "secondaryFuel",
+        "secondary_fuel",
+        "Secondary Fuel Type",
       ),
-      co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
-      so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
-      noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
-      primaryFuel: toStr(
-        get(
-          "primaryFuelInfo",
-          "primaryFuel",
-          "primary_fuel",
-          "Primary Fuel Type",
-        ),
-      ),
-      secondaryFuel: toStr(
-        get(
-          "secondaryFuelInfo",
-          "secondaryFuel",
-          "secondary_fuel",
-          "Secondary Fuel Type",
-        ),
-      ),
-      unitType: toStr(get("unitType", "unit_type", "Unit Type")),
-      so2Controls: toStr(
-        get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
-      ),
-      noxControls: toStr(
-        get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
-      ),
-      pmControls: toStr(
-        get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
-      ),
-      hgControls: toStr(
-        get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
-      ),
-      programCode: toStr(
-        get("programCodeInfo", "programCode", "program_code", "Program Code"),
-      ),
-    };
-  });
+    ),
+    unitType: toStr(get("unitType", "unit_type", "Unit Type")),
+    so2Controls: toStr(
+      get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
+    ),
+    noxControls: toStr(
+      get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
+    ),
+    pmControls: toStr(
+      get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
+    ),
+    hgControls: toStr(
+      get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
+    ),
+    programCode: toStr(
+      get("programCodeInfo", "programCode", "program_code", "Program Code"),
+    ),
+  };
+});
 
 type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
 
@@ -247,9 +245,7 @@ interface AnomalyFlag {
 /**
  * Pure evaluation function for EPA physical sanity checks (PRD Section 3.3)
  */
-function evaluatePhysicalSanityRules(
-  input: AnomalyInput,
-): AnomalyFlag[] {
+function evaluatePhysicalSanityRules(input: AnomalyInput): AnomalyFlag[] {
   const flags: AnomalyFlag[] = [];
 
   // Rule 1: ZERO_EMISSIONS_HIGH_HEAT
@@ -509,6 +505,13 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
             },
           });
       }
+
+      await db.delete(dataAuditLogs).where(
+        inArray(
+          dataAuditLogs.annualRecordId,
+          recordsToInsert.map((record) => record.id!),
+        ),
+      );
     }
 
     if (auditLogsToInsert.length > 0) {

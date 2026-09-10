@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -70,7 +70,9 @@ function FilterSelects({
   return (
     <>
       <Select value={selectedState} onValueChange={onStateChange}>
-        <SelectTrigger className={isDrawer ? triggerClass : `${triggerClass} w-[130px]`}>
+        <SelectTrigger
+          className={isDrawer ? triggerClass : `${triggerClass} w-[130px]`}
+        >
           <SelectValue placeholder="All States" />
         </SelectTrigger>
         <SelectContent>
@@ -88,7 +90,9 @@ function FilterSelects({
       </Select>
 
       <Select value={selectedNerc} onValueChange={onNercChange}>
-        <SelectTrigger className={isDrawer ? triggerClass : `${triggerClass} w-[135px]`}>
+        <SelectTrigger
+          className={isDrawer ? triggerClass : `${triggerClass} w-[135px]`}
+        >
           <SelectValue placeholder="All Grids" />
         </SelectTrigger>
         <SelectContent>
@@ -123,8 +127,8 @@ function FilterSelects({
           onClick={onResetFilters}
           className={
             isDrawer
-              ? "col-span-2 h-8 gap-1 text-xs text-fg-2"
-              : "h-9 gap-1 px-2.5 text-xs text-fg-muted hover:text-fg"
+              ? "text-fg-2 col-span-2 h-8 gap-1 text-xs"
+              : "text-fg-muted hover:text-fg h-9 gap-1 px-2.5 text-xs"
           }
         >
           <RotateCcw className="h-3 w-3" />
@@ -152,13 +156,9 @@ export function FacilityFilters({
 }: FacilityFiltersProps) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (selectedState !== "ALL") count++;
-    if (selectedNerc !== "ALL") count++;
-    if (selectedFuel !== "ALL") count++;
-    return count;
-  }, [selectedState, selectedNerc, selectedFuel]);
+  const activeFilterCount = [selectedState, selectedNerc, selectedFuel].filter(
+    (value) => value !== "ALL",
+  ).length;
 
   const filterSelectProps = {
     filterOptions,
@@ -177,18 +177,18 @@ export function FacilityFilters({
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-1 flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64 md:w-72">
-            <Search className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-fg-muted" />
+            <Search className="text-fg-muted pointer-events-none absolute top-2.5 left-3 h-4 w-4" />
             <Input
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Search plant, operator, state..."
-              className="h-9 pr-8 pl-9 bg-surface/60 border-edge"
+              className="bg-surface/60 border-edge h-9 pr-8 pl-9"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => onSearchChange("")}
-                className="absolute top-2.5 right-2.5 cursor-pointer text-fg-muted hover:text-fg"
+                className="text-fg-muted hover:text-fg absolute top-2.5 right-2.5 cursor-pointer"
                 aria-label="Clear search"
               >
                 <X className="h-4 w-4" />
@@ -205,9 +205,9 @@ export function FacilityFilters({
             variant="outline"
             size="sm"
             onClick={() => setIsMobileFiltersOpen((prev) => !prev)}
-            className="h-9 gap-1.5 border-edge bg-surface/60 px-3 text-xs text-fg-2 sm:hidden"
+            className="border-edge bg-surface/60 text-fg-2 h-9 gap-1.5 px-3 text-xs sm:hidden"
           >
-            <SlidersHorizontal className="h-3.5 w-3.5 text-fg-muted" />
+            <SlidersHorizontal className="text-fg-muted h-3.5 w-3.5" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
               <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20 text-xs font-semibold text-emerald-400">
@@ -217,12 +217,12 @@ export function FacilityFilters({
           </Button>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 whitespace-nowrap text-xs text-fg-muted sm:text-sm">
+        <div className="text-fg-muted ml-auto flex items-center gap-2 text-xs whitespace-nowrap sm:text-sm">
           {isLoading ? (
-            <span className="text-xs text-fg-muted">Updating...</span>
+            <span className="text-fg-muted text-xs">Updating...</span>
           ) : (
             <span>
-              <strong className="font-semibold text-fg">
+              <strong className="text-fg font-semibold">
                 {totalMatching?.toLocaleString() ?? 0}
               </strong>{" "}
               facilities
@@ -232,7 +232,7 @@ export function FacilityFilters({
       </div>
 
       {isMobileFiltersOpen && (
-        <div className="grid animate-in fade-in slide-in-from-top-1 grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
+        <div className="animate-in fade-in slide-in-from-top-1 grid grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
           <FilterSelects variant="drawer" {...filterSelectProps} />
         </div>
       )}

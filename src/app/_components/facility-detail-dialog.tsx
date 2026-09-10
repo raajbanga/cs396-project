@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -19,7 +19,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { AuditSeverityBadge, Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
 import {
@@ -32,6 +32,7 @@ import {
 } from "~/components/ui/dialog";
 import { FuelBadge } from "~/components/ui/fuel-badge";
 import { PlantRoleBadge } from "~/components/ui/plant-role-badge";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { StatTile } from "~/components/ui/stat-tile";
 import {
   Table,
@@ -49,6 +50,8 @@ import {
   cleanOwnerOperator,
   formatCountyShort,
   generatePlantStory,
+  hasAirQualityControls,
+  isOperatingStatus,
 } from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
@@ -79,13 +82,14 @@ export function FacilityDetailDialog({
   const [activeTab, setActiveTab] = useState<"units" | "emissions" | "audit">(
     "units",
   );
-  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set());
+  const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
 
   const toggleYearExpanded = (year: number) => {
-    setExpandedYears((prev) => {
+    const key = `${facilityId}:${year}`;
+    setCollapsedYears((prev) => {
       const next = new Set(prev);
-      if (next.has(year)) next.delete(year);
-      else next.add(year);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -158,13 +162,6 @@ export function FacilityDetailDialog({
       }));
   }, [facility?.annualRecords]);
 
-  // Automatically expand all reporting years so unit breakdown is visible immediately
-  useEffect(() => {
-    if (yearlyRollups.length > 0) {
-      setExpandedYears(new Set(yearlyRollups.map((r) => r.year)));
-    }
-  }, [yearlyRollups]);
-
   const latestRollup = yearlyRollups[0];
   const allAuditLogs =
     facility?.annualRecords.flatMap((r) => r.auditLogs ?? []) ?? [];
@@ -173,9 +170,7 @@ export function FacilityDetailDialog({
     new Set(facility?.units.map((u) => u.primaryFuel).filter(Boolean)),
   ) as string[];
 
-  const hasControls =
-    facility?.units.some((u) => Boolean(u.so2Controls ?? u.noxControls)) ??
-    false;
+  const hasControls = facility?.units.some(hasAirQualityControls) ?? false;
 
   const story = facility
     ? generatePlantStory({
@@ -427,51 +422,37 @@ export function FacilityDetailDialog({
             </div>
           )}
 
-          {/* Clean Segmented Tab Switcher */}
-          <div className="border-edge bg-surface/95 sticky top-0 z-10 flex border-b pt-1 text-xs font-medium backdrop-blur-md sm:text-sm">
-            <button
-              type="button"
-              onClick={() => setActiveTab("units")}
-              className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
-                activeTab === "units"
-                  ? "text-fg border-emerald-400 font-semibold"
-                  : "text-fg-muted hover:text-fg border-transparent"
-              }`}
-            >
-              Fleet Units ({facility?.units.length ?? 0})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("emissions")}
-              className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
-                activeTab === "emissions"
-                  ? "text-fg border-emerald-400 font-semibold"
-                  : "text-fg-muted hover:text-fg border-transparent"
-              }`}
-            >
-              Annual Timeline ({yearlyRollups.length}{" "}
-              {yearlyRollups.length === 1 ? "Yr" : "Yrs"})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("audit")}
-              className={`flex cursor-pointer items-center gap-1.5 border-b-2 px-3.5 py-2 transition-colors ${
-                activeTab === "audit"
-                  ? "text-fg border-emerald-400 font-semibold"
-                  : "text-fg-muted hover:text-fg border-transparent"
-              }`}
-            >
-              <span>Sanity Audits</span>
-              {allAuditLogs.length > 0 && (
-                <Badge
-                  variant="warning"
-                  className="px-1.5 py-0 font-mono text-xs"
-                >
-                  {allAuditLogs.length}
-                </Badge>
-              )}
-            </button>
-          </div>
+          <SegmentedControl
+            variant="tabs"
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              {
+                value: "units",
+                label: `Fleet Units (${facility?.units.length ?? 0})`,
+              },
+              {
+                value: "emissions",
+                label: `Annual Timeline (${yearlyRollups.length} ${yearlyRollups.length === 1 ? "Yr" : "Yrs"})`,
+              },
+              {
+                value: "audit",
+                label: (
+                  <>
+                    Sanity Audits{" "}
+                    {allAuditLogs.length > 0 && (
+                      <Badge
+                        variant="warning"
+                        className="px-1.5 py-0 font-mono text-xs"
+                      >
+                        {allAuditLogs.length}
+                      </Badge>
+                    )}
+                  </>
+                ),
+              },
+            ]}
+          />
 
           {/* Tab Content Panes */}
           <div className="space-y-4 pt-1">
@@ -507,9 +488,9 @@ export function FacilityDetailDialog({
                     </TableHeader>
                     <TableBody>
                       {facility?.units.map((unit) => {
-                        const isOperating = (unit.operatingStatus ?? "")
-                          .toLowerCase()
-                          .includes("op");
+                        const isOperating = isOperatingStatus(
+                          unit.operatingStatus,
+                        );
                         return (
                           <TableRow
                             key={unit.id}
@@ -616,7 +597,9 @@ export function FacilityDetailDialog({
                     </TableHeader>
                     <TableBody>
                       {yearlyRollups.map((rollup) => {
-                        const isExpanded = expandedYears.has(rollup.year);
+                        const isExpanded = !collapsedYears.has(
+                          `${facilityId}:${rollup.year}`,
+                        );
                         const hasMultipleUnits = rollup.records.length > 1;
 
                         return (
@@ -774,16 +757,7 @@ export function FacilityDetailDialog({
                       {allAuditLogs.map((log) => (
                         <TableRow key={log.id} className="hover:bg-surface/40">
                           <TableCell>
-                            <Badge
-                              variant={
-                                log.severity === "ERROR"
-                                  ? "destructive"
-                                  : "warning"
-                              }
-                              className="px-2 py-0.5 font-mono text-xs"
-                            >
-                              {log.severity}
-                            </Badge>
+                            <AuditSeverityBadge severity={log.severity} />
                           </TableCell>
                           <TableCell className="text-fg font-mono text-xs font-semibold">
                             {log.flagType}

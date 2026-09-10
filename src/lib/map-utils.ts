@@ -17,21 +17,26 @@ export interface MapFacility {
 export type MetricMode = "capacity" | "co2" | "uniform";
 
 export type FuelIconKind =
-  | "gas"
-  | "nuclear"
-  | "solar"
-  | "wind"
-  | "hydro"
-  | "fossil"
-  | "other";
+  "gas" | "nuclear" | "solar" | "wind" | "hydro" | "fossil" | "other";
 
 export interface FuelTheme {
   name: string;
   color: string;
   glow: string;
-  variant: "sky" | "destructive" | "warning" | "secondary" | "success" | "default";
+  variant:
+    "sky" | "destructive" | "warning" | "secondary" | "success" | "default";
   icon: FuelIconKind;
 }
+
+const FUEL_STYLES = {
+  coal: ["Coal", "#f59e0b", "rgba(245, 158, 11, 0.45)", "destructive"],
+  gas: ["Natural Gas", "#10b981", "rgba(16, 185, 129, 0.45)", "sky"],
+  nuclear: ["Nuclear", "#06b6d4", "rgba(6, 182, 212, 0.45)", "sky"],
+  oil: ["Oil / Petroleum", "#f43f5e", "rgba(244, 63, 94, 0.45)", "warning"],
+  hydro: ["Hydro", "#3b82f6", "rgba(59, 130, 246, 0.45)", "success"],
+  renewable: ["Solar / Wind", "#84cc16", "rgba(132, 204, 22, 0.45)", "success"],
+  other: ["Other / Mixed", "#a1a1aa", "rgba(161, 161, 170, 0.35)", "secondary"],
+} as const;
 
 function classifyFuel(fuel: string | null | undefined): FuelIconKind {
   const f = (fuel ?? "").toLowerCase();
@@ -54,7 +59,12 @@ function classifyFuel(fuel: string | null | undefined): FuelIconKind {
 
 export function isZeroCarbonFuel(fuel: string): boolean {
   const kind = classifyFuel(fuel);
-  return kind === "nuclear" || kind === "solar" || kind === "wind" || kind === "hydro";
+  return (
+    kind === "nuclear" ||
+    kind === "solar" ||
+    kind === "wind" ||
+    kind === "hydro"
+  );
 }
 
 export function getFuelIcon(fuel: string | null | undefined): FuelIconKind {
@@ -64,67 +74,20 @@ export function getFuelIcon(fuel: string | null | undefined): FuelIconKind {
 export function getFuelTheme(fuel: string | null | undefined): FuelTheme {
   const icon = classifyFuel(fuel);
   const f = (fuel ?? "").toLowerCase();
-
-  if (icon === "fossil" && (f.includes("coal") || f.includes("lignite"))) {
-    return {
-      name: "Coal",
-      color: "#f59e0b",
-      glow: "rgba(245, 158, 11, 0.45)",
-      variant: "destructive",
-      icon,
-    };
-  }
-  if (icon === "gas") {
-    return {
-      name: "Natural Gas",
-      color: "#10b981",
-      glow: "rgba(16, 185, 129, 0.45)",
-      variant: "sky",
-      icon,
-    };
-  }
-  if (icon === "nuclear") {
-    return {
-      name: "Nuclear",
-      color: "#06b6d4",
-      glow: "rgba(6, 182, 212, 0.45)",
-      variant: "sky",
-      icon,
-    };
-  }
-  if (icon === "fossil") {
-    return {
-      name: "Oil / Petroleum",
-      color: "#f43f5e",
-      glow: "rgba(244, 63, 94, 0.45)",
-      variant: "warning",
-      icon,
-    };
-  }
-  if (icon === "hydro") {
-    return {
-      name: "Hydro",
-      color: "#3b82f6",
-      glow: "rgba(59, 130, 246, 0.45)",
-      variant: "success",
-      icon,
-    };
-  }
-  if (icon === "solar" || icon === "wind") {
-    return {
-      name: "Solar / Wind",
-      color: "#84cc16",
-      glow: "rgba(132, 204, 22, 0.45)",
-      variant: "success",
-      icon,
-    };
-  }
-
+  const style =
+    icon === "fossil"
+      ? f.includes("coal") || f.includes("lignite")
+        ? FUEL_STYLES.coal
+        : FUEL_STYLES.oil
+      : icon === "solar" || icon === "wind"
+        ? FUEL_STYLES.renewable
+        : FUEL_STYLES[icon];
+  const [defaultName, color, glow, variant] = style;
   return {
-    name: fuel && fuel !== "Unknown" ? fuel : "Other / Mixed",
-    color: "#a1a1aa",
-    glow: "rgba(161, 161, 170, 0.35)",
-    variant: "secondary",
+    name: icon === "other" && fuel && fuel !== "Unknown" ? fuel : defaultName,
+    color,
+    glow,
+    variant,
     icon,
   };
 }
@@ -153,8 +116,10 @@ export function getMarkerRadius(
   }
   if (metricMode === "capacity") {
     return (
-      Math.max(min, Math.min(max, Math.sqrt(plant.totalCapacityMW) * capacityScale)) +
-      zoomBonus
+      Math.max(
+        min,
+        Math.min(max, Math.sqrt(plant.totalCapacityMW) * capacityScale),
+      ) + zoomBonus
     );
   }
   return (
@@ -164,9 +129,20 @@ export function getMarkerRadius(
 }
 
 export const FUEL_CATEGORIES = [
-  { label: "Natural Gas", color: "#10b981", query: "Pipeline Natural Gas" },
-  { label: "Coal", color: "#f59e0b", query: "Coal" },
-  { label: "Nuclear", color: "#06b6d4", query: "Nuclear" },
-  { label: "Oil / Petroleum", color: "#f43f5e", query: "Residual Oil" },
-  { label: "Other / Mixed", color: "#a1a1aa", query: "ALL" },
+  {
+    label: FUEL_STYLES.gas[0],
+    color: FUEL_STYLES.gas[1],
+    query: "Pipeline Natural Gas",
+  },
+  { label: FUEL_STYLES.coal[0], color: FUEL_STYLES.coal[1], query: "Coal" },
+  {
+    label: FUEL_STYLES.nuclear[0],
+    color: FUEL_STYLES.nuclear[1],
+    query: "Nuclear",
+  },
+  {
+    label: FUEL_STYLES.oil[0],
+    color: FUEL_STYLES.oil[1],
+    query: "Residual Oil",
+  },
 ] as const;
