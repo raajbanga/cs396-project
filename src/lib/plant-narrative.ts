@@ -1,3 +1,5 @@
+import { isZeroCarbonFuel } from "~/lib/map-utils";
+
 /**
  * Plant Narrative & Real-World Impact Engine
  *
@@ -11,6 +13,21 @@ export interface PlantRoleInfo {
   badgeClass: string;
   icon: "zap" | "clock" | "activity" | "factory" | "power";
   description: string;
+}
+
+export function isOperatingStatus(status: string | null | undefined) {
+  return /^operating\b/i.test(status?.trim() ?? "");
+}
+
+export function hasAirQualityControls(unit: {
+  so2Controls?: string | null;
+  noxControls?: string | null;
+  pmControls?: string | null;
+  hgControls?: string | null;
+}) {
+  return Boolean(
+    unit.so2Controls ?? unit.noxControls ?? unit.pmControls ?? unit.hgControls,
+  );
 }
 
 /**
@@ -43,16 +60,7 @@ export function getPlantRole(params: {
     };
   }
 
-  // Zero-carbon generation
-  if (
-    fuels.some(
-      (f) =>
-        f.includes("solar") ||
-        f.includes("wind") ||
-        f.includes("hydro") ||
-        f.includes("nuclear"),
-    )
-  ) {
+  if (fuels.some(isZeroCarbonFuel)) {
     return {
       role: "Zero-Carbon Generator",
       badgeLabel: "Zero-Carbon",
@@ -64,20 +72,7 @@ export function getPlantRole(params: {
     };
   }
 
-  // Peaking plant: runs fewer than 1,500 hours/year (or mostly sits idle until demand surges)
-  if (hours > 0 && hours < 1800) {
-    return {
-      role: "On-Demand Peaker",
-      badgeLabel: "On-Demand Peaker",
-      badgeClass:
-        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300/60 dark:border-amber-500/20",
-      icon: "clock",
-      description:
-        "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
-    };
-  }
-
-  // Baseload workhorse: runs continuously (> 5,000 hours/year)
+  // Baseload workhorse: runs continuously (> 4,800 hours/year) or high capacity (> 1,200 MW)
   if (hours >= 4800 || (params.capacityMW ?? 0) > 1200) {
     return {
       role: "Baseload Workhorse",
@@ -87,6 +82,19 @@ export function getPlantRole(params: {
       icon: "zap",
       description:
         "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
+    };
+  }
+
+  // Peaking plant: runs fewer than 1,800 hours/year (or mostly sits idle until demand surges)
+  if (hours > 0 && hours < 1800) {
+    return {
+      role: "On-Demand Peaker",
+      badgeLabel: "On-Demand Peaker",
+      badgeClass:
+        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300/60 dark:border-amber-500/20",
+      icon: "clock",
+      description:
+        "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
     };
   }
 
@@ -133,7 +141,9 @@ export interface CarbonIntensityTier {
   narrativeDescription: string;
 }
 
-export function getCarbonIntensityTier(intensity: number | null): CarbonIntensityTier {
+export function getCarbonIntensityTier(
+  intensity: number | null,
+): CarbonIntensityTier {
   if (intensity === null || intensity === 0) {
     return {
       tier: "unknown",
@@ -209,7 +219,10 @@ export function formatCountyShort(county: string | null | undefined): string {
  */
 export function cleanOwnerOperator(raw: string | null | undefined): string {
   if (!raw) return "Owner unlisted";
-  const parts = raw.split("|").map((p) => p.trim()).filter(Boolean);
+  const parts = raw
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
   if (parts.length === 0) return "Owner unlisted";
 
   const cleaned = parts.map((p) =>
@@ -252,6 +265,7 @@ export function generatePlantStory(params: {
   grossGenerationMWh: number;
   carbonIntensity: number | null;
   hasControls: boolean;
+  year?: number | null;
 }) {
   const roleInfo = getPlantRole({
     operatingHours: params.operatingHours,
@@ -287,12 +301,15 @@ export function generatePlantStory(params: {
   if (params.totalCapacityMW > 0) {
     gridStory = `At full capacity, it can supply electricity to approximately ${equivalents.homesPoweredFormatted}. `;
   }
+  const yearPrefix = params.year
+    ? `In ${params.year},`
+    : "In recent reporting,";
   if (params.operatingHours > 0) {
     const pctYear = Math.min(
       Math.round((params.operatingHours / 8760) * 100),
       100,
     );
-    gridStory += `In 2022, it was actively generating power for ${params.operatingHours.toLocaleString()} hours (about ${pctYear}% of the year), producing ${
+    gridStory += `${yearPrefix} it was actively generating power for ${params.operatingHours.toLocaleString()} hours (about ${pctYear}% of the year), producing ${
       params.grossGenerationMWh > 0
         ? `${(params.grossGenerationMWh / 1_000_000).toFixed(2)} million MWh`
         : "energy"
@@ -316,8 +333,9 @@ export function generatePlantStory(params: {
       environmentalStory += `${tier.narrativeDescription} `;
     }
   } else {
-    environmentalStory =
-      "No direct annual carbon emissions were reported for 2022. ";
+    environmentalStory = params.year
+      ? `No direct annual carbon emissions were reported for ${params.year}. `
+      : "No direct annual carbon emissions were reported for this period. ";
   }
 
   if (params.hasControls) {

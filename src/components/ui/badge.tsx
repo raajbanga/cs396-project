@@ -41,3 +41,14 @@ export function Badge({
     />
   );
 }
+
+export function AuditSeverityBadge({ severity }: { severity: string }) {
+  return (
+    <Badge
+      variant={severity === "ERROR" ? "destructive" : "warning"}
+      className="px-2 py-0.5 font-mono text-xs"
+    >
+      {severity}
+    </Badge>
+  );
+}

@@ -5,20 +5,19 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
   getFuelTheme,
+  getMarkerRadius,
   type MapFacility,
   type MetricMode,
 } from "~/lib/map-utils";
 
 interface LeafletMapProps {
   facilities: MapFacility[];
-  selectedFacilityId?: number | null;
   onInspectFacility: (id: number) => void;
   metricMode: MetricMode;
 }
 
 export function LeafletMap({
   facilities,
-  selectedFacilityId,
   onInspectFacility,
   metricMode,
 }: LeafletMapProps) {
@@ -39,15 +38,10 @@ export function LeafletMap({
       zoomControl: false,
     });
 
-    // CARTO Basemap Tiles with API key
-    const cartoKey =
-      process.env.NEXT_PUBLIC_CARTO_API ?? process.env.CARTO_API;
-
+    const cartoKey = process.env.NEXT_PUBLIC_CARTO_API;
     const tileUrl = cartoKey
       ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=${cartoKey}`
-      : process.env.NEXT_PUBLIC_MAPBOX_TOKEN
-        ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}`
-        : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+      : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
     const attribution =
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>';
@@ -72,7 +66,7 @@ export function LeafletMap({
     };
   }, []);
 
-  // Update markers when facilities, metricMode, or selectedFacilityId changes
+  // Update markers when facilities or the metric changes
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layerGroup = layerGroupRef.current;
@@ -83,20 +77,13 @@ export function LeafletMap({
     facilities.forEach((plant) => {
       const theme = getFuelTheme(plant.primaryFuel);
 
-      let radius = 5;
-      if (metricMode === "capacity") {
-        radius = Math.max(3, Math.min(14, Math.sqrt(plant.totalCapacityMW) * 0.15));
-      } else if (metricMode === "co2") {
-        radius = Math.max(3, Math.min(14, Math.sqrt(plant.totalCo2Tons) * 0.0035));
-      }
-
-      const isSelected = selectedFacilityId === plant.id;
+      const radius = getMarkerRadius(plant, metricMode, { uniformBase: 5 });
 
       const marker = L.circleMarker([plant.latitude, plant.longitude], {
-        radius: isSelected ? radius + 3 : radius,
+        radius,
         fillColor: theme.color,
-        color: isSelected ? "#ffffff" : "#09090b",
-        weight: isSelected ? 2 : 1,
+        color: "#09090b",
+        weight: 1,
         opacity: 1,
         fillOpacity: 0.85,
       });
@@ -121,19 +108,21 @@ export function LeafletMap({
 
       marker.addTo(layerGroup);
     });
-  }, [facilities, metricMode, selectedFacilityId, onInspectFacility]);
+  }, [facilities, metricMode, onInspectFacility]);
 
   return (
-    <div className="relative isolate z-0 h-[420px] sm:h-[520px] lg:h-[620px] w-full overflow-hidden rounded-xl border border-edge/80 bg-surface/20 shadow-xs">
+    <div className="border-edge/80 bg-surface/20 relative isolate z-0 h-[420px] w-full overflow-hidden rounded-xl border shadow-xs sm:h-[520px] lg:h-[620px]">
       <div ref={mapContainerRef} className="h-full w-full" />
 
       {/* Floating Instructions */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-2 text-xs text-fg-muted">
-        <div className="rounded-md border border-edge/80 bg-surface/90 px-3 py-1.5 backdrop-blur-md shadow-xs">
-          <span>Leaflet Mercator Map • Click any marker to view full facility profile</span>
+      <div className="text-fg-muted pointer-events-none absolute bottom-3 left-3 z-10 hidden items-center gap-2 text-xs sm:flex">
+        <div className="border-edge/80 bg-surface/90 rounded-md border px-3 py-1.5 shadow-xs backdrop-blur-md">
+          <span>
+            Leaflet Mercator Map • Click any marker to view full facility
+            profile
+          </span>
         </div>
       </div>
     </div>
   );
 }
-

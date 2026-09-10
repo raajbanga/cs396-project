@@ -1,6 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "~/env";
+import {
+  computeCo2IntensityLbsMWh,
+  computeHeatRateMMBtuMWh,
+} from "~/lib/emissions-metrics";
 import { db } from "~/server/db";
 import {
   annualRecords,
@@ -19,128 +23,128 @@ const CAMPD_BASE_URL = "https://api.epa.gov/easey";
  * Resolves malalignment across CAMPD REST API (camelCase), snake_case,
  * and bulk EPA Custom Data Download (CDD) CSV headers into unified internal fields.
  */
-export const rawCampdRecordSchema = z
-  .record(z.unknown())
-  .transform((raw, ctx) => {
-    const get = (...keys: string[]): unknown => {
-      for (const k of keys) {
-        if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
-          return raw[k];
-        }
+const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
+  const get = (...keys: string[]): unknown => {
+    for (const k of keys) {
+      if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
+        return raw[k];
       }
-      return undefined;
-    };
-
-    const toNum = (val: unknown, fallback = 0): number => {
-      if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
-      if (typeof val === "string") {
-        const n = Number.parseFloat(val.replace(/,/g, "").trim());
-        return Number.isNaN(n) ? fallback : n;
-      }
-      return fallback;
-    };
-
-    const toStr = (val: unknown): string | null => {
-      if (typeof val === "string") {
-        const s = val.trim();
-        return s.length > 0 ? s : null;
-      }
-      if (typeof val === "number" || typeof val === "boolean") {
-        return String(val);
-      }
-      return null;
-    };
-
-    const facIdVal = get(
-      "facilityId",
-      "facility_id",
-      "Facility ID (ORISPL)",
-      "Facility ID",
-    );
-    const facilityId = Math.round(toNum(facIdVal, 0));
-
-    const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
-    const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
-      .toUpperCase()
-      .slice(0, 2);
-    const facilityName =
-      toStr(get("facilityName", "facility_name", "Facility Name")) ??
-      `Facility #${facilityId}`;
-    const year = Math.round(toNum(get("year", "Year", "reportingYear"), 2022));
-
-    if (!facilityId || !unitId) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Missing mandatory facilityId or unitId",
-      });
-      return z.NEVER;
     }
+    return undefined;
+  };
 
-    return {
-      facilityId,
-      facilityName,
-      stateCode,
-      unitId,
-      year,
-      operatingHours: toNum(
-        get(
-          "sumOpTime",
-          "operatingTime",
-          "operatingHours",
-          "Operating Time",
-          "countOpTime",
-        ),
-        0,
-      ),
-      grossGenerationMWh: toNum(
-        get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
-        0,
-      ),
-      heatInputMMBtu: toNum(
-        get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
-        0,
-      ),
-      co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
-      so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
-      noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
-      primaryFuel: toStr(
-        get(
-          "primaryFuelInfo",
-          "primaryFuel",
-          "primary_fuel",
-          "Primary Fuel Type",
-        ),
-      ),
-      secondaryFuel: toStr(
-        get(
-          "secondaryFuelInfo",
-          "secondaryFuel",
-          "secondary_fuel",
-          "Secondary Fuel Type",
-        ),
-      ),
-      unitType: toStr(get("unitType", "unit_type", "Unit Type")),
-      so2Controls: toStr(
-        get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
-      ),
-      noxControls: toStr(
-        get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
-      ),
-      pmControls: toStr(
-        get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
-      ),
-      hgControls: toStr(
-        get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
-      ),
-      programCode: toStr(
-        get("programCodeInfo", "programCode", "program_code", "Program Code"),
-      ),
-    };
-  });
+  const toNum = (val: unknown, fallback = 0): number => {
+    if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
+    if (typeof val === "string") {
+      const n = Number.parseFloat(val.replace(/,/g, "").trim());
+      return Number.isNaN(n) ? fallback : n;
+    }
+    return fallback;
+  };
 
-export type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
+  const toStr = (val: unknown): string | null => {
+    if (typeof val === "string") {
+      const s = val.trim();
+      return s.length > 0 ? s : null;
+    }
+    if (typeof val === "number" || typeof val === "boolean") {
+      return String(val);
+    }
+    return null;
+  };
 
-export interface SyncOptions {
+  const facIdVal = get(
+    "facilityId",
+    "facility_id",
+    "Facility ID (ORISPL)",
+    "Facility ID",
+  );
+  const facilityId = Math.round(toNum(facIdVal, 0));
+
+  const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
+  const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
+    .toUpperCase()
+    .slice(0, 2);
+  const facilityName =
+    toStr(get("facilityName", "facility_name", "Facility Name")) ??
+    `Facility #${facilityId}`;
+  const year = Math.round(
+    toNum(get("year", "Year", "reportingYear", "opYear", "calendarYear"), 0),
+  );
+
+  if (!facilityId || !unitId || !year) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Missing mandatory facilityId, unitId, or year",
+    });
+    return z.NEVER;
+  }
+
+  return {
+    facilityId,
+    facilityName,
+    stateCode,
+    unitId,
+    year,
+    operatingHours: toNum(
+      get(
+        "sumOpTime",
+        "operatingTime",
+        "operatingHours",
+        "Operating Time",
+        "countOpTime",
+      ),
+      0,
+    ),
+    grossGenerationMWh: toNum(
+      get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
+      0,
+    ),
+    heatInputMMBtu: toNum(
+      get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
+      0,
+    ),
+    co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
+    so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
+    noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
+    primaryFuel: toStr(
+      get(
+        "primaryFuelInfo",
+        "primaryFuel",
+        "primary_fuel",
+        "Primary Fuel Type",
+      ),
+    ),
+    secondaryFuel: toStr(
+      get(
+        "secondaryFuelInfo",
+        "secondaryFuel",
+        "secondary_fuel",
+        "Secondary Fuel Type",
+      ),
+    ),
+    unitType: toStr(get("unitType", "unit_type", "Unit Type")),
+    so2Controls: toStr(
+      get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
+    ),
+    noxControls: toStr(
+      get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
+    ),
+    pmControls: toStr(
+      get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
+    ),
+    hgControls: toStr(
+      get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
+    ),
+    programCode: toStr(
+      get("programCodeInfo", "programCode", "program_code", "Program Code"),
+    ),
+  };
+});
+
+type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
+
+interface SyncOptions {
   year: number;
   stateCode?: string;
   facilityId?: number;
@@ -148,7 +152,7 @@ export interface SyncOptions {
   maxPages?: number;
 }
 
-export async function fetchCampdAnnualEmissions(
+async function fetchCampdAnnualEmissions(
   params: {
     year: number;
     stateCode?: string;
@@ -208,7 +212,7 @@ export async function fetchCampdAnnualEmissions(
   };
 }
 
-export interface AnomalyInput {
+interface AnomalyInput {
   heatInputMMBtu: number;
   co2MassTons: number;
   grossGenerationMWh: number;
@@ -216,23 +220,40 @@ export interface AnomalyInput {
   heatRateMMBtuMWh: number | null;
 }
 
-export interface AnomalyFlag {
-  flagType:
-    "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
-  severity: "WARN" | "ERROR";
+/**
+ * Physical Sanity Audit Thresholds (PRD Section 3.3):
+ * Standard thermodynamic and operational bounds for CEMS data.
+ */
+const AUDIT_THRESHOLDS = {
+  ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
+  PHANTOM_GENERATION_MIN_MWH: 0,
+  HEAT_RATE_MIN_MMBTU_MWH: 5.0,
+  HEAT_RATE_MAX_MMBTU_MWH: 25.0,
+} as const;
+
+type AuditFlagType =
+  "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
+
+type AuditSeverity = "WARN" | "ERROR";
+
+interface AnomalyFlag {
+  flagType: AuditFlagType;
+  severity: AuditSeverity;
   details: string;
 }
 
 /**
  * Pure evaluation function for EPA physical sanity checks (PRD Section 3.3)
  */
-export function evaluatePhysicalSanityRules(
-  input: AnomalyInput,
-): AnomalyFlag[] {
+function evaluatePhysicalSanityRules(input: AnomalyInput): AnomalyFlag[] {
   const flags: AnomalyFlag[] = [];
 
   // Rule 1: ZERO_EMISSIONS_HIGH_HEAT
-  if (input.heatInputMMBtu > 1000 && input.co2MassTons === 0) {
+  if (
+    input.heatInputMMBtu >
+      AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
+    input.co2MassTons === 0
+  ) {
     flags.push({
       flagType: "ZERO_EMISSIONS_HIGH_HEAT",
       severity: "ERROR",
@@ -241,7 +262,10 @@ export function evaluatePhysicalSanityRules(
   }
 
   // Rule 2: PHANTOM_GENERATION
-  if (input.grossGenerationMWh > 0 && input.operatingHours === 0) {
+  if (
+    input.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
+    input.operatingHours === 0
+  ) {
     flags.push({
       flagType: "PHANTOM_GENERATION",
       severity: "ERROR",
@@ -252,12 +276,13 @@ export function evaluatePhysicalSanityRules(
   // Rule 3: EXTREME_HEAT_RATE
   if (
     input.heatRateMMBtuMWh !== null &&
-    (input.heatRateMMBtuMWh > 25.0 || input.heatRateMMBtuMWh < 5.0)
+    (input.heatRateMMBtuMWh > AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH ||
+      input.heatRateMMBtuMWh < AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH)
   ) {
     flags.push({
       flagType: "EXTREME_HEAT_RATE",
       severity: "WARN",
-      details: `Heat rate of ${input.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (5.0 - 25.0).`,
+      details: `Heat rate of ${input.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH.toFixed(1)} - ${AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH.toFixed(1)}).`,
     });
   }
 
@@ -316,8 +341,8 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
   const anomaliesSummary: Array<{
     facilityId: number;
     unitId: string;
-    flagType: string;
-    severity: string;
+    flagType: AuditFlagType;
+    severity: AuditSeverity;
     details: string;
   }> = [];
 
@@ -393,15 +418,14 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
         noxMassTons,
       } = item;
 
-      // Derived Efficiency Metrics (PRD Section 1.2 & 3.3)
-      const co2IntensityLbsMWh =
-        grossGenerationMWh > 0
-          ? Math.round((co2MassTons * 2000.0) / grossGenerationMWh)
-          : null;
-      const heatRateMMBtuMWh =
-        grossGenerationMWh > 0
-          ? Number((heatInputMMBtu / grossGenerationMWh).toFixed(2))
-          : null;
+      const co2IntensityLbsMWh = computeCo2IntensityLbsMWh(
+        co2MassTons,
+        grossGenerationMWh,
+      );
+      const heatRateMMBtuMWh = computeHeatRateMMBtuMWh(
+        heatInputMMBtu,
+        grossGenerationMWh,
+      );
 
       // Physical Sanity Anomaly Engine (PRD Section 3.3)
       const flags = evaluatePhysicalSanityRules({
@@ -481,6 +505,13 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
             },
           });
       }
+
+      await db.delete(dataAuditLogs).where(
+        inArray(
+          dataAuditLogs.annualRecordId,
+          recordsToInsert.map((record) => record.id!),
+        ),
+      );
     }
 
     if (auditLogsToInsert.length > 0) {
