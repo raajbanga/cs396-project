@@ -10,8 +10,21 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  computeCo2IntensityLbsMWh,
+  computeHeatRateMMBtuMWh,
+} from "~/lib/emissions-metrics";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { syncCampdAnnualEmissions } from "~/server/campd/client";
+import {
+  buildFacilityFilterConditions,
+  facilityCarbonIntensitySubquery,
+  facilityFilterSchema,
+  facilityTotalCapacitySubquery,
+  facilityTotalCo2Subquery,
+  facilityUnitCountSubquery,
+  fetchFacilityWithRelations,
+} from "~/server/db/facility-queries";
 import {
   annualRecords,
   dataAuditLogs,
@@ -19,57 +32,14 @@ import {
   units,
 } from "~/server/db/schema";
 
-function buildFacilityFilterConditions(filter?: {
-  search?: string;
-  stateCode?: string;
-  primaryFuel?: string;
-  nercRegion?: string;
-  sourceCategory?: string;
-}) {
-  const conditions = [];
+const CURRENT_YEAR = new Date().getFullYear();
+const STALE_DATA_YEAR_THRESHOLD = CURRENT_YEAR - 2;
+const SYNC_YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1];
 
-  if (filter?.stateCode && filter.stateCode !== "ALL") {
-    conditions.push(eq(facilities.stateCode, filter.stateCode));
-  }
-
-  if (filter?.nercRegion && filter.nercRegion !== "ALL") {
-    conditions.push(eq(facilities.nercRegion, filter.nercRegion));
-  }
-
-  if (filter?.sourceCategory && filter.sourceCategory !== "ALL") {
-    conditions.push(eq(facilities.sourceCategory, filter.sourceCategory));
-  }
-
-  if (filter?.search && filter.search.trim() !== "") {
-    const term = `%${filter.search.trim().toLowerCase()}%`;
-    const num = Number.parseInt(filter.search.trim(), 10);
-    const textCond = sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`;
-    conditions.push(
-      !Number.isNaN(num)
-        ? sql`(${facilities.id} = ${num} OR ${textCond})`
-        : textCond,
-    );
-  }
-
-  if (filter?.primaryFuel && filter.primaryFuel !== "ALL") {
-    conditions.push(
-      sql`${facilities.id} IN (
-        SELECT DISTINCT ${units.facilityId}
-        FROM ${units}
-        WHERE ${units.primaryFuel} = ${filter.primaryFuel}
-      )`,
-    );
-  }
-
-  return conditions;
-}
-
+/** In-process guard to avoid duplicate CAMPD syncs during a single server instance. */
 const syncedFacilityIds = new Set<number>();
 
 export const facilitiesRouter = createTRPCRouter({
-  /**
-   * Get overall system metrics, grid stats, and anomaly counts
-   */
   getStats: publicProcedure.query(async ({ ctx }) => {
     const [facilitiesCountRes] = await ctx.db
       .select({ total: count() })
@@ -150,9 +120,6 @@ export const facilitiesRouter = createTRPCRouter({
     };
   }),
 
-  /**
-   * Get filter dropdown options (states, fuels, NERC regions, source categories)
-   */
   getFilterOptions: publicProcedure.query(async ({ ctx }) => {
     const stateRows = await ctx.db
       .selectDistinct({ stateCode: facilities.stateCode })
@@ -186,19 +153,11 @@ export const facilitiesRouter = createTRPCRouter({
     };
   }),
 
-  /**
-   * Get paginated facilities with search, state, fuel, NERC region, and source category filtering
-   */
   getFacilities: publicProcedure
     .input(
-      z.object({
+      facilityFilterSchema.extend({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(5).max(100).default(10),
-        search: z.string().optional(),
-        stateCode: z.string().optional(),
-        primaryFuel: z.string().optional(),
-        nercRegion: z.string().optional(),
-        sourceCategory: z.string().optional(),
         sortBy: z
           .enum(["name", "id", "capacity", "co2"])
           .optional()
@@ -238,29 +197,16 @@ export const facilitiesRouter = createTRPCRouter({
           name: facilities.name,
           stateCode: facilities.stateCode,
           county: facilities.county,
-          latitude: facilities.latitude,
-          longitude: facilities.longitude,
-          epaRegion: facilities.epaRegion,
           nercRegion: facilities.nercRegion,
           sourceCategory: facilities.sourceCategory,
           ownerOperator: facilities.ownerOperator,
-          unitCount: sql<number>`(
-            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id"
-          )`.as("unit_count"),
-          totalCapacityMW: sql<number>`(
-            SELECT COALESCE(ROUND(SUM("units"."nameplate_capacity_mw"), 1), 0) FROM "units" WHERE "units"."facility_id" = "facilities"."id"
-          )`.as("total_capacity_mw"),
-          totalCo2Tons: sql<number>`(
-            SELECT COALESCE(ROUND(SUM("annual_records"."co2_mass_tons"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
-          )`.as("total_co2_tons"),
+          unitCount: facilityUnitCountSubquery,
+          totalCapacityMW: facilityTotalCapacitySubquery,
+          totalCo2Tons: facilityTotalCo2Subquery,
           primaryFuelsRaw: sql<string | null>`(
             SELECT GROUP_CONCAT(DISTINCT "units"."primary_fuel") FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
           )`.as("primary_fuels_raw"),
-          carbonIntensityLbsMWh: sql<number | null>`(
-            SELECT ROUND(SUM("annual_records"."co2_mass_tons") * 2000.0 / NULLIF(SUM("annual_records"."gross_generation_mwh"), 0))
-            FROM "annual_records"
-            WHERE "annual_records"."facility_id" = "facilities"."id"
-          )`.as("carbon_intensity_lbs_mwh"),
+          carbonIntensityLbsMWh: facilityCarbonIntensitySubquery,
           controlledUnitsCount: sql<number>`(
             SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL)
           )`.as("controlled_units_count"),
@@ -288,22 +234,8 @@ export const facilitiesRouter = createTRPCRouter({
       };
     }),
 
-  /**
-   * Get all facilities with coordinates for map visualization (3D Globe and 2D Leaflet).
-   * Supports optional filtering by state, fuel, NERC region, source category, and search query.
-   */
   getMapFacilities: publicProcedure
-    .input(
-      z
-        .object({
-          search: z.string().optional(),
-          stateCode: z.string().optional(),
-          primaryFuel: z.string().optional(),
-          nercRegion: z.string().optional(),
-          sourceCategory: z.string().optional(),
-        })
-        .optional(),
-    )
+    .input(facilityFilterSchema.optional())
     .query(async ({ ctx, input }) => {
       const conditions = [
         sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
@@ -327,17 +259,9 @@ export const facilitiesRouter = createTRPCRouter({
             WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
             LIMIT 1
           )`.as("primary_fuel"),
-          totalCapacityMW: sql<number>`(
-            SELECT COALESCE(ROUND(SUM("units"."nameplate_capacity_mw"), 1), 0)
-            FROM "units" WHERE "units"."facility_id" = "facilities"."id"
-          )`.as("total_capacity_mw"),
-          totalCo2Tons: sql<number>`(
-            SELECT COALESCE(ROUND(SUM("annual_records"."co2_mass_tons"), 0), 0)
-            FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
-          )`.as("total_co2_tons"),
-          unitCount: sql<number>`(
-            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id"
-          )`.as("unit_count"),
+          totalCapacityMW: facilityTotalCapacitySubquery,
+          totalCo2Tons: facilityTotalCo2Subquery,
+          unitCount: facilityUnitCountSubquery,
         })
         .from(facilities)
         .where(whereClause);
@@ -350,36 +274,23 @@ export const facilitiesRouter = createTRPCRouter({
       }));
     }),
 
-  /**
-   * Get single facility with its generating units and annual emissions records
-   */
   getFacility: publicProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      let facility = await ctx.db.query.facilities.findFirst({
-        where: eq(facilities.id, input.id),
-        with: {
-          units: true,
-          annualRecords: {
-            orderBy: (rec, { desc }) => [desc(rec.year)],
-            with: {
-              unit: true,
-              auditLogs: true,
-            },
-          },
-        },
-      });
+      let facility = await fetchFacilityWithRelations(ctx.db, input.id);
 
       if (!facility) return null;
 
-      // Automatically fetch latest data from EPA CAMPD if this plant only has data up to 2022
       const recordedYears = facility.annualRecords.map((r) => r.year);
       const maxYear = recordedYears.length > 0 ? Math.max(...recordedYears) : 0;
 
-      if (maxYear <= 2022 && !syncedFacilityIds.has(input.id)) {
+      if (
+        maxYear <= STALE_DATA_YEAR_THRESHOLD &&
+        !syncedFacilityIds.has(input.id)
+      ) {
         syncedFacilityIds.add(input.id);
         try {
-          for (const year of [2024, 2023]) {
+          for (const year of SYNC_YEARS) {
             await syncCampdAnnualEmissions({
               year,
               facilityId: input.id,
@@ -387,20 +298,7 @@ export const facilitiesRouter = createTRPCRouter({
             });
           }
 
-          const refreshed = await ctx.db.query.facilities.findFirst({
-            where: eq(facilities.id, input.id),
-            with: {
-              units: true,
-              annualRecords: {
-                orderBy: (rec, { desc }) => [desc(rec.year)],
-                with: {
-                  unit: true,
-                  auditLogs: true,
-                },
-              },
-            },
-          });
-
+          const refreshed = await fetchFacilityWithRelations(ctx.db, input.id);
           if (refreshed) {
             facility = refreshed;
           }
@@ -415,10 +313,6 @@ export const facilitiesRouter = createTRPCRouter({
       return facility;
     }),
 
-  /**
-   * Head-to-Head Plant Benchmarking (PRD Section 1.2):
-   * Compare 2-4 power plants side-by-side on grid attributes, capacity, and emissions.
-   */
   compareFacilities: publicProcedure
     .input(z.object({ ids: z.array(z.number()).min(2).max(4) }))
     .query(async ({ ctx, input }) => {
@@ -493,10 +387,8 @@ export const facilitiesRouter = createTRPCRouter({
           totalCo2Tons: Math.round(totalCo2),
           totalSo2Tons: Math.round(totalSo2),
           totalNoxTons: Math.round(totalNox),
-          carbonIntensityLbsMWh:
-            totalGen > 0 ? Math.round((totalCo2 * 2000.0) / totalGen) : null,
-          heatRateMMBtuMWh:
-            totalGen > 0 ? Number((totalHeat / totalGen).toFixed(2)) : null,
+          carbonIntensityLbsMWh: computeCo2IntensityLbsMWh(totalCo2, totalGen),
+          heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totalHeat, totalGen),
           so2ControlledUnits,
           noxControlledUnits,
           pmControlledUnits,
@@ -505,10 +397,6 @@ export const facilitiesRouter = createTRPCRouter({
       });
     }),
 
-  /**
-   * Data Quality Audit Log Viewer (PRD Section 1.4 & 3.3):
-   * Query records flagged by the physical sanity anomaly engine.
-   */
   getAuditLogs: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
     .query(async ({ ctx, input }) => {

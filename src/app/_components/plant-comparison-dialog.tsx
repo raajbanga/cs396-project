@@ -34,13 +34,14 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { pickCleanestByCarbonIntensity } from "~/lib/emissions-metrics";
 import {
   cleanOwnerOperator,
   formatCountyShort,
 } from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
-export type ComparedPlant =
+type ComparedPlant =
   RouterOutputs["facilities"]["compareFacilities"][number];
 
 interface PlantComparisonDialogProps {
@@ -105,15 +106,7 @@ export function PlantComparisonDialog({
   const totalJointGeneration = plants.reduce((sum, p) => sum + p.totalGenerationMWh, 0);
   const totalJointCo2 = plants.reduce((sum, p) => sum + p.totalCo2Tons, 0);
 
-  // Cleanest plant (lowest carbon intensity > 0)
-  const validIntensityPlants = plants.filter(
-    (p) => p.carbonIntensityLbsMWh !== null && p.carbonIntensityLbsMWh > 0,
-  );
-  const cleanestPlant = validIntensityPlants.length > 0
-    ? [...validIntensityPlants].sort(
-        (a, b) => (a.carbonIntensityLbsMWh ?? 9999) - (b.carbonIntensityLbsMWh ?? 9999),
-      )[0]
-    : undefined;
+  const cleanestPlant = pickCleanestByCarbonIntensity(plants);
 
   // Largest capacity plant
   const largestPlant = [...plants].sort((a, b) => b.totalCapacityMW - a.totalCapacityMW)[0];
@@ -210,9 +203,11 @@ export function PlantComparisonDialog({
                     )
                   }
                   subtext={
-                    cleanestPlant?.carbonIntensityLbsMWh
-                      ? `${cleanestPlant.carbonIntensityLbsMWh.toLocaleString()} lbs/MWh`
-                      : "Zero stack CO₂"
+                    cleanestPlant?.carbonIntensityLbsMWh != null
+                      ? cleanestPlant.carbonIntensityLbsMWh === 0
+                        ? "Zero stack CO₂"
+                        : `${cleanestPlant.carbonIntensityLbsMWh.toLocaleString()} lbs/MWh`
+                      : "—"
                   }
                 />
 

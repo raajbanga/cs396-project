@@ -17,6 +17,7 @@ import { FuelBadge } from "~/components/ui/fuel-badge";
 import { useTheme } from "next-themes";
 import {
   getFuelTheme,
+  getMarkerRadius,
   type MapFacility,
   type MetricMode,
 } from "~/lib/map-utils";
@@ -310,14 +311,15 @@ export function D3Globe({
       const [px, py] = coords;
       const fuelTheme = getFuelTheme(plant.primaryFuel);
 
-      // Determine dot radius based on metric mode + scale zoom bonus
       const zoomBonus = Math.min(3.5, Math.max(0, (scale - 400) / 1200));
-      let r = 3 + zoomBonus;
-      if (metricMode === "capacity") {
-        r = Math.max(2.5, Math.min(10, Math.sqrt(plant.totalCapacityMW) * 0.12)) + zoomBonus;
-      } else if (metricMode === "co2") {
-        r = Math.max(2.5, Math.min(10, Math.sqrt(plant.totalCo2Tons) * 0.003)) + zoomBonus;
-      }
+      const r = getMarkerRadius(plant, metricMode, {
+        min: 2.5,
+        max: 10,
+        capacityScale: 0.12,
+        co2Scale: 0.003,
+        uniformBase: 3,
+        zoomBonus,
+      });
 
       const isHovered = hoveredPlant?.id === plant.id;
       const isSelected = selectedFacilityId === plant.id;

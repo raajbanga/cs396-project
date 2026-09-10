@@ -59,7 +59,7 @@ function getDbUrl() {
   return env.DATABASE_URL;
 }
 
-export const client =
+const client =
   globalForDb.client ??
   createClient({
     url: getDbUrl(),

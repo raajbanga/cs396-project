@@ -1,3 +1,5 @@
+import { isZeroCarbonFuel } from "~/lib/map-utils";
+
 /**
  * Plant Narrative & Real-World Impact Engine
  *
@@ -43,16 +45,7 @@ export function getPlantRole(params: {
     };
   }
 
-  // Zero-carbon generation
-  if (
-    fuels.some(
-      (f) =>
-        f.includes("solar") ||
-        f.includes("wind") ||
-        f.includes("hydro") ||
-        f.includes("nuclear"),
-    )
-  ) {
+  if (fuels.some(isZeroCarbonFuel)) {
     return {
       role: "Zero-Carbon Generator",
       badgeLabel: "Zero-Carbon",

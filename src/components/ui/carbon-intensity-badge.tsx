@@ -14,8 +14,24 @@ export function CarbonIntensityBadge({
   className,
   ...props
 }: CarbonIntensityBadgeProps) {
-  if (intensity === null || intensity === undefined || intensity === 0) {
+  if (intensity === null || intensity === undefined) {
     return <span className="font-mono text-xs text-fg-muted">—</span>;
+  }
+
+  if (intensity === 0) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded border border-emerald-300/60 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 select-none dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300",
+          className,
+        )}
+        title="Zero direct stack CO₂ emissions per MWh generated"
+        {...props}
+      >
+        {showValue && <span className="font-mono font-semibold">0 lbs/MWh</span>}
+        <span>Zero-Carbon</span>
+      </span>
+    );
   }
 
   const tier = getCarbonIntensityTier(intensity);

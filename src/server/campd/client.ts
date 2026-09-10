@@ -1,6 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "~/env";
+import {
+  computeCo2IntensityLbsMWh,
+  computeHeatRateMMBtuMWh,
+} from "~/lib/emissions-metrics";
 import { db } from "~/server/db";
 import {
   annualRecords,
@@ -19,7 +23,7 @@ const CAMPD_BASE_URL = "https://api.epa.gov/easey";
  * Resolves malalignment across CAMPD REST API (camelCase), snake_case,
  * and bulk EPA Custom Data Download (CDD) CSV headers into unified internal fields.
  */
-export const rawCampdRecordSchema = z
+const rawCampdRecordSchema = z
   .record(z.unknown())
   .transform((raw, ctx) => {
     const get = (...keys: string[]): unknown => {
@@ -140,9 +144,9 @@ export const rawCampdRecordSchema = z
     };
   });
 
-export type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
+type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
 
-export interface SyncOptions {
+interface SyncOptions {
   year: number;
   stateCode?: string;
   facilityId?: number;
@@ -150,7 +154,7 @@ export interface SyncOptions {
   maxPages?: number;
 }
 
-export async function fetchCampdAnnualEmissions(
+async function fetchCampdAnnualEmissions(
   params: {
     year: number;
     stateCode?: string;
@@ -210,7 +214,7 @@ export async function fetchCampdAnnualEmissions(
   };
 }
 
-export interface AnomalyInput {
+interface AnomalyInput {
   heatInputMMBtu: number;
   co2MassTons: number;
   grossGenerationMWh: number;
@@ -222,19 +226,19 @@ export interface AnomalyInput {
  * Physical Sanity Audit Thresholds (PRD Section 3.3):
  * Standard thermodynamic and operational bounds for CEMS data.
  */
-export const AUDIT_THRESHOLDS = {
+const AUDIT_THRESHOLDS = {
   ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
   PHANTOM_GENERATION_MIN_MWH: 0,
   HEAT_RATE_MIN_MMBTU_MWH: 5.0,
   HEAT_RATE_MAX_MMBTU_MWH: 25.0,
 } as const;
 
-export type AuditFlagType =
+type AuditFlagType =
   "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
 
-export type AuditSeverity = "WARN" | "ERROR";
+type AuditSeverity = "WARN" | "ERROR";
 
-export interface AnomalyFlag {
+interface AnomalyFlag {
   flagType: AuditFlagType;
   severity: AuditSeverity;
   details: string;
@@ -243,7 +247,7 @@ export interface AnomalyFlag {
 /**
  * Pure evaluation function for EPA physical sanity checks (PRD Section 3.3)
  */
-export function evaluatePhysicalSanityRules(
+function evaluatePhysicalSanityRules(
   input: AnomalyInput,
 ): AnomalyFlag[] {
   const flags: AnomalyFlag[] = [];
@@ -418,15 +422,14 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
         noxMassTons,
       } = item;
 
-      // Derived Efficiency Metrics (PRD Section 1.2 & 3.3)
-      const co2IntensityLbsMWh =
-        grossGenerationMWh > 0
-          ? Math.round((co2MassTons * 2000.0) / grossGenerationMWh)
-          : null;
-      const heatRateMMBtuMWh =
-        grossGenerationMWh > 0
-          ? Number((heatInputMMBtu / grossGenerationMWh).toFixed(2))
-          : null;
+      const co2IntensityLbsMWh = computeCo2IntensityLbsMWh(
+        co2MassTons,
+        grossGenerationMWh,
+      );
+      const heatRateMMBtuMWh = computeHeatRateMMBtuMWh(
+        heatInputMMBtu,
+        grossGenerationMWh,
+      );
 
       // Physical Sanity Anomaly Engine (PRD Section 3.3)
       const flags = evaluatePhysicalSanityRules({

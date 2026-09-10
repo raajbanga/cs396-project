@@ -85,18 +85,6 @@ export function DialogTitle({
   );
 }
 
-export function DialogDescription({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLParagraphElement>) {
-  return (
-    <p
-      className={cn("mt-1 text-sm leading-relaxed text-fg-muted", className)}
-      {...props}
-    />
-  );
-}
-
 export function DialogFooter({
   className,
   ...props

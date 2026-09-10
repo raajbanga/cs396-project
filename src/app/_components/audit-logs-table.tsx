@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 
-export interface AuditLogRow {
+interface AuditLogRow {
   id: string;
   flagType: string;
   severity: string;

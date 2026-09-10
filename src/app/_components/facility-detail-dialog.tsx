@@ -42,20 +42,20 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
+  computeCo2IntensityLbsMWh,
+  computeHeatRateMMBtuMWh,
+} from "~/lib/emissions-metrics";
+import {
   cleanOwnerOperator,
   formatCountyShort,
   generatePlantStory,
 } from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
-export type FacilityDetailData = NonNullable<
+type FacilityDetailData = NonNullable<
   RouterOutputs["facilities"]["getFacility"]
 >;
-export type FacilityUnit = FacilityDetailData["units"][number];
-export type FacilityAnnualRecord = FacilityDetailData["annualRecords"][number];
-export type FacilityAuditLog = NonNullable<
-  FacilityAnnualRecord["auditLogs"]
->[number];
+type FacilityAnnualRecord = FacilityDetailData["annualRecords"][number];
 
 interface FacilityDetailDialogProps {
   open: boolean;
@@ -146,16 +146,15 @@ export function FacilityDetailDialog({
       .sort((a, b) => b.year - a.year)
       .map((entry) => ({
         ...entry,
-        co2IntensityLbsMWh:
-          entry.grossGenerationMWh > 0
-            ? Math.round((entry.co2MassTons * 2000) / entry.grossGenerationMWh)
-            : null,
-        heatRateMMBtuMWh:
-          entry.grossGenerationMWh > 0
-            ? Number(
-                (entry.heatInputMMBtu / entry.grossGenerationMWh).toFixed(1),
-              )
-            : null,
+        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(
+          entry.co2MassTons,
+          entry.grossGenerationMWh,
+        ),
+        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(
+          entry.heatInputMMBtu,
+          entry.grossGenerationMWh,
+          1,
+        ),
       }));
   }, [facility?.annualRecords]);
 
