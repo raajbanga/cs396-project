@@ -66,12 +66,14 @@ export const rawCampdRecordSchema = z
     const facilityName =
       toStr(get("facilityName", "facility_name", "Facility Name")) ??
       `Facility #${facilityId}`;
-    const year = Math.round(toNum(get("year", "Year", "reportingYear"), 2022));
+    const year = Math.round(
+      toNum(get("year", "Year", "reportingYear", "opYear", "calendarYear"), 0),
+    );
 
-    if (!facilityId || !unitId) {
+    if (!facilityId || !unitId || !year) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Missing mandatory facilityId or unitId",
+        message: "Missing mandatory facilityId, unitId, or year",
       });
       return z.NEVER;
     }
@@ -228,9 +230,7 @@ export const AUDIT_THRESHOLDS = {
 } as const;
 
 export type AuditFlagType =
-  | "ZERO_EMISSIONS_HIGH_HEAT"
-  | "PHANTOM_GENERATION"
-  | "EXTREME_HEAT_RATE";
+  "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
 
 export type AuditSeverity = "WARN" | "ERROR";
 
@@ -250,7 +250,8 @@ export function evaluatePhysicalSanityRules(
 
   // Rule 1: ZERO_EMISSIONS_HIGH_HEAT
   if (
-    input.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
+    input.heatInputMMBtu >
+      AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
     input.co2MassTons === 0
   ) {
     flags.push({

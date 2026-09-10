@@ -45,7 +45,9 @@ function buildFacilityFilterConditions(filter?: {
     const num = Number.parseInt(filter.search.trim(), 10);
     const textCond = sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`;
     conditions.push(
-      !Number.isNaN(num) ? sql`(${facilities.id} = ${num} OR ${textCond})` : textCond,
+      !Number.isNaN(num)
+        ? sql`(${facilities.id} = ${num} OR ${textCond})`
+        : textCond,
     );
   }
 
@@ -61,6 +63,8 @@ function buildFacilityFilterConditions(filter?: {
 
   return conditions;
 }
+
+const syncedFacilityIds = new Set<number>();
 
 export const facilitiesRouter = createTRPCRouter({
   /**
@@ -203,12 +207,7 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const {
-        page,
-        pageSize,
-        sortBy = "name",
-        sortDir = "asc",
-      } = input;
+      const { page, pageSize, sortBy = "name", sortDir = "asc" } = input;
       const offset = (page - 1) * pageSize;
 
       const conditions = buildFacilityFilterConditions(input);
@@ -357,20 +356,63 @@ export const facilitiesRouter = createTRPCRouter({
   getFacility: publicProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ ctx, input }) => {
-      const facility = await ctx.db.query.facilities.findFirst({
+      let facility = await ctx.db.query.facilities.findFirst({
         where: eq(facilities.id, input.id),
         with: {
           units: true,
           annualRecords: {
             orderBy: (rec, { desc }) => [desc(rec.year)],
             with: {
+              unit: true,
               auditLogs: true,
             },
           },
         },
       });
 
-      return facility ?? null;
+      if (!facility) return null;
+
+      // Automatically fetch latest data from EPA CAMPD if this plant only has data up to 2022
+      const recordedYears = facility.annualRecords.map((r) => r.year);
+      const maxYear = recordedYears.length > 0 ? Math.max(...recordedYears) : 0;
+
+      if (maxYear <= 2022 && !syncedFacilityIds.has(input.id)) {
+        syncedFacilityIds.add(input.id);
+        try {
+          for (const year of [2024, 2023]) {
+            await syncCampdAnnualEmissions({
+              year,
+              facilityId: input.id,
+              maxPages: 1,
+            });
+          }
+
+          const refreshed = await ctx.db.query.facilities.findFirst({
+            where: eq(facilities.id, input.id),
+            with: {
+              units: true,
+              annualRecords: {
+                orderBy: (rec, { desc }) => [desc(rec.year)],
+                with: {
+                  unit: true,
+                  auditLogs: true,
+                },
+              },
+            },
+          });
+
+          if (refreshed) {
+            facility = refreshed;
+          }
+        } catch (err) {
+          console.error(
+            `Auto-fetch latest CAMPD data for facility ${input.id} failed:`,
+            err,
+          );
+        }
+      }
+
+      return facility;
     }),
 
   /**
@@ -408,13 +450,22 @@ export const facilitiesRouter = createTRPCRouter({
           if (u.pmControls) pmControlledUnits++;
         }
 
+        const years = Array.from(
+          new Set(plant.annualRecords.map((r) => r.year)),
+        );
+        const latestYear = years.length > 0 ? Math.max(...years) : null;
+        const targetRecords =
+          latestYear !== null
+            ? plant.annualRecords.filter((r) => r.year === latestYear)
+            : plant.annualRecords;
+
         let totalGen = 0;
         let totalHours = 0;
         let totalCo2 = 0;
         let totalSo2 = 0;
         let totalNox = 0;
         let totalHeat = 0;
-        for (const r of plant.annualRecords) {
+        for (const r of targetRecords) {
           totalGen += r.grossGenerationMWh;
           totalHours += r.operatingHours;
           totalCo2 += r.co2MassTons;
@@ -426,6 +477,7 @@ export const facilitiesRouter = createTRPCRouter({
         return {
           id: plant.id,
           name: plant.name,
+          reportingYear: latestYear,
           stateCode: plant.stateCode,
           county: plant.county,
           nercRegion: plant.nercRegion ?? "Unassigned",
@@ -483,27 +535,5 @@ export const facilitiesRouter = createTRPCRouter({
         .limit(input.limit);
 
       return logs;
-    }),
-
-  /**
-   * Trigger EPA CAMPD API synchronization directly from the client.
-   */
-  syncCampdData: publicProcedure
-    .input(
-      z.object({
-        year: z.number().min(2010).max(2026).default(2022),
-        stateCode: z.string().optional(),
-        limit: z.number().min(10).max(500).default(100),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const result = await syncCampdAnnualEmissions({
-        year: input.year,
-        stateCode: input.stateCode,
-        perPage: input.limit,
-        maxPages: 1, // 1 page per on-demand click
-      });
-
-      return result;
     }),
 });
