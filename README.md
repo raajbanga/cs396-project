@@ -62,62 +62,81 @@ Bundled TopoJSON assets come from the BSD-licensed
 
 ## Database Architecture
 
+Five normalized SQLite tables (via LibSQL / Turso), managed with Drizzle ORM. For column-level usage, view mappings, and ingestion details, see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
-    FACILITIES ||--o{ ANNUAL_RECORDS : "reports"
-    UNITS ||--o{ ANNUAL_RECORDS : "operates"
+    FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
+    UNITS ||--o{ ANNUAL_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
-    ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "triggers"
+    ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
 
     FACILITIES {
-        int id PK "ORISPL Plant ID"
-        string name "Facility Name"
-        string state_code "2-letter state"
-        string county "County name"
-        float latitude "Coordinates"
-        float longitude "Coordinates"
-        int epa_region "EPA Region (1-10)"
-        string nerc_region "Reliability grid"
-        string source_category "Sector"
-        string owner_operator "Utility / Owner"
+        integer id PK "ORISPL Plant ID (e.g. 3, 56, 1378)"
+        text name "Facility Name"
+        text state_code "2-letter US State (e.g. TX, OH, PA)"
+        text county "County location"
+        real latitude "GPS Latitude coordinate"
+        real longitude "GPS Longitude coordinate"
+        integer epa_region "EPA Administrative Region (1-10)"
+        text nerc_region "Regional Reliability Grid (ERCOT, PJM/RFC, WECC, etc.)"
+        text source_category "Industrial sector (Electric Utility, Cogen, Small Power)"
+        text owner_operator "Operating utility or holding entity"
     }
 
     UNITS {
-        string id PK "UUID"
-        string unit_id "Generator Unit ID"
-        int facility_id FK "References facilities"
-        string unit_type "Boiler / Turbine / Engine"
-        string primary_fuel "Coal, Natural Gas, etc."
-        string secondary_fuel "Backup fuel"
-        string operating_status "Operating, Retired, etc."
-        string commercial_op_date "Commissioning date"
-        float nameplate_capacity_mw "Capacity MW"
-        string so2_controls "SO2 Scrubbers"
-        string nox_controls "SCR / SNCR / Controls"
+        text id PK "UUID internal key"
+        text unit_id "Generator Unit ID (e.g. '1', '2', 'CT1')"
+        integer facility_id FK "References facilities.id"
+        text unit_type "Boiler / Turbine / Combustion Engine type"
+        text primary_fuel "Primary fuel (Coal, Natural Gas, Oil, etc.)"
+        text secondary_fuel "Backup fuel"
+        text operating_status "Operating, Retired, etc."
+        text commercial_op_date "Original commissioning date"
+        real max_hourly_hi_rate "Max heat input rating (MMBtu/hr)"
+        real nameplate_capacity_mw "Electric generator size in Megawatts"
+        text so2_controls "Flue gas desulfurization / scrubbers"
+        text nox_controls "Selective catalytic reduction / low-NOx burners"
+        text pm_controls "Electrostatic precipitators / fabric filters"
+        text hg_controls "Activated carbon injection"
+        text program_code "Federal regulatory programs (ARP, CSNOX, MATS)"
+    }
+
+    DATASETS {
+        text id PK "UUID batch identifier"
+        text name "Human label (e.g. 'CAMPD API 2022 [TX]')"
+        text source "API or BULK_CSV"
+        integer reporting_year "Calendar reporting year"
+        integer imported_at "Unix epoch timestamp"
+        integer raw_record_count "Total records received from EPA"
+        integer valid_records "Successfully saved records"
+        integer flagged_records "Records with sanity anomalies"
     }
 
     ANNUAL_RECORDS {
-        string id PK "unit_internal_id + year"
-        string dataset_id FK "References datasets"
-        int facility_id FK "References facilities"
-        string unit_internal_id FK "References units"
-        int year "Reporting Year"
-        float operating_hours "Hours operated"
-        float gross_generation_mwh "Total MWh produced"
-        float heat_input_mmbtu "Fuel energy consumed"
-        float co2_mass_tons "Gross CO2 mass"
-        float co2_intensity_lbs_mwh "Derived carbon intensity"
-        float heat_rate_mmbtu_mwh "Derived heat rate"
+        text id PK "Composite ID: unitInternalId_year"
+        text dataset_id FK "References datasets.id"
+        integer facility_id FK "References facilities.id"
+        text unit_internal_id FK "References units.id"
+        integer year "Reporting Year (e.g. 2022)"
+        real operating_hours "Hours the unit ran during the year"
+        real gross_generation_mwh "Total electrical generation"
+        real heat_input_mmbtu "Total thermal fuel consumed"
+        real co2_mass_tons "Mass of CO2 emitted"
+        real so2_mass_tons "Mass of SO2 emitted"
+        real nox_mass_tons "Mass of NOx emitted"
+        real co2_intensity_lbs_mwh "Stored derived intensity"
+        real heat_rate_mmbtu_mwh "Stored derived heat rate"
     }
 
     DATA_AUDIT_LOGS {
-        string id PK "UUID"
-        string annual_record_id FK "References annual_records"
-        string flag_type "Sanity rule triggered"
-        string severity "WARN | ERROR"
-        string details "Explanatory audit message"
-        int created_at "Timestamp"
+        text id PK "UUID flag ID"
+        text annual_record_id FK "References annual_records.id"
+        text flag_type "ZERO_EMISSIONS_HIGH_HEAT | PHANTOM_GENERATION | EXTREME_HEAT_RATE"
+        text severity "WARN | ERROR"
+        text details "Plain-English diagnostic description"
+        integer created_at "Unix epoch timestamp"
     }
 ```
 
