@@ -20,20 +20,26 @@ Built for **CS396 Phase 1 Core**.
      - **Carbon Intensity**: $\text{lbs CO}_2 / \text{MWh} = \frac{\text{CO}_2\ (\text{tons}) \times 2000}{\text{Gross Generation}\ (\text{MWh})}$
      - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
 
-3. **Automated Physical Sanity & Data Quality Auditing (PRD Section 3.3)**:
-   - Ingestion-time validation engine flagging thermodynamic and operational anomalies:
-     - `ZERO_EMISSIONS_HIGH_HEAT`: Fossil units with heat input > 100,000 MMBtu reporting 0 CO2 emissions.
-     - `PHANTOM_GENERATION`: Generating power (> 100 MWh) with 0 operating hours recorded.
-     - `EXTREME_HEAT_RATE`: Units operating outside thermodynamic boundaries (< 4.0 or > 30.0 MMBtu/MWh).
-   - Dedicated audit log explorer with severity tracking and violation details.
+3. **Automated Physical Sanity & Data Quality Auditing**:
+   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `client.ts`):
+     - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO2 emissions.
+     - `PHANTOM_GENERATION` (`ERROR`): Generating power (> 0 MWh) with 0 operating hours recorded.
+     - `EXTREME_HEAT_RATE` (`WARN`): Units operating outside thermodynamic boundaries (< 5.0 or > 25.0 MMBtu/MWh).
+   - Dedicated audit log explorer with severity tracking (`WARN` | `ERROR`) and plain-language diagnostic descriptions.
 
-4. **Head-to-Head Plant Benchmarking (PRD Section 1.2)**:
+4. **Geospatial Mapping & Interactive 3D Globe**:
+   - Seamless dual-mode geospatial visualization of all 1,582 facilities across the US grid.
+   - **2D Leaflet Map**: Interactive slippy map utilizing dark CARTO / OpenStreetMap basemaps with hardware-accelerated circle markers dynamically scaled by nameplate capacity (MW) or CO2 mass (tons) and color-coded by fuel type (Natural Gas, Coal, Oil, Renewables/Nuclear).
+   - **3D D3 Orthographic Globe**: Canvas-rendered interactive globe powered by D3.js and TopoJSON (`us-states-10m` and `world-land-110m`), supporting drag rotation, momentum panning, zoom controls, auto-spin toggle, and responsive map pins.
+   - Synchronized state/fuel filtering, metric switching (Generation Capacity vs. Gross CO2 Tonnage), and click-to-inspect facility modals.
+
+5. **Head-to-Head Plant Benchmarking**:
    - Side-by-side comparative analysis of 2 to 4 power plants.
    - Direct evaluation of grid region, generation capacity, fleet fuel diversity, gross carbon tonnage, carbon intensity, and thermal efficiency.
 
-5. **Clean, Modern UI (Tailwind CSS v4 & shadcn/ui)**:
-   - Built with DRY, accessible component primitives (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `MetricCard`).
-   - Clean dark aesthetic with zero distracting emoticons, fully powered by SVG icons from `lucide-react`.
+6. **Clean, Modern UI (Tailwind CSS v4 & shadcn/ui)**:
+   - Built with DRY, accessible component primitives (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`).
+   - Clean dark and light aesthetic with zero distracting emoticons, fully powered by SVG icons from `lucide-react`.
 
 ---
 
@@ -42,6 +48,8 @@ Built for **CS396 Phase 1 Core**.
 - **Framework**: [Next.js 15 (App Router)](https://nextjs.org) + [React 19](https://react.dev)
 - **API & RPC**: [tRPC v11](https://trpc.io) with [TanStack Query v5](https://tanstack.com/query)
 - **Database & ORM**: [Drizzle ORM](https://orm.drizzle.team) with [LibSQL / SQLite](https://github.com/tursodatabase/libsql-client-ts)
+- **Geospatial & 2D Mapping**: [Leaflet](https://leafletjs.com) with CARTO / OpenStreetMap basemap tiles
+- **3D Visualization & Math**: [D3.js](https://d3js.org) (orthographic projection, canvas rendering) + [TopoJSON](https://github.com/topojson/topojson-client)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com)
 - **UI Primitives**: [shadcn/ui](https://ui.shadcn.com) style design system + [Lucide React](https://lucide.dev)
 - **Validation**: [Zod](https://zod.dev)
@@ -105,7 +113,7 @@ erDiagram
         string id PK "UUID"
         string annual_record_id FK "References annual_records"
         string flag_type "Sanity rule triggered"
-        string severity "ERROR | WARNING | INFO"
+        string severity "WARN | ERROR"
         string details "Explanatory audit message"
         int created_at "Timestamp"
     }
@@ -174,6 +182,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```
 ├── drizzle/                     # Drizzle SQL migration files
 ├── public/                      # Static assets
+│   └── geo/                     # TopoJSON maps (us-states-10m.json, world-land-110m.json)
 ├── scripts/                     # Data seeding & sync scripts
 │   ├── enrich_facilities_and_units.py # Enrichment pipeline from CAMPD CSVs
 │   └── sync_campd.ts            # CLI CAMPD API annual emissions sync
@@ -182,10 +191,14 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 │   │   ├── _components/         # Application feature components
 │   │   │   ├── audit-logs-table.tsx       # Sanity audit logs table
 │   │   │   ├── campd-sync-dialog.tsx      # EPA CAMPD live sync modal
+│   │   │   ├── d3-globe.tsx               # 3D D3 orthographic canvas globe
 │   │   │   ├── database-explorer.tsx      # Explorer view orchestrator
+│   │   │   ├── epa-primer.tsx             # EPA CAMPD domain primer & guide
+│   │   │   ├── facilities-map.tsx         # Map & globe view container with metric controls
 │   │   │   ├── facilities-table.tsx       # Paginated plant table
 │   │   │   ├── facility-detail-dialog.tsx # Facility & unit inspector
 │   │   │   ├── facility-filters.tsx       # Filter controls & search
+│   │   │   ├── leaflet-map.tsx            # 2D Leaflet map with fuel-colored markers
 │   │   │   ├── plant-comparison-dialog.tsx# Head-to-head benchmarking
 │   │   │   └── stat-metrics.tsx           # High-level system KPI cards
 │   │   ├── api/trpc/[trpc]/route.ts       # tRPC HTTP handler
@@ -194,14 +207,25 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 │   ├── components/ui/           # Reusable DRY shadcn/ui primitives
 │   │   ├── badge.tsx
 │   │   ├── button.tsx
+│   │   ├── carbon-intensity-badge.tsx
 │   │   ├── card.tsx
 │   │   ├── dialog.tsx
+│   │   ├── fuel-badge.tsx
 │   │   ├── input.tsx
-│   │   ├── metric-card.tsx
+│   │   ├── metric-bar.tsx
+│   │   ├── plant-role-badge.tsx
 │   │   ├── select.tsx
-│   │   └── table.tsx
+│   │   ├── stat-tile.tsx
+│   │   ├── table.tsx
+│   │   └── theme-toggle.tsx
 │   ├── env.js                   # Type-safe environment validation (t3-env)
-│   ├── lib/utils.ts             # Utility functions (cn helper)
+│   ├── hooks/                   # Custom client state hooks
+│   │   ├── use-facility-filters.ts    # Search, filter, and pagination state
+│   │   └── use-plant-comparison.ts    # Multi-facility comparison selection
+│   ├── lib/                     # Client & server utilities
+│   │   ├── map-utils.ts         # Fuel categorization, marker radii & colors
+│   │   ├── plant-narrative.ts   # Plant summary narrative generators
+│   │   └── utils.ts             # Tailwind class merging (cn)
 │   ├── server/
 │   │   ├── api/
 │   │   │   ├── routers/facilities.ts  # tRPC facilities & stats procedures
@@ -212,8 +236,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 │   │   └── db/
 │   │       ├── index.ts               # LibSQL client instance
 │   │       └── schema.ts              # Drizzle relational schema
+│   ├── styles/                  # Tailwind CSS styling
+│   │   └── globals.css
 │   └── trpc/                    # tRPC client React & server helpers
-└── PRD_epaData_Phase1.md        # Product Requirements Document
+├── DATABASE_BREAKDOWN.md        # Comprehensive database & column usage guide
+└── README.md                    # Project overview & documentation
 ```
 
 ---
