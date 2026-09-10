@@ -1,42 +1,25 @@
 import * as React from "react";
 import { Atom, Droplets, Factory, Flame, Sun, Wind, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import { getFuelTheme } from "~/lib/map-utils";
+import { getFuelIcon, getFuelTheme, type FuelIconKind } from "~/lib/map-utils";
 import { cn } from "~/lib/utils";
+
+const FUEL_ICONS: Record<FuelIconKind, React.ReactNode> = {
+  gas: <Flame className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />,
+  nuclear: <Atom className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />,
+  solar: <Sun className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />,
+  wind: <Wind className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />,
+  hydro: <Droplets className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400" />,
+  fossil: <Factory className="h-3 w-3 shrink-0 text-amber-700 dark:text-amber-500" />,
+  other: <Zap className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />,
+};
 
 export interface FuelBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   fuel: string;
 }
 
-export function FuelBadge({
-  fuel,
-  className,
-  ...props
-}: FuelBadgeProps) {
+export function FuelBadge({ fuel, className, ...props }: FuelBadgeProps) {
   const theme = getFuelTheme(fuel);
-  const f = fuel.toLowerCase();
-
-  const renderIcon = () => {
-    if (f.includes("gas") || f.includes("methane")) {
-      return <Flame className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />;
-    }
-    if (f.includes("nuclear")) {
-      return <Atom className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />;
-    }
-    if (f.includes("solar")) {
-      return <Sun className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />;
-    }
-    if (f.includes("wind")) {
-      return <Wind className="h-3 w-3 shrink-0 text-sky-600 dark:text-sky-400" />;
-    }
-    if (f.includes("hydro") || f.includes("water")) {
-      return <Droplets className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400" />;
-    }
-    if (f.includes("coal") || f.includes("oil") || f.includes("petroleum")) {
-      return <Factory className="h-3 w-3 shrink-0 text-amber-700 dark:text-amber-500" />;
-    }
-    return <Zap className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />;
-  };
 
   return (
     <Badge
@@ -47,7 +30,7 @@ export function FuelBadge({
       )}
       {...props}
     >
-      {renderIcon()}
+      {FUEL_ICONS[getFuelIcon(fuel)]}
       <span>{fuel}</span>
     </Badge>
   );

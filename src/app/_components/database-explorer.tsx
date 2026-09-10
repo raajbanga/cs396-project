@@ -56,25 +56,17 @@ export function DatabaseExplorer() {
     setPage(1);
   };
 
-  const handleStateChange = (st: string) => {
-    setSelectedState(st);
-    setPage(1);
-  };
+  const withPageReset =
+    <T,>(setter: (value: T) => void) =>
+    (value: T) => {
+      setter(value);
+      setPage(1);
+    };
 
-  const handleFuelChange = (fuel: string) => {
-    setSelectedFuel(fuel);
-    setPage(1);
-  };
-
-  const handleNercChange = (nerc: string) => {
-    setSelectedNerc(nerc);
-    setPage(1);
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    setPageSize(newSize);
-    setPage(1);
-  };
+  const handleStateChange = withPageReset(setSelectedState);
+  const handleFuelChange = withPageReset(setSelectedFuel);
+  const handleNercChange = withPageReset(setSelectedNerc);
+  const handlePageSizeChange = withPageReset(setPageSize);
 
   const hasActiveFilters =
     search.trim() !== "" ||

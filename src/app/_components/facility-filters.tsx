@@ -34,6 +34,107 @@ interface FacilityFiltersProps {
   onResetFilters: () => void;
 }
 
+interface FilterSelectsProps {
+  variant: "inline" | "drawer";
+  filterOptions?: FilterOptions;
+  selectedState: string;
+  selectedNerc: string;
+  selectedFuel: string;
+  onStateChange: (value: string) => void;
+  onNercChange: (value: string) => void;
+  onFuelChange: (value: string) => void;
+  hasActiveFilters: boolean;
+  onResetFilters: () => void;
+}
+
+function FilterSelects({
+  variant,
+  filterOptions,
+  selectedState,
+  selectedNerc,
+  selectedFuel,
+  onStateChange,
+  onNercChange,
+  onFuelChange,
+  hasActiveFilters,
+  onResetFilters,
+}: FilterSelectsProps) {
+  const isDrawer = variant === "drawer";
+  const triggerClass = isDrawer
+    ? "h-9 w-full border-edge bg-surface/80 text-xs"
+    : "h-9 border-edge bg-surface/60";
+  const fuelTriggerClass = isDrawer
+    ? "col-span-2 h-9 w-full border-edge bg-surface/80 text-xs"
+    : "h-9 w-[135px] border-edge bg-surface/60";
+
+  return (
+    <>
+      <Select value={selectedState} onValueChange={onStateChange}>
+        <SelectTrigger className={isDrawer ? triggerClass : `${triggerClass} w-[130px]`}>
+          <SelectValue placeholder="All States" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">
+            {isDrawer
+              ? "All States"
+              : `All States (${filterOptions?.states.length ?? 0})`}
+          </SelectItem>
+          {filterOptions?.states.map((st) => (
+            <SelectItem key={st} value={st}>
+              {st}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={selectedNerc} onValueChange={onNercChange}>
+        <SelectTrigger className={isDrawer ? triggerClass : `${triggerClass} w-[135px]`}>
+          <SelectValue placeholder="All Grids" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">All Grids</SelectItem>
+          {filterOptions?.nercRegions.map((n) => (
+            <SelectItem key={n} value={n}>
+              {isDrawer ? n : `Grid: ${n}`}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select value={selectedFuel} onValueChange={onFuelChange}>
+        <SelectTrigger className={fuelTriggerClass}>
+          <SelectValue placeholder="All Fuels" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="ALL">All Fuels</SelectItem>
+          {filterOptions?.fuels.map((f) => (
+            <SelectItem key={f} value={f}>
+              {f}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {hasActiveFilters && (
+        <Button
+          type="button"
+          variant={isDrawer ? "outline" : "ghost"}
+          size="sm"
+          onClick={onResetFilters}
+          className={
+            isDrawer
+              ? "col-span-2 h-8 gap-1 text-xs text-fg-2"
+              : "h-9 gap-1 px-2.5 text-xs text-fg-muted hover:text-fg"
+          }
+        >
+          <RotateCcw className="h-3 w-3" />
+          <span>{isDrawer ? "Reset all filters" : "Reset"}</span>
+        </Button>
+      )}
+    </>
+  );
+}
+
 export function FacilityFilters({
   search,
   onSearchChange,
@@ -59,12 +160,22 @@ export function FacilityFilters({
     return count;
   }, [selectedState, selectedNerc, selectedFuel]);
 
+  const filterSelectProps = {
+    filterOptions,
+    selectedState,
+    selectedNerc,
+    selectedFuel,
+    onStateChange,
+    onNercChange,
+    onFuelChange,
+    hasActiveFilters,
+    onResetFilters,
+  };
+
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        {/* Left: Search + inline selects */}
         <div className="flex flex-1 flex-wrap items-center gap-2">
-          {/* Search Input */}
           <div className="relative w-full sm:w-64 md:w-72">
             <Search className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-fg-muted" />
             <Input
@@ -85,67 +196,10 @@ export function FacilityFilters({
             )}
           </div>
 
-          {/* Desktop Inline Selects (>= sm) */}
           <div className="hidden items-center gap-2 sm:flex">
-            <Select value={selectedState} onValueChange={onStateChange}>
-              <SelectTrigger className="h-9 w-[130px] border-edge bg-surface/60">
-                <SelectValue placeholder="All States" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">
-                  All States ({filterOptions?.states.length ?? 0})
-                </SelectItem>
-                {filterOptions?.states.map((st) => (
-                  <SelectItem key={st} value={st}>
-                    {st}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedNerc} onValueChange={onNercChange}>
-              <SelectTrigger className="h-9 w-[135px] border-edge bg-surface/60">
-                <SelectValue placeholder="All Grids" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Grids</SelectItem>
-                {filterOptions?.nercRegions.map((n) => (
-                  <SelectItem key={n} value={n}>
-                    Grid: {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={selectedFuel} onValueChange={onFuelChange}>
-              <SelectTrigger className="h-9 w-[135px] border-edge bg-surface/60">
-                <SelectValue placeholder="All Fuels" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Fuels</SelectItem>
-                {filterOptions?.fuels.map((f) => (
-                  <SelectItem key={f} value={f}>
-                    {f}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {hasActiveFilters && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={onResetFilters}
-                className="h-9 gap-1 px-2.5 text-xs text-fg-muted hover:text-fg"
-              >
-                <RotateCcw className="h-3 w-3" />
-                <span>Reset</span>
-              </Button>
-            )}
+            <FilterSelects variant="inline" {...filterSelectProps} />
           </div>
 
-          {/* Mobile Filter Toggle (< sm) */}
           <Button
             type="button"
             variant="outline"
@@ -163,7 +217,6 @@ export function FacilityFilters({
           </Button>
         </div>
 
-        {/* Right: Results Count */}
         <div className="ml-auto flex items-center gap-2 whitespace-nowrap text-xs text-fg-muted sm:text-sm">
           {isLoading ? (
             <span className="text-xs text-fg-muted">Updating...</span>
@@ -178,63 +231,9 @@ export function FacilityFilters({
         </div>
       </div>
 
-      {/* Mobile Collapsible Drawer (< sm) */}
       {isMobileFiltersOpen && (
         <div className="grid animate-in fade-in slide-in-from-top-1 grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
-          <Select value={selectedState} onValueChange={onStateChange}>
-            <SelectTrigger className="h-9 w-full border-edge bg-surface/80 text-xs">
-              <SelectValue placeholder="All States" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All States</SelectItem>
-              {filterOptions?.states.map((st) => (
-                <SelectItem key={st} value={st}>
-                  {st}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedNerc} onValueChange={onNercChange}>
-            <SelectTrigger className="h-9 w-full border-edge bg-surface/80 text-xs">
-              <SelectValue placeholder="All Grids" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Grids</SelectItem>
-              {filterOptions?.nercRegions.map((n) => (
-                <SelectItem key={n} value={n}>
-                  {n}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={selectedFuel} onValueChange={onFuelChange}>
-            <SelectTrigger className="col-span-2 h-9 w-full border-edge bg-surface/80 text-xs">
-              <SelectValue placeholder="All Fuels" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Fuels</SelectItem>
-              {filterOptions?.fuels.map((f) => (
-                <SelectItem key={f} value={f}>
-                  {f}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {hasActiveFilters && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onResetFilters}
-              className="col-span-2 h-8 gap-1 text-xs text-fg-2"
-            >
-              <RotateCcw className="h-3 w-3" />
-              <span>Reset all filters</span>
-            </Button>
-          )}
+          <FilterSelects variant="drawer" {...filterSelectProps} />
         </div>
       )}
     </div>

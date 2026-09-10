@@ -159,13 +159,15 @@ npx drizzle-kit generate
 
 ### 4. Seed / Ingest Data
 
-To run the CAMPD live emissions sync via CLI:
+Apply migrations, seed facilities/units from CAMPD CSVs, then sync annual emissions:
 
 ```bash
+npm run db:migrate
+npx tsx scripts/seed-facilities-from-csv.ts --csv-dir "../CAMPD DATA"
 npx tsx scripts/sync_campd.ts
 ```
 
-Or trigger syncs dynamically through the application UI using the **CAMPD Sync** button.
+Opening a facility detail dialog can also trigger an automatic CAMPD refresh when stored emissions data is stale.
 
 ### 5. Run the Development Server
 
@@ -182,17 +184,16 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```
 ├── drizzle/                     # Drizzle SQL migration files
 ├── public/                      # Static assets
-│   └── geo/                     # TopoJSON maps (us-states-10m.json, world-land-110m.json)
+│   └── geo/                     # TopoJSON for 3D globe (us-states-10m.json, world-land-110m.json)
 ├── scripts/                     # Data seeding & sync scripts
-│   ├── enrich_facilities_and_units.py # Enrichment pipeline from CAMPD CSVs
+│   ├── seed-facilities-from-csv.ts  # Seed facilities/units from CAMPD CSVs
 │   └── sync_campd.ts            # CLI CAMPD API annual emissions sync
 ├── src/
 │   ├── app/                     # Next.js App Router
 │   │   ├── _components/         # Application feature components
 │   │   │   ├── audit-logs-table.tsx       # Sanity audit logs table
-│   │   │   ├── campd-sync-dialog.tsx      # EPA CAMPD live sync modal
 │   │   │   ├── d3-globe.tsx               # 3D D3 orthographic canvas globe
-│   │   │   ├── database-explorer.tsx      # Explorer view orchestrator
+│   │   │   ├── database-explorer.tsx      # Explorer orchestrator (filters, tabs, compare)
 │   │   │   ├── epa-primer.tsx             # EPA CAMPD domain primer & guide
 │   │   │   ├── facilities-map.tsx         # Map & globe view container with metric controls
 │   │   │   ├── facilities-table.tsx       # Paginated plant table
@@ -219,9 +220,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 │   │   ├── table.tsx
 │   │   └── theme-toggle.tsx
 │   ├── env.js                   # Type-safe environment validation (t3-env)
-│   ├── hooks/                   # Custom client state hooks
-│   │   ├── use-facility-filters.ts    # Search, filter, and pagination state
-│   │   └── use-plant-comparison.ts    # Multi-facility comparison selection
 │   ├── lib/                     # Client & server utilities
 │   │   ├── map-utils.ts         # Fuel categorization, marker radii & colors
 │   │   ├── plant-narrative.ts   # Plant summary narrative generators

@@ -43,11 +43,11 @@ import {
 import { cn } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
-export type FacilityRow =
+type FacilityRow =
   RouterOutputs["facilities"]["getFacilities"]["items"][number];
 
-export type SortByField = "name" | "id" | "capacity" | "co2";
-export type SortDirection = "asc" | "desc";
+type SortByField = "name" | "id" | "capacity" | "co2";
+type SortDirection = "asc" | "desc";
 
 interface FacilitiesTableProps {
   facilities?: FacilityRow[];
@@ -88,19 +88,27 @@ interface FacilityItemProps {
   onInspect: (id: number) => void;
 }
 
+function getFacilityDisplayData(fac: FacilityRow) {
+  return {
+    plantRole: getPlantRole({
+      operatingHours: fac.totalOperatingHours,
+      capacityMW: fac.totalCapacityMW,
+      sourceCategory: fac.sourceCategory,
+      primaryFuels: fac.primaryFuels,
+    }),
+    equivalents: getHumanEquivalents(fac.totalCapacityMW, fac.totalCo2Tons),
+    owner: cleanOwnerOperator(fac.ownerOperator),
+    county: formatCountyShort(fac.county),
+  };
+}
+
 function FacilityTableRowDesktop({
   fac,
   isSelected,
   onToggleCompare,
   onInspect,
 }: FacilityItemProps) {
-  const equivalents = getHumanEquivalents(fac.totalCapacityMW, fac.totalCo2Tons);
-  const plantRole = getPlantRole({
-    operatingHours: fac.totalOperatingHours,
-    capacityMW: fac.totalCapacityMW,
-    sourceCategory: fac.sourceCategory,
-    primaryFuels: fac.primaryFuels,
-  });
+  const { plantRole, equivalents, owner, county } = getFacilityDisplayData(fac);
 
   return (
     <TableRow
@@ -134,18 +142,15 @@ function FacilityTableRowDesktop({
           </span>
           <PlantRoleBadge roleInfo={plantRole} className="shrink-0" />
         </div>
-        <div
-          className="truncate text-xs text-fg-muted pt-0.5"
-          title={cleanOwnerOperator(fac.ownerOperator)}
-        >
-          {cleanOwnerOperator(fac.ownerOperator)}
+        <div className="truncate text-xs text-fg-muted pt-0.5" title={owner}>
+          {owner}
         </div>
       </TableCell>
 
       <TableCell className="min-w-0">
         <div className="text-sm font-semibold text-fg-2">{fac.stateCode}</div>
-        <div className="truncate text-xs text-fg-muted" title={formatCountyShort(fac.county)}>
-          {formatCountyShort(fac.county)}
+        <div className="truncate text-xs text-fg-muted" title={county}>
+          {county}
         </div>
       </TableCell>
 
@@ -208,12 +213,7 @@ function FacilityCardMobile({
   onToggleCompare,
   onInspect,
 }: FacilityItemProps) {
-  const plantRole = getPlantRole({
-    operatingHours: fac.totalOperatingHours,
-    capacityMW: fac.totalCapacityMW,
-    sourceCategory: fac.sourceCategory,
-    primaryFuels: fac.primaryFuels,
-  });
+  const { plantRole, county } = getFacilityDisplayData(fac);
 
   return (
     <div
@@ -241,7 +241,7 @@ function FacilityCardMobile({
             <div className="flex items-center gap-1.5 truncate text-xs text-fg-muted">
               <span className="font-mono">#{fac.id}</span>
               <span>•</span>
-              <span>{fac.county ? `${formatCountyShort(fac.county)}, ` : ""}{fac.stateCode}</span>
+              <span>{county ? `${county}, ` : ""}{fac.stateCode}</span>
             </div>
           </div>
         </div>
