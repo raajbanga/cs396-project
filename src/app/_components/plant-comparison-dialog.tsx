@@ -25,6 +25,7 @@ import {
 } from "~/components/ui/dialog";
 import { FuelBadge } from "~/components/ui/fuel-badge";
 import { MetricBar } from "~/components/ui/metric-bar";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { StatTile } from "~/components/ui/stat-tile";
 import {
   Table,
@@ -35,14 +36,10 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { pickCleanestByCarbonIntensity } from "~/lib/emissions-metrics";
-import {
-  cleanOwnerOperator,
-  formatCountyShort,
-} from "~/lib/plant-narrative";
+import { cleanOwnerOperator, formatCountyShort } from "~/lib/plant-narrative";
 import { type RouterOutputs } from "~/trpc/react";
 
-type ComparedPlant =
-  RouterOutputs["facilities"]["compareFacilities"][number];
+type ComparedPlant = RouterOutputs["facilities"]["compareFacilities"][number];
 
 interface PlantComparisonDialogProps {
   open: boolean;
@@ -59,7 +56,7 @@ function SectionRow({ title, colSpan }: { title: string; colSpan: number }) {
     <TableRow className="bg-surface/50 hover:bg-surface/50">
       <TableCell
         colSpan={colSpan}
-        className="px-3.5 py-2 text-xs font-semibold tracking-wider text-fg uppercase"
+        className="text-fg px-3.5 py-2 text-xs font-semibold tracking-wider uppercase"
       >
         {title}
       </TableCell>
@@ -78,9 +75,9 @@ function MetricRow({
 }) {
   return (
     <TableRow className="hover:bg-surface/40">
-      <TableCell className="p-3.5 font-medium text-fg-2">{label}</TableCell>
+      <TableCell className="text-fg-2 p-3.5 font-medium">{label}</TableCell>
       {plants.map((p) => (
-        <TableCell key={p.id} className="border-l border-edge/60 p-3.5">
+        <TableCell key={p.id} className="border-edge/60 border-l p-3.5">
           {renderCell(p)}
         </TableCell>
       ))}
@@ -97,19 +94,27 @@ export function PlantComparisonDialog({
   onRemovePlant,
   onInspectPlant,
 }: PlantComparisonDialogProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "emissions" | "fleet">(
-    "overview",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "emissions" | "fleet"
+  >("overview");
 
   // Benchmarking aggregate calculations
-  const totalJointCapacity = plants.reduce((sum, p) => sum + p.totalCapacityMW, 0);
-  const totalJointGeneration = plants.reduce((sum, p) => sum + p.totalGenerationMWh, 0);
+  const totalJointCapacity = plants.reduce(
+    (sum, p) => sum + p.totalCapacityMW,
+    0,
+  );
+  const totalJointGeneration = plants.reduce(
+    (sum, p) => sum + p.totalGenerationMWh,
+    0,
+  );
   const totalJointCo2 = plants.reduce((sum, p) => sum + p.totalCo2Tons, 0);
 
   const cleanestPlant = pickCleanestByCarbonIntensity(plants);
 
   // Largest capacity plant
-  const largestPlant = [...plants].sort((a, b) => b.totalCapacityMW - a.totalCapacityMW)[0];
+  const largestPlant = [...plants].sort(
+    (a, b) => b.totalCapacityMW - a.totalCapacityMW,
+  )[0];
 
   // Highest generation plant
   const highestGenPlant = [...plants].sort(
@@ -119,7 +124,7 @@ export function PlantComparisonDialog({
   // Total scrubbed units across all plants
   const totalUnits = plants.reduce((sum, p) => sum + p.unitCount, 0);
   const totalScrubbed = plants.reduce(
-    (sum, p) => sum + Math.max(p.so2ControlledUnits, p.noxControlledUnits),
+    (sum, p) => sum + p.controlledUnitsCount,
     0,
   );
   const controlCoveragePct =
@@ -138,14 +143,15 @@ export function PlantComparisonDialog({
         <DialogClose onClose={() => onOpenChange(false)} />
 
         {/* Dialog Header */}
-        <DialogHeader className="shrink-0 border-b border-edge pb-3 pr-10">
+        <DialogHeader className="border-edge shrink-0 border-b pr-10 pb-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs font-medium text-emerald-400">
                 BENCHMARK MATRIX
               </span>
               <Badge variant="outline" className="font-mono text-xs">
-                {plants.length} {plants.length === 1 ? "Facility" : "Facilities"} Selected
+                {plants.length}{" "}
+                {plants.length === 1 ? "Facility" : "Facilities"} Selected
               </Badge>
               {cleanestPlant && (
                 <Badge variant="success" className="gap-1">
@@ -159,8 +165,9 @@ export function PlantComparisonDialog({
               Cross-Facility Comparative Benchmark
             </DialogTitle>
 
-            <p className="mt-0.5 text-xs text-fg-muted">
-              Side-by-side performance audit across grid reliability, thermodynamic capacity, and emission rates.
+            <p className="text-fg-muted mt-0.5 text-xs">
+              Side-by-side performance audit across grid reliability,
+              thermodynamic capacity, and emission rates.
             </p>
           </div>
         </DialogHeader>
@@ -168,22 +175,24 @@ export function PlantComparisonDialog({
         {/* Scrollable Body */}
         <div className="-mr-1 min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
           {isLoading ? (
-            <div className="py-24 text-center text-fg-muted">
+            <div className="text-fg-muted py-24 text-center">
               <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin text-emerald-400" />
-              <p className="text-sm font-medium text-fg">
+              <p className="text-fg text-sm font-medium">
                 Computing comparative cross-facility metrics...
               </p>
-              <p className="mt-1 text-xs text-fg-muted">
-                Aggregating generation, emission intensity, and environmental controls
+              <p className="text-fg-muted mt-1 text-xs">
+                Aggregating generation, emission intensity, and environmental
+                controls
               </p>
             </div>
           ) : plants.length < 2 ? (
-            <div className="py-20 text-center text-fg-muted">
-              <p className="text-sm font-medium text-fg">
+            <div className="text-fg-muted py-20 text-center">
+              <p className="text-fg text-sm font-medium">
                 Select at least 2 facilities to benchmark side-by-side.
               </p>
-              <p className="mt-1 text-xs text-fg-muted">
-                Use the comparison checkboxes in the facilities table to add up to 4 plants.
+              <p className="text-fg-muted mt-1 text-xs">
+                Use the comparison checkboxes in the facilities table to add up
+                to 4 plants.
               </p>
             </div>
           ) : (
@@ -195,7 +204,7 @@ export function PlantComparisonDialog({
                   icon={<Award className="h-3.5 w-3.5 text-emerald-400" />}
                   value={
                     cleanestPlant ? (
-                      <span className="truncate block max-w-[120px] text-emerald-400">
+                      <span className="block max-w-[120px] truncate text-emerald-400">
                         {cleanestPlant.name}
                       </span>
                     ) : (
@@ -246,56 +255,32 @@ export function PlantComparisonDialog({
 
                 <StatTile
                   label="Control Coverage"
-                  icon={<ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />}
+                  icon={
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                  }
                   value={`${controlCoveragePct}%`}
                   subtext={`${totalScrubbed}/${totalUnits} units scrubbed`}
                   className="col-span-2 sm:col-span-1"
                 />
               </div>
 
-              {/* Clean Segmented Tab Switcher */}
-              <div className="sticky top-0 z-10 flex border-b border-edge bg-surface/95 pt-1 text-xs font-medium backdrop-blur-md sm:text-sm">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("overview")}
-                  className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
-                    activeTab === "overview"
-                      ? "border-emerald-400 font-semibold text-fg"
-                      : "border-transparent text-fg-muted hover:text-fg"
-                  }`}
-                >
-                  Overview Matrix
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("emissions")}
-                  className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
-                    activeTab === "emissions"
-                      ? "border-emerald-400 font-semibold text-fg"
-                      : "border-transparent text-fg-muted hover:text-fg"
-                  }`}
-                >
-                  Emissions & Air Quality
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("fleet")}
-                  className={`cursor-pointer border-b-2 px-3.5 py-2 transition-colors ${
-                    activeTab === "fleet"
-                      ? "border-emerald-400 font-semibold text-fg"
-                      : "border-transparent text-fg-muted hover:text-fg"
-                  }`}
-                >
-                  Fleet & Generation Units
-                </button>
-              </div>
+              <SegmentedControl
+                variant="tabs"
+                value={activeTab}
+                onChange={setActiveTab}
+                options={[
+                  { value: "overview", label: "Overview Matrix" },
+                  { value: "emissions", label: "Emissions & Air Quality" },
+                  { value: "fleet", label: "Fleet & Generation Units" },
+                ]}
+              />
 
               {/* Benchmark Table Container */}
-              <div className="overflow-hidden rounded-xl border border-edge bg-canvas">
+              <div className="border-edge bg-canvas overflow-hidden rounded-xl border">
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-b border-edge bg-surface/80">
-                      <TableHead className="w-48 align-bottom text-xs font-medium tracking-wider text-fg-muted uppercase sm:w-56">
+                    <TableRow className="border-edge bg-surface/80 border-b">
+                      <TableHead className="text-fg-muted w-48 align-bottom text-xs font-medium tracking-wider uppercase sm:w-56">
                         Benchmarking Metric
                       </TableHead>
                       {plants.map((plant) => {
@@ -303,7 +288,7 @@ export function PlantComparisonDialog({
                         return (
                           <TableHead
                             key={plant.id}
-                            className="min-w-[220px] border-l border-edge p-3.5 align-top"
+                            className="border-edge min-w-[220px] border-l p-3.5 align-top"
                           >
                             <div className="space-y-2">
                               {/* Header Meta: ID & Actions */}
@@ -337,7 +322,7 @@ export function PlantComparisonDialog({
                                     <button
                                       type="button"
                                       onClick={() => onRemovePlant(plant.id)}
-                                      className="cursor-pointer rounded p-1 text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+                                      className="text-fg-muted hover:bg-surface-2 hover:text-fg cursor-pointer rounded p-1 transition-colors"
                                       title={`Remove ${plant.name} from comparison`}
                                     >
                                       <Trash2 className="h-3 w-3" />
@@ -347,14 +332,16 @@ export function PlantComparisonDialog({
                               </div>
 
                               {/* Plant Name */}
-                              <div className="line-clamp-2 text-sm font-semibold text-fg sm:text-base">
+                              <div className="text-fg line-clamp-2 text-sm font-semibold sm:text-base">
                                 {plant.name}
                               </div>
 
                               {/* Location & NERC */}
-                              <div className="flex items-center gap-1.5 text-xs text-fg-muted">
+                              <div className="text-fg-muted flex items-center gap-1.5 text-xs">
                                 <span>
-                                  {plant.county ? `${formatCountyShort(plant.county)}, ` : ""}
+                                  {plant.county
+                                    ? `${formatCountyShort(plant.county)}, `
+                                    : ""}
                                   {plant.stateCode}
                                 </span>
                                 {plant.nercRegion && (
@@ -389,17 +376,33 @@ export function PlantComparisonDialog({
                     {/* ──────────────── TAB 1: OVERVIEW MATRIX ──────────────── */}
                     {activeTab === "overview" && (
                       <>
-                        <SectionRow title="1. Operational Capacity & Grid Delivery" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="1. Operational Capacity & Grid Delivery"
+                          colSpan={plants.length + 1}
+                        />
 
                         <MetricRow
                           label="Nameplate Capacity"
                           plants={plants}
                           renderCell={(p) => (
                             <MetricBar
-                              value={p.totalCapacityMW > 0 ? `${p.totalCapacityMW.toLocaleString()} MW` : "—"}
-                              percentage={maxCapacity > 0 ? Math.round((p.totalCapacityMW / maxCapacity) * 100) : 0}
+                              value={
+                                p.totalCapacityMW > 0
+                                  ? `${p.totalCapacityMW.toLocaleString()} MW`
+                                  : "—"
+                              }
+                              percentage={
+                                maxCapacity > 0
+                                  ? Math.round(
+                                      (p.totalCapacityMW / maxCapacity) * 100,
+                                    )
+                                  : 0
+                              }
                               color="amber"
-                              isLeader={p.id === largestPlant?.id && p.totalCapacityMW > 0}
+                              isLeader={
+                                p.id === largestPlant?.id &&
+                                p.totalCapacityMW > 0
+                              }
                               leaderLabel="Largest"
                             />
                           )}
@@ -410,10 +413,23 @@ export function PlantComparisonDialog({
                           plants={plants}
                           renderCell={(p) => (
                             <MetricBar
-                              value={p.totalGenerationMWh > 0 ? `${p.totalGenerationMWh.toLocaleString()} MWh` : "—"}
-                              percentage={maxGen > 0 ? Math.round((p.totalGenerationMWh / maxGen) * 100) : 0}
+                              value={
+                                p.totalGenerationMWh > 0
+                                  ? `${p.totalGenerationMWh.toLocaleString()} MWh`
+                                  : "—"
+                              }
+                              percentage={
+                                maxGen > 0
+                                  ? Math.round(
+                                      (p.totalGenerationMWh / maxGen) * 100,
+                                    )
+                                  : 0
+                              }
                               color="sky"
-                              isLeader={p.id === highestGenPlant?.id && p.totalGenerationMWh > 0}
+                              isLeader={
+                                p.id === highestGenPlant?.id &&
+                                p.totalGenerationMWh > 0
+                              }
                               leaderLabel="Top Gen"
                             />
                           )}
@@ -423,8 +439,10 @@ export function PlantComparisonDialog({
                           label="Annual Dispatch Hours"
                           plants={plants}
                           renderCell={(p) => (
-                            <span className="font-mono text-xs text-fg-2">
-                              {p.totalOperatingHours > 0 ? `${p.totalOperatingHours.toLocaleString()} hrs` : "—"}
+                            <span className="text-fg-2 font-mono text-xs">
+                              {p.totalOperatingHours > 0
+                                ? `${p.totalOperatingHours.toLocaleString()} hrs`
+                                : "—"}
                             </span>
                           )}
                         />
@@ -435,22 +453,39 @@ export function PlantComparisonDialog({
                           renderCell={(p) => {
                             const capFactor =
                               p.totalCapacityMW > 0 && p.totalGenerationMWh > 0
-                                ? Math.min(100, Math.round((p.totalGenerationMWh / (p.totalCapacityMW * 8760)) * 100))
+                                ? Math.min(
+                                    100,
+                                    Math.round(
+                                      (p.totalGenerationMWh /
+                                        (p.totalCapacityMW * 8760)) *
+                                        100,
+                                    ),
+                                  )
                                 : null;
                             return capFactor !== null ? (
                               <div className="space-y-1">
-                                <span className="font-mono text-xs font-semibold text-fg">{capFactor}%</span>
-                                <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-2">
-                                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${capFactor}%` }} />
+                                <span className="text-fg font-mono text-xs font-semibold">
+                                  {capFactor}%
+                                </span>
+                                <div className="bg-surface-2 h-1 w-24 overflow-hidden rounded-full">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-500"
+                                    style={{ width: `${capFactor}%` }}
+                                  />
                                 </div>
                               </div>
                             ) : (
-                              <span className="font-mono text-xs text-fg-muted">—</span>
+                              <span className="text-fg-muted font-mono text-xs">
+                                —
+                              </span>
                             );
                           }}
                         />
 
-                        <SectionRow title="2. Thermodynamic & Carbon Intensity" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="2. Thermodynamic & Carbon Intensity"
+                          colSpan={plants.length + 1}
+                        />
 
                         <MetricRow
                           label={
@@ -460,7 +495,12 @@ export function PlantComparisonDialog({
                             </div>
                           }
                           plants={plants}
-                          renderCell={(p) => <CarbonIntensityBadge intensity={p.carbonIntensityLbsMWh} showValue />}
+                          renderCell={(p) => (
+                            <CarbonIntensityBadge
+                              intensity={p.carbonIntensityLbsMWh}
+                              showValue
+                            />
+                          )}
                         />
 
                         <MetricRow
@@ -474,10 +514,10 @@ export function PlantComparisonDialog({
                           renderCell={(p) =>
                             p.heatRateMMBtuMWh ? (
                               <div className="space-y-0.5">
-                                <div className="font-mono text-xs font-semibold text-fg">
+                                <div className="text-fg font-mono text-xs font-semibold">
                                   {p.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh
                                 </div>
-                                <span className="text-xs text-fg-muted">
+                                <span className="text-fg-muted text-xs">
                                   {p.heatRateMMBtuMWh < 8.0
                                     ? "High CCGT efficiency"
                                     : p.heatRateMMBtuMWh < 12.0
@@ -486,7 +526,9 @@ export function PlantComparisonDialog({
                                 </span>
                               </div>
                             ) : (
-                              <span className="font-mono text-xs text-fg-muted">—</span>
+                              <span className="text-fg-muted font-mono text-xs">
+                                —
+                              </span>
                             )
                           }
                         />
@@ -496,15 +538,26 @@ export function PlantComparisonDialog({
                     {/* ───────────── TAB 2: EMISSIONS & AIR QUALITY ───────────── */}
                     {activeTab === "emissions" && (
                       <>
-                        <SectionRow title="1. Direct Stack Pollutant Mass" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="1. Direct Stack Pollutant Mass"
+                          colSpan={plants.length + 1}
+                        />
 
                         <MetricRow
                           label="Annual CO₂ Mass"
                           plants={plants}
                           renderCell={(p) => (
                             <MetricBar
-                              value={p.totalCo2Tons > 0 ? `${p.totalCo2Tons.toLocaleString()} t` : "0 t"}
-                              percentage={maxCo2 > 0 ? Math.round((p.totalCo2Tons / maxCo2) * 100) : 0}
+                              value={
+                                p.totalCo2Tons > 0
+                                  ? `${p.totalCo2Tons.toLocaleString()} t`
+                                  : "0 t"
+                              }
+                              percentage={
+                                maxCo2 > 0
+                                  ? Math.round((p.totalCo2Tons / maxCo2) * 100)
+                                  : 0
+                              }
                               color="rose"
                             />
                           )}
@@ -515,8 +568,16 @@ export function PlantComparisonDialog({
                           plants={plants}
                           renderCell={(p) => (
                             <MetricBar
-                              value={p.totalSo2Tons > 0 ? `${p.totalSo2Tons.toLocaleString()} t` : "0 t"}
-                              percentage={maxSo2 > 0 ? Math.round((p.totalSo2Tons / maxSo2) * 100) : 0}
+                              value={
+                                p.totalSo2Tons > 0
+                                  ? `${p.totalSo2Tons.toLocaleString()} t`
+                                  : "0 t"
+                              }
+                              percentage={
+                                maxSo2 > 0
+                                  ? Math.round((p.totalSo2Tons / maxSo2) * 100)
+                                  : 0
+                              }
                               color="amber"
                             />
                           )}
@@ -527,20 +588,46 @@ export function PlantComparisonDialog({
                           plants={plants}
                           renderCell={(p) => (
                             <MetricBar
-                              value={p.totalNoxTons > 0 ? `${p.totalNoxTons.toLocaleString()} t` : "0 t"}
-                              percentage={maxNox > 0 ? Math.round((p.totalNoxTons / maxNox) * 100) : 0}
+                              value={
+                                p.totalNoxTons > 0
+                                  ? `${p.totalNoxTons.toLocaleString()} t`
+                                  : "0 t"
+                              }
+                              percentage={
+                                maxNox > 0
+                                  ? Math.round((p.totalNoxTons / maxNox) * 100)
+                                  : 0
+                              }
                               color="amber"
                             />
                           )}
                         />
 
-                        <SectionRow title="2. Clean Air Quality & Abatement Controls" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="2. Clean Air Quality & Abatement Controls"
+                          colSpan={plants.length + 1}
+                        />
 
                         {(
                           [
-                            { label: "SO₂ Scrubbers (FGD)", countFn: (p: ComparedPlant) => p.so2ControlledUnits, color: "bg-emerald-500" },
-                            { label: "NOₓ Catalytic Controls (SCR/SNCR)", countFn: (p: ComparedPlant) => p.noxControlledUnits, color: "bg-sky-500" },
-                            { label: "Particulate Controls (ESP/Baghouses)", countFn: (p: ComparedPlant) => p.pmControlledUnits, color: "bg-amber-500" },
+                            {
+                              label: "SO₂ Scrubbers (FGD)",
+                              countFn: (p: ComparedPlant) =>
+                                p.so2ControlledUnits,
+                              color: "bg-emerald-500",
+                            },
+                            {
+                              label: "NOₓ Catalytic Controls (SCR/SNCR)",
+                              countFn: (p: ComparedPlant) =>
+                                p.noxControlledUnits,
+                              color: "bg-sky-500",
+                            },
+                            {
+                              label: "Particulate Controls (ESP/Baghouses)",
+                              countFn: (p: ComparedPlant) =>
+                                p.pmControlledUnits,
+                              color: "bg-amber-500",
+                            },
                           ] as const
                         ).map((ctrl) => (
                           <MetricRow
@@ -549,15 +636,25 @@ export function PlantComparisonDialog({
                             plants={plants}
                             renderCell={(p) => {
                               const count = ctrl.countFn(p);
-                              const pct = p.unitCount > 0 ? Math.round((count / p.unitCount) * 100) : 0;
+                              const pct =
+                                p.unitCount > 0
+                                  ? Math.round((count / p.unitCount) * 100)
+                                  : 0;
                               return (
                                 <div className="space-y-1">
-                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-fg">
-                                    <span>{count} of {p.unitCount} units</span>
-                                    <span className="text-fg-muted">({pct}%)</span>
+                                  <div className="text-fg flex items-center gap-1.5 text-xs font-semibold">
+                                    <span>
+                                      {count} of {p.unitCount} units
+                                    </span>
+                                    <span className="text-fg-muted">
+                                      ({pct}%)
+                                    </span>
                                   </div>
-                                  <div className="h-1 w-24 overflow-hidden rounded-full bg-surface-2">
-                                    <div className={`h-full rounded-full ${ctrl.color}`} style={{ width: `${pct}%` }} />
+                                  <div className="bg-surface-2 h-1 w-24 overflow-hidden rounded-full">
+                                    <div
+                                      className={`h-full rounded-full ${ctrl.color}`}
+                                      style={{ width: `${pct}%` }}
+                                    />
                                   </div>
                                 </div>
                               );
@@ -570,15 +667,23 @@ export function PlantComparisonDialog({
                     {/* ────────────── TAB 3: FLEET & TECHNOLOGY ───────────── */}
                     {activeTab === "fleet" && (
                       <>
-                        <SectionRow title="1. Generation Units & Status" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="1. Generation Units & Status"
+                          colSpan={plants.length + 1}
+                        />
 
                         <MetricRow
                           label="Operating vs Total Units"
                           plants={plants}
                           renderCell={(p) => (
                             <span className="text-xs">
-                              <strong className="font-semibold text-fg">{p.operatingUnitsCount}</strong>
-                              <span className="text-fg-muted"> / {p.unitCount} total units</span>
+                              <strong className="text-fg font-semibold">
+                                {p.operatingUnitsCount}
+                              </strong>
+                              <span className="text-fg-muted">
+                                {" "}
+                                / {p.unitCount} total units
+                              </span>
                             </span>
                           )}
                         />
@@ -610,7 +715,9 @@ export function PlantComparisonDialog({
                           label="Owner / Operator"
                           plants={plants}
                           renderCell={(p) => (
-                            <span className="text-sm text-fg-2">{cleanOwnerOperator(p.ownerOperator)}</span>
+                            <span className="text-fg-2 text-sm">
+                              {cleanOwnerOperator(p.ownerOperator)}
+                            </span>
                           )}
                         />
 
@@ -618,13 +725,14 @@ export function PlantComparisonDialog({
                           label="EPA Source Category"
                           plants={plants}
                           renderCell={(p) => (
-                            <Badge variant="outline">
-                              {p.sourceCategory}
-                            </Badge>
+                            <Badge variant="outline">{p.sourceCategory}</Badge>
                           )}
                         />
 
-                        <SectionRow title="2. Unit-Level Roster Comparison" colSpan={plants.length + 1} />
+                        <SectionRow
+                          title="2. Unit-Level Roster Comparison"
+                          colSpan={plants.length + 1}
+                        />
 
                         <MetricRow
                           label="Generator Units"
@@ -634,14 +742,20 @@ export function PlantComparisonDialog({
                               {p.units?.map((u) => (
                                 <div
                                   key={u.id}
-                                  className="flex items-center justify-between rounded-md border border-edge/60 bg-surface/60 px-2 py-1 text-sm"
+                                  className="border-edge/60 bg-surface/60 flex items-center justify-between rounded-md border px-2 py-1 text-sm"
                                 >
                                   <div className="flex items-center gap-1.5">
-                                    <span className="font-mono font-medium text-emerald-400">#{u.unitId}</span>
-                                    <span className="text-sm text-fg-muted">{u.unitType ?? "Combustion"}</span>
+                                    <span className="font-mono font-medium text-emerald-400">
+                                      #{u.unitId}
+                                    </span>
+                                    <span className="text-fg-muted text-sm">
+                                      {u.unitType ?? "Combustion"}
+                                    </span>
                                   </div>
-                                  <span className="font-mono text-sm font-medium text-fg">
-                                    {u.nameplateCapacityMW ? `${u.nameplateCapacityMW} MW` : "—"}
+                                  <span className="text-fg font-mono text-sm font-medium">
+                                    {u.nameplateCapacityMW
+                                      ? `${u.nameplateCapacityMW} MW`
+                                      : "—"}
                                   </span>
                                 </div>
                               ))}
@@ -657,11 +771,11 @@ export function PlantComparisonDialog({
           )}
         </div>
 
-        <DialogFooter className="mt-auto flex-col items-stretch justify-between gap-2 border-t border-edge pt-3 sm:flex-row sm:items-center">
+        <DialogFooter className="border-edge mt-auto flex-col items-stretch justify-between gap-2 border-t pt-3 sm:flex-row sm:items-center">
           <button
             type="button"
             onClick={onClearSelection}
-            className="cursor-pointer py-1 text-center text-xs text-fg-muted underline transition-colors hover:text-fg sm:text-left"
+            className="text-fg-muted hover:text-fg cursor-pointer py-1 text-center text-xs underline transition-colors sm:text-left"
           >
             Clear comparison selection ({plants.length} plants)
           </button>

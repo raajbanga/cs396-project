@@ -20,8 +20,8 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
     <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
       <StatTile
         variant="card"
-        title="Total Facilities"
-        icon={<Building2 className="h-4 w-4 text-fg-muted" />}
+        label="Total Facilities"
+        icon={<Building2 className="text-fg-muted h-4 w-4" />}
         value={
           isLoading ? "..." : (stats?.totalFacilities.toLocaleString() ?? "0")
         }
@@ -30,7 +30,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <StatTile
         variant="card"
-        title="Tracked Capacity"
+        label="Tracked Capacity"
         icon={<Zap className="h-4 w-4 text-amber-400" />}
         value={
           isLoading
@@ -48,7 +48,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <StatTile
         variant="card"
-        title="Reliability Grids"
+        label="Reliability Grids"
         icon={<Globe className="h-4 w-4 text-sky-400" />}
         value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
         subtext="ERCOT, SERC, WECC, etc."
@@ -56,7 +56,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <StatTile
         variant="card"
-        title="Annual CO₂"
+        label="Annual CO₂"
         icon={<Activity className="h-4 w-4 text-emerald-400" />}
         value={
           isLoading
@@ -71,7 +71,7 @@ export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
 
       <StatTile
         variant="card"
-        title="Audit Flags"
+        label="Audit Flags"
         icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
         value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}
         valueClassName="font-mono text-amber-400"

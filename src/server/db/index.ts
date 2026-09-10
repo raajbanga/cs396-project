@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/libsql";
 
 import { env } from "~/env";
 import * as schema from "./schema";
+import { resolveDatabaseUrl } from "./url";
 
 /**
  * Cache the database connection in development. This avoids creating a new connection on every HMR
@@ -16,10 +17,7 @@ const globalForDb = globalThis as unknown as {
 
 function getDbUrl() {
   if (env.DATABASE_URL.startsWith("file:")) {
-    const rawPath = env.DATABASE_URL.slice(5);
-    const resolvedPath = path.isAbsolute(rawPath)
-      ? rawPath
-      : path.resolve(process.cwd(), rawPath);
+    const resolvedPath = resolveDatabaseUrl(env.DATABASE_URL).slice(5);
 
     // In Vercel / AWS Lambda serverless environments, the deployment filesystem is read-only.
     // Copy the bundled SQLite database to /tmp (writable) on cold start so SQLite can acquire locks and journals.

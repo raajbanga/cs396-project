@@ -5,12 +5,10 @@ import { cn } from "~/lib/utils";
 
 export interface PlantRoleBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   roleInfo: PlantRoleInfo;
-  showIcon?: boolean;
 }
 
 export function PlantRoleBadge({
   roleInfo,
-  showIcon = true,
   className,
   ...props
 }: PlantRoleBadgeProps) {
@@ -32,14 +30,14 @@ export function PlantRoleBadge({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 text-xs font-medium select-none",
+        "inline-flex shrink-0 items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium whitespace-nowrap select-none",
         roleInfo.badgeClass,
         className,
       )}
       title={roleInfo.description}
       {...props}
     >
-      {showIcon && renderIcon()}
+      {renderIcon()}
       <span className="whitespace-nowrap">{roleInfo.badgeLabel}</span>
     </span>
   );

@@ -14,8 +14,11 @@ import {
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
 } from "~/lib/emissions-metrics";
+import {
+  hasAirQualityControls,
+  isOperatingStatus,
+} from "~/lib/plant-narrative";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { syncCampdAnnualEmissions } from "~/server/campd/client";
 import {
   buildFacilityFilterConditions,
   facilityCarbonIntensitySubquery,
@@ -31,13 +34,6 @@ import {
   facilities,
   units,
 } from "~/server/db/schema";
-
-const CURRENT_YEAR = new Date().getFullYear();
-const STALE_DATA_YEAR_THRESHOLD = CURRENT_YEAR - 2;
-const SYNC_YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1];
-
-/** In-process guard to avoid duplicate CAMPD syncs during a single server instance. */
-const syncedFacilityIds = new Set<number>();
 
 export const facilitiesRouter = createTRPCRouter({
   getStats: publicProcedure.query(async ({ ctx }) => {
@@ -208,7 +204,7 @@ export const facilitiesRouter = createTRPCRouter({
           )`.as("primary_fuels_raw"),
           carbonIntensityLbsMWh: facilityCarbonIntensitySubquery,
           controlledUnitsCount: sql<number>`(
-            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL)
+            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
           )`.as("controlled_units_count"),
           totalOperatingHours: sql<number>`(
             SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
@@ -276,42 +272,7 @@ export const facilitiesRouter = createTRPCRouter({
 
   getFacility: publicProcedure
     .input(z.object({ id: z.number() }))
-    .query(async ({ ctx, input }) => {
-      let facility = await fetchFacilityWithRelations(ctx.db, input.id);
-
-      if (!facility) return null;
-
-      const recordedYears = facility.annualRecords.map((r) => r.year);
-      const maxYear = recordedYears.length > 0 ? Math.max(...recordedYears) : 0;
-
-      if (
-        maxYear <= STALE_DATA_YEAR_THRESHOLD &&
-        !syncedFacilityIds.has(input.id)
-      ) {
-        syncedFacilityIds.add(input.id);
-        try {
-          for (const year of SYNC_YEARS) {
-            await syncCampdAnnualEmissions({
-              year,
-              facilityId: input.id,
-              maxPages: 1,
-            });
-          }
-
-          const refreshed = await fetchFacilityWithRelations(ctx.db, input.id);
-          if (refreshed) {
-            facility = refreshed;
-          }
-        } catch (err) {
-          console.error(
-            `Auto-fetch latest CAMPD data for facility ${input.id} failed:`,
-            err,
-          );
-        }
-      }
-
-      return facility;
-    }),
+    .query(({ ctx, input }) => fetchFacilityWithRelations(ctx.db, input.id)),
 
   compareFacilities: publicProcedure
     .input(z.object({ ids: z.array(z.number()).min(2).max(4) }))
@@ -330,6 +291,7 @@ export const facilitiesRouter = createTRPCRouter({
         let so2ControlledUnits = 0;
         let noxControlledUnits = 0;
         let pmControlledUnits = 0;
+        let controlledUnitsCount = 0;
         const primaryFuels = new Set<string>();
         const secondaryFuels = new Set<string>();
 
@@ -337,11 +299,11 @@ export const facilitiesRouter = createTRPCRouter({
           totalCapacityMW += u.nameplateCapacityMW ?? 0;
           if (u.primaryFuel) primaryFuels.add(u.primaryFuel);
           if (u.secondaryFuel) secondaryFuels.add(u.secondaryFuel);
-          if ((u.operatingStatus ?? "").toLowerCase().includes("op"))
-            operatingUnitsCount++;
+          if (isOperatingStatus(u.operatingStatus)) operatingUnitsCount++;
           if (u.so2Controls) so2ControlledUnits++;
           if (u.noxControls) noxControlledUnits++;
           if (u.pmControls) pmControlledUnits++;
+          if (hasAirQualityControls(u)) controlledUnitsCount++;
         }
 
         const years = Array.from(
@@ -392,6 +354,7 @@ export const facilitiesRouter = createTRPCRouter({
           so2ControlledUnits,
           noxControlledUnits,
           pmControlledUnits,
+          controlledUnitsCount,
           units: plant.units,
         };
       });

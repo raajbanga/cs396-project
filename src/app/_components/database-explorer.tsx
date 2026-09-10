@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { Globe, Scale, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
@@ -22,7 +23,7 @@ export function DatabaseExplorer() {
 
   // Consolidated Filter State
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [selectedState, setSelectedState] = useState<string>("ALL");
   const [selectedFuel, setSelectedFuel] = useState<string>("ALL");
   const [selectedNerc, setSelectedNerc] = useState<string>("ALL");
@@ -36,15 +37,6 @@ export function DatabaseExplorer() {
   // Consolidated Plant Comparison State
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
-
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   const handleSortChange = (field: "name" | "id" | "capacity" | "co2") => {
     if (sortBy === field) {
@@ -76,7 +68,6 @@ export function DatabaseExplorer() {
 
   const resetFilters = () => {
     setSearch("");
-    setDebouncedSearch("");
     setSelectedState("ALL");
     setSelectedFuel("ALL");
     setSelectedNerc("ALL");
@@ -119,6 +110,13 @@ export function DatabaseExplorer() {
 
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
 
+  const filters = {
+    search: deferredSearch,
+    stateCode: selectedState,
+    primaryFuel: selectedFuel,
+    nercRegion: selectedNerc,
+  };
+
   const {
     data: facilitiesData,
     isLoading: facilitiesLoading,
@@ -127,10 +125,7 @@ export function DatabaseExplorer() {
     {
       page,
       pageSize,
-      search: debouncedSearch,
-      stateCode: selectedState,
-      primaryFuel: selectedFuel,
-      nercRegion: selectedNerc,
+      ...filters,
       sortBy,
       sortDir,
     },
@@ -140,17 +135,10 @@ export function DatabaseExplorer() {
   );
 
   const { data: mapFacilities, isLoading: mapFacilitiesLoading } =
-    api.facilities.getMapFacilities.useQuery(
-      {
-        search: debouncedSearch,
-        stateCode: selectedState,
-        primaryFuel: selectedFuel,
-        nercRegion: selectedNerc,
-      },
-      {
-        placeholderData: (prev) => prev,
-      },
-    );
+    api.facilities.getMapFacilities.useQuery(filters, {
+      enabled: activeTab === "map",
+      placeholderData: (prev) => prev,
+    });
 
   const { data: selectedFacility, isLoading: facilityDetailLoading } =
     api.facilities.getFacility.useQuery(
@@ -202,50 +190,35 @@ export function DatabaseExplorer() {
           {/* Right Actions */}
           <div className="flex items-center gap-2">
             {/* View Tab Switcher */}
-            <div className="border-edge/80 bg-surface/60 flex rounded-lg border p-0.5 text-xs sm:text-sm">
-              <button
-                type="button"
-                onClick={() => setActiveTab("explorer")}
-                className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition-all sm:px-3 sm:text-sm ${
-                  activeTab === "explorer"
-                    ? "bg-surface-2 text-fg shadow-xs"
-                    : "text-fg-muted hover:text-fg"
-                }`}
-              >
-                Facilities
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("map")}
-                className={`flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all sm:gap-1.5 sm:px-3 sm:text-sm ${
-                  activeTab === "map"
-                    ? "bg-surface-2 text-fg shadow-xs"
-                    : "text-fg-muted hover:text-fg"
-                }`}
-              >
-                <Globe className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Map</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("audit")}
-                className={`flex cursor-pointer items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-all sm:gap-1.5 sm:px-3 sm:text-sm ${
-                  activeTab === "audit"
-                    ? "bg-surface-2 text-fg shadow-xs"
-                    : "text-fg-muted hover:text-fg"
-                }`}
-              >
-                <span>Audits</span>
-                {(stats?.totalAnomalies ?? 0) > 0 && (
-                  <Badge
-                    variant="warning"
-                    className="px-1.5 py-0 font-mono text-xs"
-                  >
-                    {stats?.totalAnomalies}
-                  </Badge>
-                )}
-              </button>
-            </div>
+            <SegmentedControl
+              value={activeTab}
+              onChange={setActiveTab}
+              className="rounded-lg"
+              options={[
+                { value: "explorer", label: "Facilities" },
+                {
+                  value: "map",
+                  label: "Map",
+                  icon: <Globe className="h-3.5 w-3.5 text-emerald-400" />,
+                },
+                {
+                  value: "audit",
+                  label: (
+                    <>
+                      Audits{" "}
+                      {(stats?.totalAnomalies ?? 0) > 0 && (
+                        <Badge
+                          variant="warning"
+                          className="px-1.5 py-0 font-mono text-xs"
+                        >
+                          {stats?.totalAnomalies}
+                        </Badge>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
 
             {/* Theme Toggle */}
             <ThemeToggle />
@@ -278,7 +251,10 @@ export function DatabaseExplorer() {
           <div className="space-y-4">
             <FacilityFilters
               search={search}
-              onSearchChange={setSearch}
+              onSearchChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
               selectedState={selectedState}
               onStateChange={handleStateChange}
               selectedNerc={selectedNerc}

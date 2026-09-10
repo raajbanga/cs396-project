@@ -2,8 +2,7 @@ import * as React from "react";
 import { cn } from "~/lib/utils";
 
 export interface StatTileProps extends React.HTMLAttributes<HTMLDivElement> {
-  label?: string;
-  title?: string;
+  label: string;
   value: React.ReactNode;
   icon?: React.ReactNode;
   subtext?: React.ReactNode;
@@ -13,7 +12,6 @@ export interface StatTileProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function StatTile({
   label,
-  title,
   value,
   icon,
   subtext,
@@ -22,8 +20,6 @@ export function StatTile({
   className,
   ...props
 }: StatTileProps) {
-  const displayTitle = title ?? label;
-
   return (
     <div
       className={cn(
@@ -35,15 +31,15 @@ export function StatTile({
       )}
       {...props}
     >
-      <div className="flex items-center justify-between gap-1 text-xs font-medium tracking-wider text-fg-muted uppercase">
-        <span className="truncate">{displayTitle}</span>
+      <div className="text-fg-muted flex items-center justify-between gap-1 text-xs font-medium tracking-wider uppercase">
+        <span className="truncate">{label}</span>
         {icon && <span className="shrink-0 opacity-80">{icon}</span>}
       </div>
       <div
         className={cn(
           variant === "card"
-            ? "mt-1.5 text-2xl font-semibold tracking-tight text-fg sm:text-3xl"
-            : "mt-1.5 font-mono text-base font-semibold text-fg sm:text-lg",
+            ? "text-fg mt-1.5 text-2xl font-semibold tracking-tight sm:text-3xl"
+            : "text-fg mt-1.5 font-mono text-base font-semibold sm:text-lg",
           valueClassName,
         )}
       >
@@ -52,7 +48,7 @@ export function StatTile({
       {subtext && (
         <div
           className={cn(
-            "mt-1 truncate text-fg-muted",
+            "text-fg-muted mt-1 truncate",
             variant === "card" ? "text-sm" : "text-xs",
           )}
           title={typeof subtext === "string" ? subtext : undefined}

@@ -15,6 +15,21 @@ export interface PlantRoleInfo {
   description: string;
 }
 
+export function isOperatingStatus(status: string | null | undefined) {
+  return /^operating\b/i.test(status?.trim() ?? "");
+}
+
+export function hasAirQualityControls(unit: {
+  so2Controls?: string | null;
+  noxControls?: string | null;
+  pmControls?: string | null;
+  hgControls?: string | null;
+}) {
+  return Boolean(
+    unit.so2Controls ?? unit.noxControls ?? unit.pmControls ?? unit.hgControls,
+  );
+}
+
 /**
  * Determine the plain-English grid role of a power plant
  */

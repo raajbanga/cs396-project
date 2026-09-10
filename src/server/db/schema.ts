@@ -191,4 +191,3 @@ export const dataAuditLogsRelations = relations(dataAuditLogs, ({ one }) => ({
 
 export type NewAnnualRecord = typeof annualRecords.$inferInsert;
 export type NewDataAuditLog = typeof dataAuditLogs.$inferInsert;
-

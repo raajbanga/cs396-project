@@ -9,7 +9,6 @@ export const facilityFilterSchema = z.object({
   stateCode: z.string().optional(),
   primaryFuel: z.string().optional(),
   nercRegion: z.string().optional(),
-  sourceCategory: z.string().optional(),
 });
 
 export type FacilityFilterInput = z.infer<typeof facilityFilterSchema>;
@@ -45,10 +44,6 @@ export function buildFacilityFilterConditions(
 
   if (filter?.nercRegion && filter.nercRegion !== "ALL") {
     conditions.push(eq(facilities.nercRegion, filter.nercRegion));
-  }
-
-  if (filter?.sourceCategory && filter.sourceCategory !== "ALL") {
-    conditions.push(eq(facilities.sourceCategory, filter.sourceCategory));
   }
 
   if (filter?.search && filter.search.trim() !== "") {
