@@ -363,10 +363,10 @@ flowchart LR
 * **What Part of the Table It Uses**:
   * Joins `data_audit_logs` + `annual_records` + `facilities` + `units`.
   * Extracts the facility name, unit ID, reporting year, violation flag type, severity (`ERROR` / `WARN`), and plain-English diagnostic description.
-* **The Physics Rules We Check**:
-  1. **`ZERO_EMISSIONS_HIGH_HEAT`**: A fossil fuel generator consumed more than 1,000 MMBtu of heat energy, but reported 0.0 tons of CO₂ emissions (physically impossible when burning hydrocarbon fuels).
-  2. **`PHANTOM_GENERATION`**: A generator produced electricity ($> 0\text{ MWh}$), but recorded $0.0$ hours of operating time.
-  3. **`EXTREME_HEAT_RATE`**: The calculated heat rate falls outside standard thermodynamic limits ($< 5.0$ or $> 25.0\text{ MMBtu/MWh}$), indicating faulty generation or fuel telemetry.
+* **The Physics Rules We Check** (enforced via `AUDIT_THRESHOLDS` in `src/server/campd/client.ts`):
+  1. **`ZERO_EMISSIONS_HIGH_HEAT`** (`severity: "ERROR"`): A fossil fuel generator consumed heat energy above the threshold (`heatInputMMBtu > 1,000 MMBtu`), but reported 0.0 tons of CO₂ emissions (`co2MassTons === 0`), which is physically impossible when combusting hydrocarbon fuels.
+  2. **`PHANTOM_GENERATION`** (`severity: "ERROR"`): A generator produced electricity (`grossGenerationMWh > 0 MWh`), but recorded 0.0 hours of operating time (`operatingHours === 0`).
+  3. **`EXTREME_HEAT_RATE`** (`severity: "WARN"`): The calculated heat rate falls outside standard thermodynamic limits (< 5.0 or > 25.0 MMBtu/MWh: `heatRateMMBtuMWh < 5.0 || heatRateMMBtuMWh > 25.0`), indicating faulty generation or fuel telemetry.
 * **Why It’s Built This Way**: Isolates suspicious or corrupt data points into a dedicated review screen with human-friendly descriptions rather than silently corrupting fleet-wide averages.
 
 ---

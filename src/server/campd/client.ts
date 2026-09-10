@@ -216,10 +216,27 @@ export interface AnomalyInput {
   heatRateMMBtuMWh: number | null;
 }
 
+/**
+ * Physical Sanity Audit Thresholds (PRD Section 3.3):
+ * Standard thermodynamic and operational bounds for CEMS data.
+ */
+export const AUDIT_THRESHOLDS = {
+  ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
+  PHANTOM_GENERATION_MIN_MWH: 0,
+  HEAT_RATE_MIN_MMBTU_MWH: 5.0,
+  HEAT_RATE_MAX_MMBTU_MWH: 25.0,
+} as const;
+
+export type AuditFlagType =
+  | "ZERO_EMISSIONS_HIGH_HEAT"
+  | "PHANTOM_GENERATION"
+  | "EXTREME_HEAT_RATE";
+
+export type AuditSeverity = "WARN" | "ERROR";
+
 export interface AnomalyFlag {
-  flagType:
-    "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
-  severity: "WARN" | "ERROR";
+  flagType: AuditFlagType;
+  severity: AuditSeverity;
   details: string;
 }
 
@@ -232,7 +249,10 @@ export function evaluatePhysicalSanityRules(
   const flags: AnomalyFlag[] = [];
 
   // Rule 1: ZERO_EMISSIONS_HIGH_HEAT
-  if (input.heatInputMMBtu > 1000 && input.co2MassTons === 0) {
+  if (
+    input.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
+    input.co2MassTons === 0
+  ) {
     flags.push({
       flagType: "ZERO_EMISSIONS_HIGH_HEAT",
       severity: "ERROR",
@@ -241,7 +261,10 @@ export function evaluatePhysicalSanityRules(
   }
 
   // Rule 2: PHANTOM_GENERATION
-  if (input.grossGenerationMWh > 0 && input.operatingHours === 0) {
+  if (
+    input.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
+    input.operatingHours === 0
+  ) {
     flags.push({
       flagType: "PHANTOM_GENERATION",
       severity: "ERROR",
@@ -252,12 +275,13 @@ export function evaluatePhysicalSanityRules(
   // Rule 3: EXTREME_HEAT_RATE
   if (
     input.heatRateMMBtuMWh !== null &&
-    (input.heatRateMMBtuMWh > 25.0 || input.heatRateMMBtuMWh < 5.0)
+    (input.heatRateMMBtuMWh > AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH ||
+      input.heatRateMMBtuMWh < AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH)
   ) {
     flags.push({
       flagType: "EXTREME_HEAT_RATE",
       severity: "WARN",
-      details: `Heat rate of ${input.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (5.0 - 25.0).`,
+      details: `Heat rate of ${input.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH.toFixed(1)} - ${AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH.toFixed(1)}).`,
     });
   }
 
@@ -316,8 +340,8 @@ export async function syncCampdAnnualEmissions(options: SyncOptions) {
   const anomaliesSummary: Array<{
     facilityId: number;
     unitId: string;
-    flagType: string;
-    severity: string;
+    flagType: AuditFlagType;
+    severity: AuditSeverity;
     details: string;
   }> = [];
 
