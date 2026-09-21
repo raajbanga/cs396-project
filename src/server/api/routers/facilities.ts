@@ -19,6 +19,7 @@ import {
   isOperatingStatus,
 } from "~/lib/plant-narrative";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { fetchGranularEmissionsForFacility } from "~/server/campd/client";
 import {
   buildFacilityFilterConditions,
   facilityCarbonIntensitySubquery,
@@ -386,5 +387,21 @@ export const facilitiesRouter = createTRPCRouter({
         .limit(input.limit);
 
       return logs;
+    }),
+
+  getGranularEmissions: publicProcedure
+    .input(
+      z.object({
+        facilityId: z.number(),
+        granularity: z
+          .enum(["hourly", "daily", "weekly", "monthly", "yearly"])
+          .default("monthly"),
+        year: z.number().default(2022),
+        date: z.string().optional(),
+        unitId: z.string().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      return fetchGranularEmissionsForFacility(input);
     }),
 });

@@ -37,6 +37,7 @@ export const facilities = sqliteTable(
 export const facilitiesRelations = relations(facilities, ({ many }) => ({
   units: many(units),
   annualRecords: many(annualRecords),
+  granularRecords: many(granularRecords),
 }));
 
 /**
@@ -80,6 +81,7 @@ export const unitsRelations = relations(units, ({ one, many }) => ({
     references: [facilities.id],
   }),
   annualRecords: many(annualRecords),
+  granularRecords: many(granularRecords),
 }));
 
 /**
@@ -102,6 +104,7 @@ export const datasets = sqliteTable("datasets", {
 
 export const datasetsRelations = relations(datasets, ({ many }) => ({
   annualRecords: many(annualRecords),
+  granularRecords: many(granularRecords),
 }));
 
 /**
@@ -189,5 +192,63 @@ export const dataAuditLogsRelations = relations(dataAuditLogs, ({ one }) => ({
   }),
 }));
 
+/**
+ * Granular Records: Multi-resolution apportioned emissions (Hourly, Weekly, Monthly, Yearly).
+ * Sourced dynamically from EPA CAMPD API or local aggregations.
+ */
+export const granularRecords = sqliteTable(
+  "granular_records",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    datasetId: text("dataset_id").references(() => datasets.id, {
+      onDelete: "cascade",
+    }),
+    facilityId: integer("facility_id")
+      .notNull()
+      .references(() => facilities.id, { onDelete: "cascade" }),
+    unitInternalId: text("unit_internal_id").references(() => units.id, {
+      onDelete: "cascade",
+    }),
+    granularity: text("granularity").notNull(), // "hourly" | "weekly" | "monthly" | "yearly"
+    periodStart: text("period_start").notNull(), // ISO datetime or date
+    periodEnd: text("period_end"),
+    operatingHours: real("operating_hours").default(0.0).notNull(),
+    grossGenerationMWh: real("gross_generation_mwh").default(0.0).notNull(),
+    heatInputMMBtu: real("heat_input_mmbtu").default(0.0).notNull(),
+    co2MassTons: real("co2_mass_tons").default(0.0).notNull(),
+    so2MassTons: real("so2_mass_tons").default(0.0).notNull(),
+    noxMassTons: real("nox_mass_tons").default(0.0).notNull(),
+    co2IntensityLbsMWh: real("co2_intensity_lbs_mwh"),
+    heatRateMMBtuMWh: real("heat_rate_mmbtu_mwh"),
+  },
+  (t) => [
+    index("granular_record_facility_gran_idx").on(t.facilityId, t.granularity),
+    index("granular_record_period_start_idx").on(t.periodStart),
+    index("granular_record_unit_gran_idx").on(t.unitInternalId, t.granularity),
+  ],
+);
+
+export const granularRecordsRelations = relations(
+  granularRecords,
+  ({ one }) => ({
+    facility: one(facilities, {
+      fields: [granularRecords.facilityId],
+      references: [facilities.id],
+    }),
+    unit: one(units, {
+      fields: [granularRecords.unitInternalId],
+      references: [units.id],
+    }),
+    dataset: one(datasets, {
+      fields: [granularRecords.datasetId],
+      references: [datasets.id],
+    }),
+  }),
+);
+
 export type NewAnnualRecord = typeof annualRecords.$inferInsert;
 export type NewDataAuditLog = typeof dataAuditLogs.$inferInsert;
+export type NewGranularRecord = typeof granularRecords.$inferInsert;
+export type GranularRecord = typeof granularRecords.$inferSelect;

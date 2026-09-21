@@ -11,33 +11,37 @@ Built for **CS396 Phase 1 Core**.
 1. **Relational Generation & Emissions Registry**:
    - Normalized database schema supporting **1,582 facilities** and **5,030 generation units** across all 50 US states, DC, and Puerto Rico.
    - Comprehensive facility categorization by NERC Reliability Regions (ERCOT, SERC, WECC, RFC, MRO, NPCC, SPP, FRCC), Source Categories (Electric Utility, Cogeneration, Small Power Producer, etc.), and Owner/Operators.
-   - Granular unit attributes including nameplate capacity (MW), operating status, commercial operation dates, primary/secondary fuels, and environmental control systems (NOx, SO2, PM, Hg).
+   - Granular unit attributes including nameplate capacity (MW), operating status, commercial operation dates, primary/secondary fuels, and environmental control systems (NOₓ, SO₂, PM, Hg).
 
 2. **EPA CAMPD API Live Ingestion Pipeline**:
    - Direct integration with EPA Clean Air Markets Program API (`/emissions-mgmt/emissions/apportioned/annual`) using API keys.
-   - Batching and high-throughput bulk upsert pipeline syncing operating hours, gross generation (MWh), heat input (MMBtu), and mass emissions (tons of CO2, SO2, NOx).
+   - Batching and high-throughput bulk upsert pipeline syncing operating hours, gross generation (MWh), heat input (MMBtu), and mass emissions (tons of CO₂, SO₂, NOₓ).
    - Dynamic server-side computation of derived metrics:
      - **Carbon Intensity**: $\text{lbs CO}_2 / \text{MWh} = \frac{\text{CO}_2\ (\text{tons}) \times 2000}{\text{Gross Generation}\ (\text{MWh})}$
      - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
 
 3. **Automated Physical Sanity & Data Quality Auditing**:
    - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `client.ts`):
-     - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO2 emissions.
+     - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO₂ emissions.
      - `PHANTOM_GENERATION` (`ERROR`): Generating power (> 0 MWh) with 0 operating hours recorded.
      - `EXTREME_HEAT_RATE` (`WARN`): Units operating outside thermodynamic boundaries (< 5.0 or > 25.0 MMBtu/MWh).
    - Dedicated audit log explorer with severity tracking (`WARN` | `ERROR`) and plain-language diagnostic descriptions.
 
 4. **Geospatial Mapping & Interactive 3D Globe**:
    - Seamless dual-mode geospatial visualization of all 1,582 facilities across the US grid.
-   - **2D Leaflet Map**: Interactive slippy map utilizing dark CARTO / OpenStreetMap basemaps with hardware-accelerated circle markers dynamically scaled by nameplate capacity (MW) or CO2 mass (tons) and color-coded by fuel type (Natural Gas, Coal, Oil, Renewables/Nuclear).
+   - **2D Leaflet Map**: Interactive slippy map utilizing dark CARTO / OpenStreetMap basemaps with hardware-accelerated circle markers dynamically scaled by nameplate capacity (MW) or CO₂ mass (tons) and color-coded by fuel type (Natural Gas, Coal, Oil, Renewables/Nuclear).
    - **3D D3 Orthographic Globe**: Canvas-rendered interactive globe powered by D3.js and TopoJSON (`us-states-10m` and `world-land-110m`), supporting drag rotation, momentum panning, zoom controls, auto-spin toggle, and responsive map pins.
-   - Synchronized state/fuel filtering, metric switching (Generation Capacity vs. Gross CO2 Tonnage), and click-to-inspect facility modals.
+   - Synchronized state/fuel filtering, metric switching (Generation Capacity vs. Gross CO₂ Tonnage), and click-to-inspect facility modals.
 
 5. **Head-to-Head Plant Benchmarking**:
    - Side-by-side comparative analysis of 2 to 4 power plants.
    - Direct evaluation of grid region, generation capacity, fleet fuel diversity, gross carbon tonnage, carbon intensity, and thermal efficiency.
 
-6. **Clean, Modern UI (Tailwind CSS v4 & shadcn/ui)**:
+6. **Granular Temporal Emissions Telemetry**:
+   - High-resolution continuous emissions intelligence across Hourly, Daily, Weekly, Monthly, and Yearly intervals.
+   - 100% direct querying of EPA CAMPD apportioned endpoints in real time with zero estimations.
+
+7. **Clean, Modern UI (Tailwind CSS v4 & shadcn/ui)**:
    - Built with DRY, accessible component primitives (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`).
    - Clean dark and light aesthetic with zero distracting emoticons, fully powered by SVG icons from `lucide-react`.
 
@@ -62,14 +66,17 @@ Bundled TopoJSON assets come from the BSD-licensed
 
 ## Database Architecture
 
-Five normalized SQLite tables (via LibSQL / Turso), managed with Drizzle ORM. For column-level usage, view mappings, and ingestion details, see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+Six normalized SQLite tables (via LibSQL / Turso), managed with Drizzle ORM. For column-level usage, view mappings, and ingestion details, see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
 
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
     FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
+    FACILITIES ||--o{ GRANULAR_RECORDS : "tracks"
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
+    UNITS ||--o{ GRANULAR_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
+    DATASETS ||--o{ GRANULAR_RECORDS : "originates"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
 
     FACILITIES {
@@ -97,7 +104,7 @@ erDiagram
         real max_hourly_hi_rate "Max heat input rating (MMBtu/hr)"
         real nameplate_capacity_mw "Electric generator size in Megawatts"
         text so2_controls "Flue gas desulfurization / scrubbers"
-        text nox_controls "Selective catalytic reduction / low-NOx burners"
+        text nox_controls "Selective catalytic reduction / low-NOₓ burners"
         text pm_controls "Electrostatic precipitators / fabric filters"
         text hg_controls "Activated carbon injection"
         text program_code "Federal regulatory programs (ARP, CSNOX, MATS)"
@@ -123,11 +130,29 @@ erDiagram
         real operating_hours "Hours the unit ran during the year"
         real gross_generation_mwh "Total electrical generation"
         real heat_input_mmbtu "Total thermal fuel consumed"
-        real co2_mass_tons "Mass of CO2 emitted"
-        real so2_mass_tons "Mass of SO2 emitted"
-        real nox_mass_tons "Mass of NOx emitted"
+        real co2_mass_tons "Mass of CO₂ emitted"
+        real so2_mass_tons "Mass of SO₂ emitted"
+        real nox_mass_tons "Mass of NOₓ emitted"
         real co2_intensity_lbs_mwh "Stored derived intensity"
         real heat_rate_mmbtu_mwh "Stored derived heat rate"
+    }
+
+    GRANULAR_RECORDS {
+        text id PK "Composite: unitId_granularity_period"
+        text dataset_id FK "References datasets.id"
+        integer facility_id FK "References facilities.id"
+        text unit_internal_id FK "References units.id"
+        text granularity "HOURLY | DAILY | WEEKLY | MONTHLY | YEARLY"
+        text period_start "ISO Timestamp or Date start"
+        text period_end "ISO Timestamp or Date end"
+        real operating_hours "Hours unit operated in period"
+        real gross_generation_mwh "Electrical generation in period"
+        real heat_input_mmbtu "Fuel consumed in period"
+        real co2_mass_tons "CO₂ mass in period"
+        real so2_mass_tons "SO₂ mass in period"
+        real nox_mass_tons "NOₓ mass in period"
+        real co2_intensity_lbs_mwh "Period carbon intensity"
+        real heat_rate_mmbtu_mwh "Period heat rate efficiency"
     }
 
     DATA_AUDIT_LOGS {

@@ -17,7 +17,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "border-edge bg-canvas text-fg placeholder:text-fg-muted hover:border-edge/70 focus:border-edge flex w-full items-center justify-between rounded-lg border text-sm transition-colors focus:ring-1 focus:ring-emerald-500/40 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "border-edge bg-canvas text-fg placeholder:text-fg-muted hover:border-edge/70 focus:border-edge flex w-full items-center justify-between rounded-lg border text-sm transition-colors focus:ring-1 focus:ring-emerald-500/50 focus:outline-none focus:ring-inset disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       sizeVariant === "sm"
         ? "h-7 px-2.5 py-1 text-xs"
         : "h-9 px-3 py-2 text-sm",
@@ -76,7 +76,7 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 border-edge bg-surface text-fg relative z-50 max-h-72 min-w-[8rem] overflow-hidden rounded-lg border shadow-2xl backdrop-blur-md",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 border-edge bg-surface text-fg relative z-[10001] max-h-72 min-w-[8rem] overflow-hidden rounded-lg border shadow-2xl backdrop-blur-md",
         position === "popper" &&
           "data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
         className,
