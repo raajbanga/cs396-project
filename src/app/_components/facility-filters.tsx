@@ -60,18 +60,13 @@ function FilterSelects({
   onResetFilters,
 }: FilterSelectsProps) {
   const isDrawer = variant === "drawer";
-  const triggerClass = isDrawer
-    ? "h-9 w-full border-edge bg-surface/80 text-xs"
-    : "h-9 border-edge bg-surface/60";
-  const fuelTriggerClass = isDrawer
-    ? "col-span-2 h-9 w-full border-edge bg-surface/80 text-xs"
-    : "h-9 w-[135px] border-edge bg-surface/60";
 
   return (
     <>
       <Select value={selectedState} onValueChange={onStateChange}>
         <SelectTrigger
-          className={isDrawer ? triggerClass : `${triggerClass} w-[130px]`}
+          sizeVariant={isDrawer ? "drawer" : "toolbar"}
+          className={isDrawer ? undefined : "w-[130px]"}
         >
           <SelectValue placeholder="All States" />
         </SelectTrigger>
@@ -91,7 +86,8 @@ function FilterSelects({
 
       <Select value={selectedNerc} onValueChange={onNercChange}>
         <SelectTrigger
-          className={isDrawer ? triggerClass : `${triggerClass} w-[135px]`}
+          sizeVariant={isDrawer ? "drawer" : "toolbar"}
+          className={isDrawer ? undefined : "w-[135px]"}
         >
           <SelectValue placeholder="All Grids" />
         </SelectTrigger>
@@ -106,7 +102,10 @@ function FilterSelects({
       </Select>
 
       <Select value={selectedFuel} onValueChange={onFuelChange}>
-        <SelectTrigger className={fuelTriggerClass}>
+        <SelectTrigger
+          sizeVariant={isDrawer ? "drawer" : "toolbar"}
+          className={isDrawer ? "col-span-2" : "w-[135px]"}
+        >
           <SelectValue placeholder="All Fuels" />
         </SelectTrigger>
         <SelectContent>

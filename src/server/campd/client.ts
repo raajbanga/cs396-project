@@ -602,7 +602,7 @@ const MONTH_NAMES = [
   "December",
 ];
 
-export async function fetchCampdHourlyEmissions(params: {
+async function fetchCampdHourlyEmissions(params: {
   facilityId: number;
   beginDate: string;
   endDate: string;
@@ -637,7 +637,7 @@ export async function fetchCampdHourlyEmissions(params: {
   }
 }
 
-export async function fetchCampdDailyEmissions(params: {
+async function fetchCampdDailyEmissions(params: {
   facilityId: number;
   beginDate: string;
   endDate: string;
@@ -677,7 +677,7 @@ export async function fetchCampdDailyEmissions(params: {
   }
 }
 
-export async function fetchCampdMonthlyEmissions(params: {
+async function fetchCampdMonthlyEmissions(params: {
   facilityId: number;
   year: number;
 }): Promise<Record<string, unknown>[]> {

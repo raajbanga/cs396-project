@@ -309,8 +309,8 @@ export const facilitiesRouter = createTRPCRouter({
 
         const years = Array.from(
           new Set(plant.annualRecords.map((r) => r.year)),
-        );
-        const latestYear = years.length > 0 ? Math.max(...years) : null;
+        ).sort((a, b) => b - a);
+        const latestYear = years.length > 0 ? years[0]! : null;
         const targetRecords =
           latestYear !== null
             ? plant.annualRecords.filter((r) => r.year === latestYear)
@@ -356,6 +356,7 @@ export const facilitiesRouter = createTRPCRouter({
           noxControlledUnits,
           pmControlledUnits,
           controlledUnitsCount,
+          availableYears: years,
           units: plant.units,
         };
       });

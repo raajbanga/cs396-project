@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildYearlyRollups } from "./annual-rollups";
+import { buildDateOptionsForYear, clampDateToYear } from "./date-options";
 import {
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
@@ -36,6 +38,46 @@ void test("unit status and controls use shared rules", () => {
   assert.equal(isOperatingStatus("Non-Operating"), false);
   assert.equal(hasAirQualityControls({ pmControls: "Baghouse" }), true);
   assert.equal(hasAirQualityControls({}), false);
+});
+
+void test("date options cover every day in a reporting year", () => {
+  const options2024 = buildDateOptionsForYear(2024);
+  assert.equal(options2024.length, 366);
+  assert.equal(options2024[0]?.value, "2024-01-01");
+  assert.equal(clampDateToYear("2023-03-10", 2024), "2024-03-10");
+  assert.equal(clampDateToYear("2024-02-29", 2025), "2025-07-15");
+});
+
+void test("yearly rollups aggregate records by reporting year", () => {
+  const rollups = buildYearlyRollups([
+    {
+      id: "rec-1",
+      year: 2022,
+      grossGenerationMWh: 100,
+      co2MassTons: 50,
+      so2MassTons: 0,
+      noxMassTons: 0,
+      heatInputMMBtu: 800,
+      operatingHours: 4000,
+    },
+    {
+      id: "rec-2",
+      year: 2022,
+      grossGenerationMWh: 50,
+      co2MassTons: 25,
+      so2MassTons: 0,
+      noxMassTons: 0,
+      heatInputMMBtu: 400,
+      operatingHours: 2000,
+    },
+  ]);
+
+  assert.equal(rollups.length, 1);
+  assert.equal(rollups[0]?.year, 2022);
+  assert.equal(rollups[0]?.grossGenerationMWh, 150);
+  assert.equal(rollups[0]?.co2MassTons, 75);
+  assert.equal(rollups[0]?.unitCount, 2);
+  assert.equal(rollups[0]?.co2IntensityLbsMWh, 1000);
 });
 
 void test("granular temporal intensity calculations adhere to bounds", () => {

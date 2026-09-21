@@ -40,7 +40,7 @@ export function MetricBar({
       </div>
 
       {percentage !== undefined && (
-        <div className="bg-surface-2 h-1.5 w-full max-w-[160px] overflow-hidden rounded-full">
+        <div className="bg-surface-2 h-1.5 w-full max-w-[160px] overflow-hidden rounded-full 2xl:max-w-[240px]">
           <div
             className={cn(
               "h-full rounded-full transition-all duration-300",

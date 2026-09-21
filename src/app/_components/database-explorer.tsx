@@ -16,7 +16,13 @@ import { FacilityFilters } from "./facility-filters";
 import { PlantComparisonDialog } from "./plant-comparison-dialog";
 import { StatMetrics } from "./stat-metrics";
 
-export function DatabaseExplorer() {
+interface DatabaseExplorerProps {
+  initialAnomalyCount?: number;
+}
+
+export function DatabaseExplorer({
+  initialAnomalyCount = 0,
+}: DatabaseExplorerProps) {
   const [activeTab, setActiveTab] = useState<"explorer" | "map" | "audit">(
     "explorer",
   );
@@ -107,6 +113,8 @@ export function DatabaseExplorer() {
   // tRPC Client queries
   const { data: stats, isLoading: statsLoading } =
     api.facilities.getStats.useQuery();
+
+  const anomalyCount = stats?.totalAnomalies ?? initialAnomalyCount;
 
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
 
@@ -206,12 +214,12 @@ export function DatabaseExplorer() {
                   label: (
                     <>
                       Audits{" "}
-                      {(stats?.totalAnomalies ?? 0) > 0 && (
+                      {anomalyCount > 0 && (
                         <Badge
                           variant="warning"
                           className="px-1.5 py-0 font-mono text-xs"
                         >
-                          {stats?.totalAnomalies}
+                          {anomalyCount}
                         </Badge>
                       )}
                     </>
