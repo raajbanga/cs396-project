@@ -36,15 +36,29 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
   );
 }
 
+export type DialogContentSize = "default" | "inspect" | "compare";
+
+const DIALOG_CONTENT_SIZE_CLASS: Record<DialogContentSize, string> = {
+  default: "max-w-4xl",
+  inspect: "max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl",
+  compare: "max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[min(96vw,90rem)]",
+};
+
+export type DialogContentProps = React.HTMLAttributes<HTMLDivElement> & {
+  size?: DialogContentSize;
+};
+
 export function DialogContent({
   className,
   children,
+  size = "default",
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: DialogContentProps) {
   return (
     <div
       className={cn(
-        "animate-in zoom-in-95 border-edge bg-surface relative flex h-[90dvh] max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border p-3.5 shadow-2xl backdrop-blur-md duration-150 sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:p-6",
+        "animate-in zoom-in-95 border-edge bg-surface relative flex h-[90dvh] max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border p-3.5 shadow-2xl backdrop-blur-md duration-150 sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:p-6",
+        DIALOG_CONTENT_SIZE_CLASS[size],
         className,
       )}
       onClick={(e) => e.stopPropagation()}

@@ -11,16 +11,19 @@ const SelectValue = SelectPrimitive.Value;
 const SelectTrigger = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> & {
-    sizeVariant?: "default" | "sm";
+    sizeVariant?: "default" | "sm" | "toolbar" | "drawer";
   }
 >(({ className, children, sizeVariant = "default", ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "border-edge bg-canvas text-fg placeholder:text-fg-muted hover:border-edge/70 focus:border-edge flex w-full items-center justify-between rounded-lg border text-sm transition-colors focus:ring-1 focus:ring-emerald-500/50 focus:outline-none focus:ring-inset disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
-      sizeVariant === "sm"
-        ? "h-7 px-2.5 py-1 text-xs"
-        : "h-9 px-3 py-2 text-sm",
+      "border-edge text-fg placeholder:text-fg-muted hover:border-edge/70 focus:border-edge flex w-full items-center justify-between rounded-lg border transition-colors focus:ring-1 focus:ring-emerald-500/50 focus:outline-none focus:ring-inset disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      sizeVariant === "sm" && "bg-canvas h-7 px-2.5 py-1 text-xs",
+      sizeVariant === "default" && "bg-canvas h-9 px-3 py-2 text-sm",
+      sizeVariant === "toolbar" &&
+        "bg-surface/60 h-9 shrink-0 px-2.5 text-xs sm:text-sm",
+      sizeVariant === "drawer" &&
+        "bg-surface/80 h-9 w-full px-2.5 text-xs sm:text-sm",
       className,
     )}
     {...props}

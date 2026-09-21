@@ -4,27 +4,31 @@ import { api, HydrateClient } from "~/trpc/server";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  // Prefetch initial data on the server
-  void api.facilities.getStats.prefetch();
-  void api.facilities.getFilterOptions.prefetch();
-  void api.facilities.getFacilities.prefetch({
-    page: 1,
-    pageSize: 10,
-    search: "",
-    stateCode: "ALL",
-    primaryFuel: "ALL",
-    nercRegion: "ALL",
-  });
-  void api.facilities.getMapFacilities.prefetch({
-    search: "",
-    stateCode: "ALL",
-    primaryFuel: "ALL",
-    nercRegion: "ALL",
-  });
+  const stats = await api.facilities.getStats();
+
+  await Promise.all([
+    api.facilities.getFilterOptions.prefetch(),
+    api.facilities.getFacilities.prefetch({
+      page: 1,
+      pageSize: 10,
+      search: "",
+      stateCode: "ALL",
+      primaryFuel: "ALL",
+      nercRegion: "ALL",
+      sortBy: "name",
+      sortDir: "asc",
+    }),
+    api.facilities.getMapFacilities.prefetch({
+      search: "",
+      stateCode: "ALL",
+      primaryFuel: "ALL",
+      nercRegion: "ALL",
+    }),
+  ]);
 
   return (
     <HydrateClient>
-      <DatabaseExplorer />
+      <DatabaseExplorer initialAnomalyCount={stats.totalAnomalies} />
     </HydrateClient>
   );
 }

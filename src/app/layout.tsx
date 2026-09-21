@@ -28,6 +28,7 @@ export default function RootLayout({
           attribute="class"
           defaultTheme="dark"
           enableSystem={false}
+          scriptProps={{ suppressHydrationWarning: true }}
         >
           <TRPCReactProvider>{children}</TRPCReactProvider>
         </ThemeProvider>

@@ -6,6 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { EmptyState } from "~/components/ui/empty-state";
+import { InlineLoading } from "~/components/ui/inline-loading";
 import {
   Table,
   TableBody,
@@ -45,7 +47,6 @@ export function AuditLogsTable({ logs, isLoading }: AuditLogsTableProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        {/* Desktop Table (>= sm) */}
         <div className="hidden sm:block">
           <Table>
             <TableHeader>
@@ -61,21 +62,22 @@ export function AuditLogsTable({ logs, isLoading }: AuditLogsTableProps) {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-fg-muted py-12 text-center"
-                  >
-                    Loading audit records...
+                  <TableCell colSpan={6} className="p-0">
+                    <InlineLoading
+                      size="sm"
+                      title="Loading audit records..."
+                      className="py-12"
+                    />
                   </TableCell>
                 </TableRow>
               ) : logs?.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="text-fg-muted py-12 text-center"
-                  >
-                    No audit violations recorded. Run CAMPD sync to evaluate
-                    records.
+                  <TableCell colSpan={6} className="p-0">
+                    <EmptyState
+                      title="No audit violations recorded"
+                      description="Run CAMPD sync to evaluate records."
+                      className="border-0 py-12"
+                    />
                   </TableCell>
                 </TableRow>
               ) : (
@@ -111,16 +113,18 @@ export function AuditLogsTable({ logs, isLoading }: AuditLogsTableProps) {
           </Table>
         </div>
 
-        {/* Mobile Card List (< sm) */}
         <div className="divide-edge/60 divide-y sm:hidden">
           {isLoading ? (
-            <div className="text-fg-muted p-6 text-center text-xs">
-              Loading audit records...
-            </div>
+            <InlineLoading
+              size="sm"
+              title="Loading audit records..."
+              className="py-6"
+            />
           ) : logs?.length === 0 ? (
-            <div className="text-fg-muted p-8 text-center text-xs">
-              No audit violations recorded.
-            </div>
+            <EmptyState
+              title="No audit violations recorded."
+              className="border-0"
+            />
           ) : (
             logs?.map((log) => (
               <div key={log.id} className="space-y-2 p-3.5 text-xs">

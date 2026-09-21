@@ -17,6 +17,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
 import { Card } from "~/components/ui/card";
+import { EmptyState } from "~/components/ui/empty-state";
 import { FuelBadge } from "~/components/ui/fuel-badge";
 import { PlantRoleBadge } from "~/components/ui/plant-role-badge";
 import {
@@ -70,14 +71,15 @@ interface FacilitiesTableProps {
 
 function EmptyTableState({ onReset }: { onReset: () => void }) {
   return (
-    <div className="text-fg-muted py-14 text-center">
-      <p className="text-fg-2 text-sm font-medium">
-        No facilities match the active filter criteria.
-      </p>
-      <Button variant="outline" size="sm" onClick={onReset} className="mt-3">
-        Clear All Filters
-      </Button>
-    </div>
+    <EmptyState
+      title="No facilities match the active filter criteria."
+      className="border-0 py-14"
+      action={
+        <Button variant="outline" size="sm" onClick={onReset}>
+          Clear All Filters
+        </Button>
+      }
+    />
   );
 }
 

@@ -1,4 +1,5 @@
 import { Activity, AlertTriangle, Building2, Globe, Zap } from "lucide-react";
+import { KpiStrip } from "~/components/ui/kpi-strip";
 import { StatTile } from "~/components/ui/stat-tile";
 
 interface StatMetricsProps {
@@ -17,67 +18,73 @@ interface StatMetricsProps {
 
 export function StatMetrics({ stats, isLoading }: StatMetricsProps) {
   return (
-    <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-      <StatTile
-        variant="card"
-        label="Total Facilities"
-        icon={<Building2 className="text-fg-muted h-4 w-4" />}
-        value={
-          isLoading ? "..." : (stats?.totalFacilities.toLocaleString() ?? "0")
-        }
-        subtext={`${stats?.totalStates ?? 52} states & territories`}
-      />
+    <section>
+      <KpiStrip
+        columns={5}
+        gapClassName="gap-2 sm:gap-3"
+        className="sm:grid-cols-3 lg:grid-cols-5"
+      >
+        <StatTile
+          variant="card"
+          label="Total Facilities"
+          icon={<Building2 className="text-fg-muted h-4 w-4" />}
+          value={
+            isLoading ? "..." : (stats?.totalFacilities.toLocaleString() ?? "0")
+          }
+          subtext={`${stats?.totalStates ?? 52} states & territories`}
+        />
 
-      <StatTile
-        variant="card"
-        label="Tracked Capacity"
-        icon={<Zap className="h-4 w-4 text-amber-400" />}
-        value={
-          isLoading
-            ? "..."
-            : stats?.totalCapacityMW
-              ? `${(stats.totalCapacityMW / 1000).toFixed(1)} GW`
-              : "0 GW"
-        }
-        subtext={
-          stats?.totalUnits
-            ? `${stats.totalUnits.toLocaleString()} generators`
-            : "Active units"
-        }
-      />
+        <StatTile
+          variant="card"
+          label="Tracked Capacity"
+          icon={<Zap className="h-4 w-4 text-amber-400" />}
+          value={
+            isLoading
+              ? "..."
+              : stats?.totalCapacityMW
+                ? `${(stats.totalCapacityMW / 1000).toFixed(1)} GW`
+                : "0 GW"
+          }
+          subtext={
+            stats?.totalUnits
+              ? `${stats.totalUnits.toLocaleString()} generators`
+              : "Active units"
+          }
+        />
 
-      <StatTile
-        variant="card"
-        label="Reliability Grids"
-        icon={<Globe className="h-4 w-4 text-sky-400" />}
-        value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
-        subtext="ERCOT, SERC, WECC, etc."
-      />
+        <StatTile
+          variant="card"
+          label="Reliability Grids"
+          icon={<Globe className="h-4 w-4 text-sky-400" />}
+          value={isLoading ? "..." : `${stats?.totalNercRegions ?? 0} Regions`}
+          subtext="ERCOT, SERC, WECC, etc."
+        />
 
-      <StatTile
-        variant="card"
-        label="Annual CO₂"
-        icon={<Activity className="h-4 w-4 text-emerald-400" />}
-        value={
-          isLoading
-            ? "..."
-            : stats?.totalCo2Tons && stats.totalCo2Tons > 0
-              ? `${(stats.totalCo2Tons / 1_000_000).toFixed(1)}M t`
-              : "—"
-        }
-        valueClassName="font-mono text-emerald-400"
-        subtext="Monitored stack mass"
-      />
+        <StatTile
+          variant="card"
+          label="Annual CO₂"
+          icon={<Activity className="h-4 w-4 text-emerald-400" />}
+          value={
+            isLoading
+              ? "..."
+              : stats?.totalCo2Tons && stats.totalCo2Tons > 0
+                ? `${(stats.totalCo2Tons / 1_000_000).toFixed(1)}M t`
+                : "—"
+          }
+          valueClassName="font-mono text-emerald-400"
+          subtext="Monitored stack mass"
+        />
 
-      <StatTile
-        variant="card"
-        label="Audit Flags"
-        icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
-        value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}
-        valueClassName="font-mono text-amber-400"
-        subtext="Sanity violations"
-        className="col-span-2 sm:col-span-1"
-      />
+        <StatTile
+          variant="card"
+          label="Audit Flags"
+          icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
+          value={isLoading ? "..." : (stats?.totalAnomalies ?? 0)}
+          valueClassName="font-mono text-amber-400"
+          subtext="Sanity violations"
+          className="col-span-2 sm:col-span-1"
+        />
+      </KpiStrip>
     </section>
   );
 }

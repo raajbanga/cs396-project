@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import { Clock, Flame, Gauge, Leaf, RefreshCw, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
-import { Input } from "~/components/ui/input";
+import { DataPanel } from "~/components/ui/data-panel";
+import { EmptyState } from "~/components/ui/empty-state";
+import { InlineLoading } from "~/components/ui/inline-loading";
+import { KpiStrip } from "~/components/ui/kpi-strip";
 import {
   Select,
   SelectContent,
@@ -21,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { buildDateOptionsForYear, clampDateToYear } from "~/lib/date-options";
 import { api } from "~/trpc/react";
 
 export interface UnitOption {
@@ -85,7 +89,8 @@ export function GranularEmissionsWindow({
 
   const currentUnits = currentPlant.units ?? units;
 
-  // Directly leverage existing tRPC query hook (DRY codebase principle - zero custom hooks)
+  const dateOptions = useMemo(() => buildDateOptionsForYear(year), [year]);
+
   const { data, isLoading, isFetching } =
     api.facilities.getGranularEmissions.useQuery(
       {
@@ -115,9 +120,7 @@ export function GranularEmissionsWindow({
 
   return (
     <div className="space-y-3.5">
-      {/* Control Header & Dropdowns Toolbar */}
       <div className="border-edge bg-surface/50 space-y-3 rounded-xl border p-3 sm:p-4">
-        {/* Title and Telemetry Source */}
         <div className="border-edge/40 flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
           <div className="flex items-center gap-2.5">
             <div className="border-edge bg-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
@@ -150,9 +153,7 @@ export function GranularEmissionsWindow({
           </div>
         </div>
 
-        {/* Dedicated Single-Line Dropdowns Toolbar: all dropdowns strictly stay on the same line with padding to prevent focus border clipping */}
         <div className="-mx-1 -my-1 flex scrollbar-none items-center gap-2 overflow-x-auto px-1 py-1 whitespace-nowrap">
-          {/* Facility Selector (Comparison mode) - widened so long plant names like 48th Street Peaking Station are not clipped */}
           {plants && plants.length > 1 && (
             <Select
               value={String(currentPlant.id)}
@@ -161,7 +162,10 @@ export function GranularEmissionsWindow({
                 setSelectedUnit("ALL");
               }}
             >
-              <SelectTrigger className="border-edge bg-surface/60 h-9 w-[280px] shrink-0 text-xs sm:w-[320px] sm:text-sm">
+              <SelectTrigger
+                sizeVariant="toolbar"
+                className="w-[280px] sm:w-[320px]"
+              >
                 <SelectValue placeholder="Select Facility" />
               </SelectTrigger>
               <SelectContent>
@@ -174,7 +178,6 @@ export function GranularEmissionsWindow({
             </Select>
           )}
 
-          {/* 1. Time Granularity Dropdown (Clean, without redundant indicators like 52w) */}
           <Select
             value={granularity}
             onValueChange={(val) =>
@@ -183,7 +186,7 @@ export function GranularEmissionsWindow({
               )
             }
           >
-            <SelectTrigger className="border-edge bg-surface/60 h-9 w-[105px] shrink-0 text-xs sm:text-sm">
+            <SelectTrigger sizeVariant="toolbar" className="w-[105px]">
               <SelectValue placeholder="Resolution" />
             </SelectTrigger>
             <SelectContent>
@@ -195,7 +198,6 @@ export function GranularEmissionsWindow({
             </SelectContent>
           </Select>
 
-          {/* 2. Reporting Year Dropdown (Displays selected year number cleanly) */}
           {granularity !== "yearly" && (
             <Select
               value={String(year)}
@@ -203,11 +205,11 @@ export function GranularEmissionsWindow({
                 const newYear = Number(val);
                 setYear(newYear);
                 if (granularity === "hourly" || granularity === "daily") {
-                  setDate(`${newYear}-07-15`);
+                  setDate((prev) => clampDateToYear(prev, newYear));
                 }
               }}
             >
-              <SelectTrigger className="border-edge bg-surface/60 h-9 w-[82px] shrink-0 text-xs sm:text-sm">
+              <SelectTrigger sizeVariant="toolbar" className="w-[82px]">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>
@@ -220,10 +222,9 @@ export function GranularEmissionsWindow({
             </Select>
           )}
 
-          {/* 3. Generator Unit Filter Dropdown */}
           {currentUnits.length > 0 && (
             <Select value={selectedUnit} onValueChange={setSelectedUnit}>
-              <SelectTrigger className="border-edge bg-surface/60 h-9 w-[150px] shrink-0 text-xs sm:text-sm">
+              <SelectTrigger sizeVariant="toolbar" className="w-[150px]">
                 <SelectValue placeholder="All Units" />
               </SelectTrigger>
               <SelectContent>
@@ -237,23 +238,28 @@ export function GranularEmissionsWindow({
             </Select>
           )}
 
-          {/* 4. Date Picker for Hourly or Daily Granularity */}
           {(granularity === "hourly" || granularity === "daily") && (
-            <div className="flex shrink-0 items-center">
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="border-edge bg-surface/60 h-9 w-[155px] px-2.5 text-xs [color-scheme:dark] sm:w-[160px] sm:text-sm"
-              />
-            </div>
+            <Select value={date} onValueChange={setDate}>
+              <SelectTrigger
+                sizeVariant="toolbar"
+                className="w-[155px] sm:w-[160px]"
+              >
+                <SelectValue placeholder="Select date" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {dateOptions.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
       </div>
 
-      {/* Aggregate KPI Strip */}
       {summary && items.length > 0 && (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <KpiStrip columns={4} gapClassName="gap-2.5">
           <StatTile
             label="Total Generation"
             icon={<Zap className="h-3.5 w-3.5 text-sky-400" />}
@@ -293,23 +299,21 @@ export function GranularEmissionsWindow({
             }
             subtext="MMBtu / MWh (Thermal efficiency)"
           />
-        </div>
+        </KpiStrip>
       )}
 
-      {/* Granular Breakdown Table with table-fixed layout, balanced column widths, and zero empty void */}
-      <div className="border-edge bg-canvas overflow-hidden rounded-xl border">
+      <DataPanel>
         {isLoading ? (
-          <div className="text-fg-muted py-14 text-center">
-            <RefreshCw className="mx-auto mb-2 h-6 w-6 animate-spin text-emerald-400" />
-            <p className="text-xs sm:text-sm">
-              Retrieving {granularity} continuous monitoring data...
-            </p>
-          </div>
+          <InlineLoading
+            size="sm"
+            title={`Retrieving ${granularity} continuous monitoring data...`}
+          />
         ) : items.length === 0 ? (
-          <div className="text-fg-muted p-8 text-center text-xs">
-            No stack telemetry returned by EPA CAMPD for this specific facility
-            and time window.
-          </div>
+          <EmptyState
+            title="No telemetry for this window"
+            description="No stack telemetry returned by EPA CAMPD for this specific facility and time window."
+            className="border-0"
+          />
         ) : (
           <div className="max-h-[380px] overflow-auto">
             <Table className="w-full text-xs">
@@ -357,7 +361,6 @@ export function GranularEmissionsWindow({
                       key={item.periodKey}
                       className="border-edge/40 hover:bg-surface/40 border-b font-mono text-xs"
                     >
-                      {/* Interval Label */}
                       <TableCell className="px-2 py-1 font-sans">
                         <span className="text-fg font-semibold">
                           {item.periodLabel}
@@ -369,7 +372,6 @@ export function GranularEmissionsWindow({
                         )}
                       </TableCell>
 
-                      {/* Operating Hours */}
                       <TableCell className="px-1.5 py-1 text-right whitespace-nowrap">
                         <span className="text-fg-2">
                           {item.operatingHours.toLocaleString()}
@@ -379,7 +381,6 @@ export function GranularEmissionsWindow({
                         </span>
                       </TableCell>
 
-                      {/* Generation + compact mini bar */}
                       <TableCell className="px-1.5 py-1 text-right">
                         <div className="flex flex-col items-end">
                           <span className="text-fg leading-none font-semibold">
@@ -394,12 +395,10 @@ export function GranularEmissionsWindow({
                         </div>
                       </TableCell>
 
-                      {/* Heat Input */}
                       <TableCell className="text-fg-2 px-1.5 py-1 text-right whitespace-nowrap">
                         {item.heatInputMMBtu.toLocaleString()}
                       </TableCell>
 
-                      {/* CO2 Mass + compact mini bar */}
                       <TableCell className="px-1.5 py-1 text-right">
                         <div className="flex flex-col items-end">
                           <span className="text-fg leading-none font-semibold">
@@ -414,21 +413,18 @@ export function GranularEmissionsWindow({
                         </div>
                       </TableCell>
 
-                      {/* SO2 */}
                       <TableCell className="text-fg-muted px-1 py-1 text-right font-mono text-[11px] whitespace-nowrap">
                         {item.so2MassTons > 0
                           ? item.so2MassTons.toFixed(1)
                           : "0.0"}
                       </TableCell>
 
-                      {/* NOx */}
                       <TableCell className="text-fg-muted px-1 py-1 text-right font-mono text-[11px] whitespace-nowrap">
                         {item.noxMassTons > 0
                           ? item.noxMassTons.toFixed(1)
                           : "0.0"}
                       </TableCell>
 
-                      {/* Intensity */}
                       <TableCell className="px-2 py-1 text-right whitespace-nowrap">
                         {item.co2IntensityLbsMWh !== null ? (
                           <span
@@ -453,7 +449,7 @@ export function GranularEmissionsWindow({
             </Table>
           </div>
         )}
-      </div>
+      </DataPanel>
     </div>
   );
 }
