@@ -6,6 +6,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
+import { InlineLoading } from "~/components/ui/inline-loading";
 import { KpiStrip } from "~/components/ui/kpi-strip";
 import { StatTile } from "~/components/ui/stat-tile";
 import { pickCleanestByCarbonIntensity } from "~/lib/emissions-metrics";
@@ -15,7 +16,6 @@ import {
   PlantAnalysisTabs,
   PlantDialogFooter,
   PlantDialogHeader,
-  PlantDialogLoading,
   PlantDialogScrollBody,
   PlantDialogShell,
 } from "./plant-dialog-shell";
@@ -80,8 +80,6 @@ export function PlantComparisonDialog({
   const maxSo2 = Math.max(...plants.map((p) => p.totalSo2Tons), 1);
   const maxNox = Math.max(...plants.map((p) => p.totalNoxTons), 1);
 
-  const defaultGranularYears = [2022, 2021, 2020];
-
   return (
     <PlantDialogShell
       open={open}
@@ -139,7 +137,7 @@ export function PlantComparisonDialog({
     >
       <PlantDialogScrollBody>
         {isLoading ? (
-          <PlantDialogLoading
+          <InlineLoading
             title="Computing comparative cross-facility metrics..."
             subtitle="Aggregating generation, emission intensity, and environmental controls"
             className="py-24"
@@ -236,7 +234,7 @@ export function PlantComparisonDialog({
                     availableYears:
                       p.availableYears.length > 0
                         ? p.availableYears
-                        : defaultGranularYears,
+                        : undefined,
                   }))}
                 />
               ) : null

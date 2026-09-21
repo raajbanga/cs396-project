@@ -14,12 +14,16 @@ import {
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
 } from "~/lib/emissions-metrics";
+import { getCampdPublishedYear } from "~/lib/campd-reporting-period";
 import {
   hasAirQualityControls,
   isOperatingStatus,
 } from "~/lib/plant-narrative";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { fetchGranularEmissionsForFacility } from "~/server/campd/client";
+import {
+  fetchGranularEmissionsForFacility,
+  resolveCampdPublishedThrough,
+} from "~/server/campd/client";
 import {
   buildFacilityFilterConditions,
   facilityCarbonIntensitySubquery,
@@ -63,39 +67,12 @@ export const facilitiesRouter = createTRPCRouter({
     const [emissionsRes] = await ctx.db
       .select({
         totalCo2: sql<number>`COALESCE(SUM(${annualRecords.co2MassTons}), 0)`,
-        totalGeneration: sql<number>`COALESCE(SUM(${annualRecords.grossGenerationMWh}), 0)`,
       })
       .from(annualRecords);
 
     const [anomaliesRes] = await ctx.db
       .select({ total: count() })
       .from(dataAuditLogs);
-
-    const fuelTypes = await ctx.db
-      .select({
-        fuel: units.primaryFuel,
-        count: count(),
-      })
-      .from(units)
-      .where(
-        sql`${units.primaryFuel} IS NOT NULL AND ${units.primaryFuel} != ''`,
-      )
-      .groupBy(units.primaryFuel)
-      .orderBy(desc(count()))
-      .limit(6);
-
-    const nercBreakdown = await ctx.db
-      .select({
-        nerc: facilities.nercRegion,
-        count: count(),
-      })
-      .from(facilities)
-      .where(
-        sql`${facilities.nercRegion} IS NOT NULL AND ${facilities.nercRegion} != ''`,
-      )
-      .groupBy(facilities.nercRegion)
-      .orderBy(desc(count()))
-      .limit(5);
 
     return {
       totalFacilities: facilitiesCountRes?.total ?? 0,
@@ -104,16 +81,7 @@ export const facilitiesRouter = createTRPCRouter({
       totalNercRegions: nercCountRes?.total ?? 0,
       totalCapacityMW: Math.round(unitsCountRes?.totalCapacity ?? 0),
       totalCo2Tons: Math.round(emissionsRes?.totalCo2 ?? 0),
-      totalGenerationMWh: Math.round(emissionsRes?.totalGeneration ?? 0),
       totalAnomalies: anomaliesRes?.total ?? 0,
-      topFuels: fuelTypes.map((f) => ({
-        fuel: f.fuel ?? "Unknown",
-        count: f.count,
-      })),
-      topNerc: nercBreakdown.map((n) => ({
-        nerc: n.nerc ?? "Unknown",
-        count: n.count,
-      })),
     };
   }),
 
@@ -390,6 +358,18 @@ export const facilitiesRouter = createTRPCRouter({
       return logs;
     }),
 
+  getCampdPublishedThrough: publicProcedure
+    .input(z.object({ facilityId: z.number().optional() }).optional())
+    .query(async ({ input }) => {
+      const publishedThrough = await resolveCampdPublishedThrough(
+        input?.facilityId,
+      );
+      return {
+        publishedThrough,
+        year: getCampdPublishedYear(publishedThrough),
+      };
+    }),
+
   getGranularEmissions: publicProcedure
     .input(
       z.object({
@@ -397,7 +377,7 @@ export const facilitiesRouter = createTRPCRouter({
         granularity: z
           .enum(["hourly", "daily", "weekly", "monthly", "yearly"])
           .default("monthly"),
-        year: z.number().default(2022),
+        year: z.number().optional(),
         date: z.string().optional(),
         unitId: z.string().optional(),
       }),

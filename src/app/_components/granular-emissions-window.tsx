@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Clock, Flame, Gauge, Leaf, RefreshCw, Zap } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
@@ -24,6 +24,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import {
+  getCampdPublishedYear,
+  getDefaultCampdDateForYear,
+  getDefaultCampdYearOptions,
+} from "~/lib/campd-reporting-period";
 import { buildDateOptionsForYear, clampDateToYear } from "~/lib/date-options";
 import { api } from "~/trpc/react";
 
@@ -54,7 +59,7 @@ export function GranularEmissionsWindow({
   facilityId,
   facilityName,
   units = [],
-  availableYears = [2022, 2021, 2020],
+  availableYears,
   plants,
   initialGranularity = "monthly",
 }: GranularEmissionsWindowProps) {
@@ -80,16 +85,49 @@ export function GranularEmissionsWindow({
     availableYears,
   ]);
 
-  const plantYears = currentPlant.availableYears ?? availableYears;
-  const defaultYear = plantYears.length > 0 ? Math.max(...plantYears) : 2022;
-
-  const [year, setYear] = useState<number>(defaultYear);
-  const [date, setDate] = useState<string>(`${defaultYear}-07-15`);
-  const [selectedUnit, setSelectedUnit] = useState<string>("ALL");
-
   const currentUnits = currentPlant.units ?? units;
 
-  const dateOptions = useMemo(() => buildDateOptionsForYear(year), [year]);
+  const { data: availability } =
+    api.facilities.getCampdPublishedThrough.useQuery(
+      { facilityId: currentPlant.id },
+      { staleTime: 60 * 60 * 1000 },
+    );
+
+  const publishedThrough = availability?.publishedThrough;
+  const lastPublishedYear = publishedThrough
+    ? getCampdPublishedYear(publishedThrough)
+    : new Date().getFullYear();
+
+  const plantYears = (
+    currentPlant.availableYears ??
+    availableYears ??
+    []
+  ).filter((y) => y <= lastPublishedYear);
+  const yearsForPicker =
+    plantYears.length > 0
+      ? plantYears
+      : publishedThrough
+        ? getDefaultCampdYearOptions(publishedThrough)
+        : [lastPublishedYear];
+  const defaultYear = Math.min(Math.max(...yearsForPicker), lastPublishedYear);
+
+  const [year, setYear] = useState<number>(defaultYear);
+  const [date, setDate] = useState<string>(() => `${defaultYear}-12-31`);
+  const [selectedUnit, setSelectedUnit] = useState<string>("ALL");
+
+  useEffect(() => {
+    setActiveFacilityId(facilityId);
+  }, [facilityId]);
+
+  useEffect(() => {
+    setYear(defaultYear);
+    setDate(
+      publishedThrough
+        ? getDefaultCampdDateForYear(defaultYear, publishedThrough)
+        : `${defaultYear}-12-31`,
+    );
+    setSelectedUnit("ALL");
+  }, [currentPlant.id, defaultYear, publishedThrough]);
 
   const { data, isLoading, isFetching } =
     api.facilities.getGranularEmissions.useQuery(
@@ -105,6 +143,13 @@ export function GranularEmissionsWindow({
       },
       { placeholderData: (prev) => prev },
     );
+
+  const livePublishedThrough = data?.publishedThrough ?? publishedThrough;
+
+  const dateOptions = useMemo(
+    () => buildDateOptionsForYear(year, livePublishedThrough),
+    [year, livePublishedThrough],
+  );
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const summary = data?.summary;
@@ -131,7 +176,7 @@ export function GranularEmissionsWindow({
                 <span className="text-fg text-sm font-semibold">
                   Temporal Emissions Telemetry
                 </span>
-                {data?.source === "EPA_CAMPD_API" && (
+                {data?.source === "EPA_CAMPD_API" && !data.error && (
                   <Badge variant="success" className="px-1.5 py-0 text-xs">
                     Live EPA CAMPD
                   </Badge>
@@ -148,6 +193,9 @@ export function GranularEmissionsWindow({
               <p className="text-fg-muted text-xs">
                 Filtering stack sensors for {currentPlant.name} across time
                 resolutions
+                {livePublishedThrough
+                  ? ` · EPA published through ${livePublishedThrough}`
+                  : ""}
               </p>
             </div>
           </div>
@@ -204,16 +252,16 @@ export function GranularEmissionsWindow({
               onValueChange={(val) => {
                 const newYear = Number(val);
                 setYear(newYear);
-                if (granularity === "hourly" || granularity === "daily") {
-                  setDate((prev) => clampDateToYear(prev, newYear));
-                }
+                setDate((prev) =>
+                  clampDateToYear(prev, newYear, livePublishedThrough),
+                );
               }}
             >
               <SelectTrigger sizeVariant="toolbar" className="w-[82px]">
                 <SelectValue placeholder="Year" />
               </SelectTrigger>
               <SelectContent>
-                {plantYears.map((y) => (
+                {yearsForPicker.map((y) => (
                   <SelectItem key={y} value={String(y)}>
                     {y}
                   </SelectItem>
@@ -310,8 +358,15 @@ export function GranularEmissionsWindow({
           />
         ) : items.length === 0 ? (
           <EmptyState
-            title="No telemetry for this window"
-            description="No stack telemetry returned by EPA CAMPD for this specific facility and time window."
+            title={
+              data?.error
+                ? "CAMPD window unavailable"
+                : "No telemetry for this window"
+            }
+            description={
+              data?.error ??
+              "No stack telemetry returned by EPA CAMPD for this specific facility and time window."
+            }
             className="border-0"
           />
         ) : (
