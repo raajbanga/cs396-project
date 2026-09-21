@@ -8,8 +8,7 @@ import { useState } from "react";
 import SuperJSON from "superjson";
 
 import { type AppRouter } from "~/server/api/root";
-import { createQueryClient } from "./query-client";
-import { getRequestQueryClient } from "./shared-query-client";
+import { createQueryClient, getRequestQueryClient } from "./query-client";
 
 let clientQueryClientSingleton: QueryClient | undefined = undefined;
 const getQueryClient = () => {

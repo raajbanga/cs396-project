@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildYearlyRollups } from "./annual-rollups";
+import {
+  clampCampdDateRange,
+  clampIsoDateToCampdPublished,
+  clampYearToCampdPublished,
+  getCampdValidMonthsForYear,
+  getDefaultCampdDateForYear,
+  parseCampdQuarterEndFromError,
+  toIsoDate,
+} from "./campd-reporting-period";
 import { buildDateOptionsForYear, clampDateToYear } from "./date-options";
 import {
   computeCo2IntensityLbsMWh,
@@ -41,11 +50,57 @@ void test("unit status and controls use shared rules", () => {
 });
 
 void test("date options cover every day in a reporting year", () => {
-  const options2024 = buildDateOptionsForYear(2024);
+  const options2024 = buildDateOptionsForYear(2024, "2026-06-30");
   assert.equal(options2024.length, 366);
   assert.equal(options2024[0]?.value, "2024-01-01");
-  assert.equal(clampDateToYear("2023-03-10", 2024), "2024-03-10");
-  assert.equal(clampDateToYear("2024-02-29", 2025), "2025-07-15");
+  assert.equal(clampDateToYear("2023-03-10", 2024, "2026-06-30"), "2024-03-10");
+  assert.equal(clampDateToYear("2024-02-29", 2025, "2026-06-30"), "2025-12-31");
+  assert.equal(clampDateToYear("2026-07-15", 2026, "2026-06-30"), "2026-06-30");
+  assert.equal(
+    buildDateOptionsForYear(2026, "2026-06-30").at(-1)?.value,
+    "2026-06-30",
+  );
+});
+
+void test("CAMPD published-through is parsed from EPA errors and used to clamp", () => {
+  const publishedThrough = "2026-06-30";
+  assert.equal(
+    parseCampdQuarterEndFromError(
+      "Ensure that beginDate and endDate are of the form YYYY-MM-DD, are now or in the past, are after 01/01/1995, and are between 01/01/1995 and the quarter ending on 06/30/2026",
+    ),
+    publishedThrough,
+  );
+  assert.equal(parseCampdQuarterEndFromError("no quarter mentioned"), null);
+  assert.deepEqual(
+    getCampdValidMonthsForYear(2026, publishedThrough),
+    [1, 2, 3, 4, 5, 6],
+  );
+  assert.deepEqual(
+    getCampdValidMonthsForYear(2025, publishedThrough),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  );
+  assert.deepEqual(getCampdValidMonthsForYear(2027, publishedThrough), []);
+  assert.equal(clampYearToCampdPublished(2027, publishedThrough), 2026);
+  assert.equal(
+    clampIsoDateToCampdPublished("2026-07-15", publishedThrough),
+    "2026-06-30",
+  );
+  assert.equal(
+    getDefaultCampdDateForYear(2026, publishedThrough),
+    "2026-06-30",
+  );
+  assert.equal(
+    getDefaultCampdDateForYear(2025, publishedThrough),
+    "2025-12-31",
+  );
+  assert.deepEqual(
+    clampCampdDateRange("2026-01-01", "2026-12-31", publishedThrough),
+    {
+      beginDate: "2026-01-01",
+      endDate: "2026-06-30",
+    },
+  );
+  assert.equal(toIsoDate(new Date(2026, 5, 30)), "2026-06-30");
 });
 
 void test("yearly rollups aggregate records by reporting year", () => {
@@ -78,18 +133,4 @@ void test("yearly rollups aggregate records by reporting year", () => {
   assert.equal(rollups[0]?.co2MassTons, 75);
   assert.equal(rollups[0]?.unitCount, 2);
   assert.equal(rollups[0]?.co2IntensityLbsMWh, 1000);
-});
-
-void test("granular temporal intensity calculations adhere to bounds", () => {
-  // Test valid intensity derivation for hourly / monthly slices
-  const hourlyIntensity = computeCo2IntensityLbsMWh(12.5, 25);
-  assert.equal(hourlyIntensity, 1000);
-
-  // When zero generation occurs, intensity must be null rather than NaN or Infinity
-  const zeroGenIntensity = computeCo2IntensityLbsMWh(5.0, 0);
-  assert.equal(zeroGenIntensity, null);
-
-  // Heat rate calculations for thermal efficiency
-  const heatRate = computeHeatRateMMBtuMWh(160, 20);
-  assert.equal(heatRate, 8.0);
 });

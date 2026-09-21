@@ -5,7 +5,14 @@ import { drizzle } from "drizzle-orm/libsql";
 
 import { env } from "~/env";
 import * as schema from "./schema";
-import { resolveDatabaseUrl } from "./url";
+
+export function resolveDatabaseUrl(rawUrl: string) {
+  if (!rawUrl.startsWith("file:")) return rawUrl;
+  const filePath = rawUrl.slice(5);
+  return `file:${
+    path.isAbsolute(filePath) ? filePath : path.resolve(process.cwd(), filePath)
+  }`;
+}
 
 /**
  * Cache the database connection in development. This avoids creating a new connection on every HMR

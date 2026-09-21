@@ -27,7 +27,7 @@ flowchart TD
         U2["<b>units</b> Table"]
         U3["<b>units</b> Table"]
         AR["<b>annual_records</b> Table<br/>(Yearly output, fuel, emissions per unit)"]
-        GR["<b>granular_records</b> Table<br/>(Hourly, Daily, Weekly, Monthly, Yearly slices)"]
+        GR["<b>granular_records</b> Table<br/>(Schema only — UI uses EPA API + annual_records)"]
         AL["<b>data_audit_logs</b> Table<br/>(Flags for physics/sanity violations)"]
         DS["<b>datasets</b> Table<br/>(Ingestion batch & provenance tracking)"]
     end
@@ -183,18 +183,18 @@ Drizzle property names below; SQLite column names are snake_case equivalents. Se
 
 Represents the physical power plant installation.
 
-| Column           | Type                  | What It Means                                                                   | Where and How It Is Used                                                                                                            |
-| :--------------- | :-------------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | `INTEGER PRIMARY KEY` | EPA ORISPL Plant code.                                                          | **Core ID**: Table searches (exact numeric lookup), URL routes, inspect modals, benchmark comparison selections, foreign key joins. |
-| `name`           | `TEXT`                | Legal plant name (e.g. "Cumberland", "W.A. Parish").                            | **Display & Search**: Table title, fuzzy text search, map marker tooltips, head-to-head comparison cards.                           |
-| `stateCode`      | `TEXT(2)`             | Two-letter state postal abbreviation.                                           | **Filtering & Grouping**: State filter dropdown, table badges, map coloring, and regional queries.                                  |
-| `county`         | `TEXT`                | County where the plant is located.                                              | **Context & Search**: Fuzzy search matches counties; displayed in facility inspector modal and comparison sheets.                   |
-| `latitude`       | `REAL`                | GPS North coordinate.                                                           | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                         |
-| `longitude`      | `REAL`                | GPS West coordinate.                                                            | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                         |
-| `epaRegion`      | `INTEGER`             | Federal EPA administrative zone (1 through 10).                                 | **Inspection**: Displayed in the plant detail dialog for regulatory context.                                                        |
-| `nercRegion`     | `TEXT`                | Electric reliability grid council (ERCOT, PJM/RFC, WECC, SERC, MRO, SPP, etc.). | **Grid Analysis & Filtering**: NERC dropdown filter, KPI regional breakdown chart, comparison dialog grid specs.                    |
-| `sourceCategory` | `TEXT`                | Classification (Electric Utility, Cogeneration, Small Power Producer, etc.).    | **Display & Classification**: Table tags and facility detail inspector (not a filter dropdown).                                     |
-| `ownerOperator`  | `TEXT`                | Parent utility or corporate owner (e.g. Duke Energy, Southern Company).         | **Search & Accountability**: Included in full-text search matching and displayed on plant cards.                                    |
+| Column           | Type                  | What It Means                                                                   | Where and How It Is Used                                                                                                                        |
+| :--------------- | :-------------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `INTEGER PRIMARY KEY` | EPA ORISPL Plant code.                                                          | **Core ID**: Table searches (exact numeric lookup), URL routes, inspect modals, benchmark comparison selections, foreign key joins.             |
+| `name`           | `TEXT`                | Legal plant name (e.g. "Cumberland", "W.A. Parish").                            | **Display & Search**: Table title, fuzzy text search, map marker tooltips, head-to-head comparison cards.                                       |
+| `stateCode`      | `TEXT(2)`             | Two-letter state postal abbreviation.                                           | **Filtering & Grouping**: State filter dropdown, table badges, map coloring, and regional queries.                                              |
+| `county`         | `TEXT`                | County where the plant is located.                                              | **Context & Search**: Fuzzy search matches counties; displayed in facility inspector modal and comparison sheets.                               |
+| `latitude`       | `REAL`                | GPS North coordinate.                                                           | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                     |
+| `longitude`      | `REAL`                | GPS West coordinate.                                                            | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                     |
+| `epaRegion`      | `INTEGER`             | Federal EPA administrative zone (1 through 10).                                 | **Inspection**: Displayed in the plant detail dialog for regulatory context.                                                                    |
+| `nercRegion`     | `TEXT`                | Electric reliability grid council (ERCOT, PJM/RFC, WECC, SERC, MRO, SPP, etc.). | **Grid Analysis & Filtering**: NERC dropdown filter, KPI count of distinct regions (`getStats.totalNercRegions`), comparison dialog grid specs. |
+| `sourceCategory` | `TEXT`                | Classification (Electric Utility, Cogeneration, Small Power Producer, etc.).    | **Display & Classification**: Table tags and facility detail inspector (not a filter dropdown).                                                 |
+| `ownerOperator`  | `TEXT`                | Parent utility or corporate owner (e.g. Duke Energy, Southern Company).         | **Search & Accountability**: Included in full-text search matching and displayed on plant cards.                                                |
 
 ### Table 2: `units`
 
@@ -268,7 +268,7 @@ Tracks batch ingestion history from the EPA REST API or bulk CSV files.
 
 ### Table 6: `granular_records`
 
-Stores multi-resolution apportioned emissions (Hourly, Daily, Weekly, Monthly, Yearly) per unit/facility for deep temporal trend analysis.
+**Schema placeholder for optional future caching.** The table is defined in Drizzle and migrated, but **no script or API path writes rows today**. The Granular Time Series UI loads **hourly–monthly** slices live from the EPA CAMPD API and **yearly** slices from aggregated `annual_records` (`source: "LOCAL_RECORDS"` in `fetchGranularEmissionsForFacility`).
 
 | Column               | Type               | What It Means                                                                          | Where and How It Is Used                                                                |
 | :------------------- | :----------------- | :------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
@@ -301,19 +301,22 @@ flowchart LR
         F[(facilities)]
         U[(units)]
         AR[(annual_records)]
-        GR[(granular_records / API)]
+        AR_YR[(annual_records — yearly rollup)]
+        EPA[(EPA CAMPD REST API — hourly…monthly)]
         AL[(data_audit_logs)]
     end
 
     subgraph tRPC["tRPC Server Procedures"]
         direction TB
-        qStats["facilities.getStats<br/><i>(SQL SUM, COUNT, GROUP BY)</i>"]
+        qStats["facilities.getStats<br/><i>(SQL COUNT / SUM aggregates)</i>"]
+        qFilters["facilities.getFilterOptions<br/><i>(Distinct states, fuels, NERC)</i>"]
         qTable["facilities.getFacilities<br/><i>(Subqueries + LIMIT/OFFSET)</i>"]
         qMap["facilities.getMapFacilities<br/><i>(Lat/Long + Fuel + Tonnage)</i>"]
         qDetail["facilities.getFacility<br/><i>(Deep relational graph)</i>"]
         qCompare["facilities.compareFacilities<br/><i>(Multi-plant side-by-side)</i>"]
         qAudit["facilities.getAuditLogs<br/><i>(4-way table INNER JOIN)</i>"]
-        qGranular["facilities.getGranularEmissions<br/><i>(Hourly / Daily / Weekly / Monthly / Yearly)</i>"]
+        qPublished["facilities.getCampdPublishedThrough<br/><i>(EPA data freshness ceiling)</i>"]
+        qGranular["facilities.getGranularEmissions<br/><i>(API + local yearly)</i>"]
     end
 
     subgraph UIViews["Client UI Views & Modals"]
@@ -328,40 +331,44 @@ flowchart LR
     end
 
     F & U & AR & AL --> qStats --> vKPI
+    F & U --> qFilters --> vTable
     F & U & AR --> qTable --> vTable
     F & U & AR --> qMap --> vMap
     F & U & AR & AL --> qDetail --> vDetail
     F & U & AR --> qCompare --> vCompare
     AL & AR & F & U --> qAudit --> vAudit
-    F & U & GR --> qGranular --> vGranular
+    AR_YR --> qGranular --> vGranular
+    EPA --> qGranular
+    EPA --> qPublished --> vGranular
 
     classDef dbStyle fill:#0f172a,stroke:#3b82f6,stroke-width:1.5px,color:#f8fafc;
     classDef trpcStyle fill:#1e293b,stroke:#10b981,stroke-width:1.5px,color:#f8fafc;
     classDef uiStyle fill:#18181b,stroke:#f59e0b,stroke-width:1.5px,color:#f8fafc;
-    class F,U,AR,GR,AL dbStyle;
-    class qStats,qTable,qMap,qDetail,qCompare,qAudit,qGranular trpcStyle;
+    class F,U,AR,AR_YR,EPA,AL dbStyle;
+    class qStats,qFilters,qTable,qMap,qDetail,qCompare,qAudit,qPublished,qGranular trpcStyle;
     class vKPI,vTable,vMap,vDetail,vCompare,vAudit,vGranular uiStyle;
 ```
 
 ---
 
-### View 1: Top-Level System KPI Cards (`StatMetrics`)
+### View 1: Top-Level System KPI Cards (`DatabaseExplorer` → `KpiStrip` + `StatTile`)
 
 - **Purpose**: Gives an instant 10,000-foot summary of the entire US electrical grid represented in the local database.
 - **Query Used**: `api.facilities.getStats`
+- **Response fields surfaced in the UI**: `totalFacilities`, `totalUnits`, `totalStates`, `totalNercRegions`, `totalCapacityMW`, `totalCo2Tons`, `totalAnomalies`.
 - **What Part of the Table It Uses**:
-  - `facilities`: `COUNT(*)` for total facilities, `COUNT(DISTINCT state_code)` for states covered, `COUNT(DISTINCT nerc_region)` for grid regions, and `GROUP BY nerc_region` to find the largest grid sectors.
-  - `units`: `COUNT(*)` for total units, `SUM(nameplate_capacity_mw)` for total grid capacity, and `GROUP BY primary_fuel` to calculate fuel type distribution (e.g. Natural Gas vs Coal vs Oil).
-  - `annual_records`: `SUM(co2_mass_tons)` and `SUM(gross_generation_mwh)` — **all years combined**.
+  - `facilities`: `COUNT(*)`, `COUNT(DISTINCT state_code)`, `COUNT(DISTINCT nerc_region)` (non-empty).
+  - `units`: `COUNT(*)`, `SUM(nameplate_capacity_mw)`.
+  - `annual_records`: `SUM(co2_mass_tons)` — **all years combined** (generation totals are not part of `getStats`; they appear in facility/compare views).
   - `data_audit_logs`: `COUNT(*)` for total flagged anomalies.
-- **Why It’s Built This Way**: The database computes these totals in a single fast query. The browser receives only a tiny JSON summary (a few hundred bytes), loading instantly without transferring thousands of rows.
+- **Why It’s Built This Way**: A handful of aggregate queries return a tiny JSON payload; the home page prefetches stats alongside filter options and the default facilities table page.
 
 ---
 
 ### View 2: Facilities Explorer Table (`FacilitiesTable` & `FacilityFilters`)
 
 - **Purpose**: The primary interactive workspace for browsing, searching, and filtering all ~1,600 facilities.
-- **Query Used**: `api.facilities.getFacilities` (pagination, text search, 3 dropdown filters: state, NERC grid, primary fuel)
+- **Queries Used**: `api.facilities.getFilterOptions` (dropdown values) and `api.facilities.getFacilities` (pagination, text search, state / NERC / primary-fuel filters)
 - **What Part of the Table It Uses**:
   - **From `facilities`**: `id`, `name`, `stateCode`, `county`, `nercRegion`, `sourceCategory`, `ownerOperator`.
   - **Aggregated from `units`**: unit count, total capacity, fuel badges, controlled-units count.
@@ -425,7 +432,9 @@ flowchart LR
 - **Purpose**: Provides high-resolution temporal emissions intelligence across Hourly, Daily, Weekly, Monthly, and Yearly intervals for deep operational dispatch and emissions peaking analysis.
 - **Query Used**: `api.facilities.getGranularEmissions` (with dropdown filters for granularity, reporting year, unit ID, and date window)
 - **What Part of the Table / API It Uses**:
-  - `granular_records` / CAMPD API: Multi-resolution stack records rolled up into discrete temporal intervals.
+  - **EPA CAMPD API** (hourly, daily, weekly, monthly): apportioned endpoints fetched in `src/server/campd/client.ts`.
+  - **`annual_records`** (yearly granularity only): rolled up in-process to yearly buckets.
+  - **`facilities.getCampdPublishedThrough`**: clamps selectable dates/years to EPA’s published-through quarter.
   - Granularity dropdown options:
     - **Hourly**: 24-hour stack profile for selected operating date (peak load vs base load cycling).
     - **Daily**: Day-by-day continuous stack telemetry across the selected calendar month.
@@ -433,7 +442,7 @@ flowchart LR
     - **Monthly**: 12-month seasonal trajectory of generation, heat input, and emissions.
     - **Yearly**: Multi-year historical macro-trends.
   - Efficiency metrics: Evaluates interval dynamic carbon intensity and heat rate.
-- **Why It’s Built This Way**: Rather than pre-ingesting tens of millions of hourly rows into local storage, the backend fetches granular slices on demand directly via the EPA CAMPD API without synthetic estimation, maintaining high application speed and low resource footprint.
+- **Why It’s Built This Way**: Rather than pre-ingesting tens of millions of hourly rows, the backend fetches granular slices on demand. Results are held in **React Query cache** on the client (the `granular_records` SQLite table is not populated yet).
 
 ---
 
@@ -443,7 +452,7 @@ There is **no in-app sync UI** today. Data enters via two CLI scripts:
 
 | Script                                | What it does                                                                                                                                              |
 | :------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/seed-facilities-from-csv.ts` | Seeds `facilities` + `units` from local CAMPD CSV exports (metadata only; no `datasets` rows).                                                            |
+| `scripts/seed-facilities-from-csv.ts` | Seeds `facilities` + `units` from local CAMPD CSV exports (metadata only; no `datasets` rows). Uses `resolveDatabaseUrl` from `src/server/db/index.ts`.   |
 | `scripts/sync_campd.ts`               | Calls `syncCampdAnnualEmissions()` — fetches annual emissions from the EPA REST API, runs Zod validation + physics audits, upserts into `annual_records`. |
 
 ```mermaid
@@ -471,37 +480,34 @@ sequenceDiagram
 
 ## 6. Table-to-View Mapping Matrix
 
-| Database Table         | Column Name                                                  |   System KPIs   | Explorer Table  | Geographic Map  |    Plant Inspector     |  Compare Modal  |        Audits Tab        | Granular Time Window |
-| :--------------------- | :----------------------------------------------------------- | :-------------: | :-------------: | :-------------: | :--------------------: | :-------------: | :----------------------: | :------------------: |
-| **`facilities`**       | `id` (ORISPL)                                                |                 |     **Yes**     |                 |        **Yes**         |     **Yes**     |         **Yes**          |   **Yes** (Filter)   |
-|                        | `name`                                                       |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |         **Yes**          |   **Yes** (Header)   |
-|                        | `stateCode`                                                  |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `county`                                                     |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `latitude` / `longitude`                                     |                 |                 |     **Yes**     |        **Yes**         |                 |                          |                      |
-|                        | `epaRegion`                                                  |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                        | `nercRegion`                                                 |  **Yes** (Mix)  |     **Yes**     |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `sourceCategory`                                             |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                        | `ownerOperator`                                              |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-| **`units`**            | `unitId`                                                     |                 |                 |                 |        **Yes**         |                 |         **Yes**          |   **Yes** (Filter)   |
-|                        | `primaryFuel`                                                |  **Yes** (Mix)  |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `unitType`                                                   |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                        | `operatingStatus`                                            |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `nameplateCapacityMW`                                        | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                      |
-|                        | Environmental Controls (`so2`, `nox`, `pm`, `hg`)            |                 | **Yes** (Count) |                 | **Yes** (SO₂/NOₓ only) | **Yes** (Tally) |                          |                      |
-| **`annual_records`**   | `grossGenerationMWh`                                         | **Yes** (Total) |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `operatingHours`                                             |                 | **Yes** (Total) |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `heatInputMMBtu`                                             |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `co2MassTons`                                                | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `so2MassTons` / `noxMassTons`                                |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `co2IntensityLbsMWh`                                         |                 | **Yes** (Badge) |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                        | `heatRateMMBtuMWh`                                           |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-| **`granular_records`** | `granularity` (`hourly`/`daily`/`weekly`/`monthly`/`yearly`) |                 |                 |                 |        **Yes**         |     **Yes**     |                          |  **Yes** (Dropdown)  |
-|                        | `periodStart` / `periodEnd`                                  |                 |                 |                 |        **Yes**         |                 |                          |       **Yes**        |
-|                        | `operatingHours` / `grossGenerationMWh` / `heatInputMMBtu`   |                 |                 |                 |        **Yes**         |                 |                          |       **Yes**        |
-|                        | `co2MassTons` / `so2MassTons` / `noxMassTons`                |                 |                 |                 |        **Yes**         |                 |                          |       **Yes**        |
-|                        | `co2IntensityLbsMWh` / `heatRateMMBtuMWh`                    |                 |                 |                 |        **Yes**         |                 |                          |   **Yes** (Badges)   |
-| **`data_audit_logs`**  | `flagType` / `severity` / `details`                          | **Yes** (Count) |                 |                 |        **Yes**         |                 |         **Yes**          |                      |
-| **`datasets`**         | `name` / `importedAt` / counts                               |                 |                 |                 |                        |                 | **CLI sync output only** |                      |
+| Database Table         | Column Name                                       |   System KPIs   | Explorer Table  | Geographic Map  |    Plant Inspector     |  Compare Modal  |        Audits Tab        |                       Granular Time Window                        |
+| :--------------------- | :------------------------------------------------ | :-------------: | :-------------: | :-------------: | :--------------------: | :-------------: | :----------------------: | :---------------------------------------------------------------: |
+| **`facilities`**       | `id` (ORISPL)                                     |                 |     **Yes**     |                 |        **Yes**         |     **Yes**     |         **Yes**          |                         **Yes** (Filter)                          |
+|                        | `name`                                            |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |         **Yes**          |                         **Yes** (Header)                          |
+|                        | `stateCode`                                       |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `county`                                          |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `latitude` / `longitude`                          |                 |                 |     **Yes**     |        **Yes**         |                 |                          |                                                                   |
+|                        | `epaRegion`                                       |                 |                 |                 |        **Yes**         |                 |                          |                                                                   |
+|                        | `nercRegion`                                      | **Yes** (count) |     **Yes**     |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `sourceCategory`                                  |                 |                 |                 |        **Yes**         |                 |                          |                                                                   |
+|                        | `ownerOperator`                                   |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                                                                   |
+| **`units`**            | `unitId`                                          |                 |                 |                 |        **Yes**         |                 |         **Yes**          |                         **Yes** (Filter)                          |
+|                        | `primaryFuel`                                     |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `unitType`                                        |                 |                 |                 |        **Yes**         |                 |                          |                                                                   |
+|                        | `operatingStatus`                                 |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `nameplateCapacityMW`                             | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | Environmental Controls (`so2`, `nox`, `pm`, `hg`) |                 | **Yes** (Count) |                 | **Yes** (SO₂/NOₓ only) | **Yes** (Tally) |                          |                                                                   |
+| **`annual_records`**   | `grossGenerationMWh`                              |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                         **Yes** (yearly)                          |
+|                        | `operatingHours`                                  |                 | **Yes** (Total) |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `heatInputMMBtu`                                  |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `co2MassTons`                                     | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `so2MassTons` / `noxMassTons`                     |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `co2IntensityLbsMWh`                              |                 | **Yes** (Badge) |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+|                        | `heatRateMMBtuMWh`                                |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                                                                   |
+| **`granular_records`** | _(all columns)_                                   |                 |                 |                 |                        |                 |                          | **Schema only** — UI uses EPA API + `annual_records` (see View 7) |
+| **EPA CAMPD API**      | apportioned hourly/daily/monthly payloads         |                 |                 |                 |                        |                 |                          |                              **Yes**                              |
+| **`data_audit_logs`**  | `flagType` / `severity` / `details`               | **Yes** (Count) |                 |                 |        **Yes**         |                 |         **Yes**          |                                                                   |
+| **`datasets`**         | `name` / `importedAt` / counts                    |                 |                 |                 |                        |                 | **CLI sync output only** |                                                                   |
 
 ---
 
@@ -510,10 +516,11 @@ sequenceDiagram
 1. **Multi-year aggregation**: KPI cards, the explorer table, and the map sum `annual_records` across every year loaded — only the comparison modal scopes to the latest year per plant.
 2. **Column naming**: Drizzle uses camelCase (`stateCode`); SQLite stores snake_case (`state_code`). This doc uses Drizzle names in tables and SQL column names in query descriptions.
 3. **Seed vs sync**: CSV seeding populates plant/unit metadata; API sync populates emissions. Both are required for a fully enriched database.
-4. **Granular on-demand ingestion**: Hourly, daily, weekly, monthly, and yearly granular slices are fetched dynamically via the API and cached rather than loaded into bulk storage upfront.
+4. **Granular data path**: Hourly–monthly slices hit the EPA API at request time; yearly slices aggregate local `annual_records`. The `granular_records` table is reserved for future persistence—nothing writes to it today.
+5. **Cross-doc index**: Setup, scripts, and repo layout are summarized in **[README.md](./README.md)**; this file is the schema and view-mapping reference.
 
 ---
 
 ## 8. Conclusion
 
-Six normalized relational tables, multi-resolution temporal time slicing (Hourly, Daily, Weekly, Monthly, Yearly), ingestion-time physics audits, and per-view server aggregations keep the UI fast on a lightweight SQLite/LibSQL database — even with ~1,600 facilities and ~5,000 units.
+Six normalized relational tables, on-demand multi-resolution temporal slicing (Hourly, Daily, Weekly, Monthly, Yearly), ingestion-time physics audits, and per-view server aggregations keep the UI fast on a lightweight SQLite/LibSQL database — even with ~1,600 facilities and ~5,000 units.

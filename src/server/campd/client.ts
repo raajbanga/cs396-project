@@ -1,6 +1,17 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { env } from "~/env";
+import { clampDateToYear } from "~/lib/date-options";
+import {
+  clampCampdDateRange,
+  clampIsoDateToCampdPublished,
+  clampYearToCampdPublished,
+  getCampdPublishedYear,
+  getCampdValidMonthsForYear,
+  getDefaultCampdDateForYear,
+  parseCampdQuarterEndFromError,
+  toIsoDate,
+} from "~/lib/campd-reporting-period";
 import {
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
@@ -572,7 +583,9 @@ export interface GranularEmissionsResult {
   year: number;
   date?: string;
   unitId?: string;
-  source: "EPA_CAMPD_API" | "LOCAL_RECORDS";
+  publishedThrough: string;
+  source: "EPA_CAMPD_API" | "LOCAL_RECORDS" | "UNAVAILABLE";
+  error?: string;
   summary: {
     totalOperatingHours: number;
     totalGenerationMWh: number;
@@ -602,111 +615,276 @@ const MONTH_NAMES = [
   "December",
 ];
 
+interface CampdFetchResult {
+  items: Record<string, unknown>[];
+  totalCount: number;
+  error?: string;
+}
+
+function parseCampdItems(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object" && "items" in data) {
+    const items = (data as { items?: unknown }).items;
+    if (Array.isArray(items)) return items as Record<string, unknown>[];
+  }
+  return [];
+}
+
+function extractCampdError(body: unknown, status: number): string {
+  if (body && typeof body === "object" && "message" in body) {
+    const message = (body as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+    if (Array.isArray(message)) {
+      const joined = message
+        .filter((part): part is string => typeof part === "string")
+        .join(" ");
+      if (joined) return joined;
+    }
+  }
+  return `CAMPD API error (${status})`;
+}
+
+async function fetchCampdJson(
+  path: string,
+  query: URLSearchParams,
+): Promise<CampdFetchResult> {
+  const key = env.CAMPD_API;
+  if (!key) {
+    return {
+      items: [],
+      totalCount: 0,
+      error: "CAMPD_API key is not configured.",
+    };
+  }
+
+  try {
+    const res = await fetch(`${CAMPD_BASE_URL}${path}?${query.toString()}`, {
+      headers: { "x-api-key": key, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(30000),
+    });
+
+    const body: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {
+        items: [],
+        totalCount: 0,
+        error: extractCampdError(body, res.status),
+      };
+    }
+
+    const items = parseCampdItems(body);
+    const totalCountHeader = res.headers.get("x-total-count");
+    const parsedTotal = totalCountHeader
+      ? Number.parseInt(totalCountHeader, 10)
+      : items.length;
+    return {
+      items,
+      totalCount: Number.isNaN(parsedTotal) ? items.length : parsedTotal,
+    };
+  } catch (err) {
+    return {
+      items: [],
+      totalCount: 0,
+      error: err instanceof Error ? err.message : "CAMPD request failed",
+    };
+  }
+}
+
+async function fetchAllCampdPages(
+  path: string,
+  query: URLSearchParams,
+  perPage = 500,
+): Promise<CampdFetchResult> {
+  const allItems: Record<string, unknown>[] = [];
+  let page = 1;
+  let totalCount = 0;
+  let error: string | undefined;
+
+  while (page <= 50) {
+    const pageQuery = new URLSearchParams(query);
+    pageQuery.set("page", String(page));
+    pageQuery.set("perPage", String(perPage));
+    const result = await fetchCampdJson(path, pageQuery);
+    if (result.error) {
+      error = result.error;
+      break;
+    }
+
+    allItems.push(...result.items);
+    totalCount = result.totalCount || allItems.length;
+    if (result.items.length < perPage) break;
+    if (totalCount > 0 && allItems.length >= totalCount) break;
+    page += 1;
+  }
+
+  return {
+    items: allItems,
+    totalCount: totalCount || allItems.length,
+    error,
+  };
+}
+
+const PUBLISHED_THROUGH_TTL_MS = 60 * 60 * 1000;
+
+let publishedThroughCache: { iso: string; expiresAt: number } | null = null;
+
+function rememberPublishedThrough(iso: string) {
+  publishedThroughCache = {
+    iso,
+    expiresAt: Date.now() + PUBLISHED_THROUGH_TTL_MS,
+  };
+}
+
+function currentPublishedThrough(fallback: string): string {
+  return publishedThroughCache?.iso ?? fallback;
+}
+
+function learnFromCampdError(error?: string): string | null {
+  if (!error) return null;
+  const parsed = parseCampdQuarterEndFromError(error);
+  if (parsed) rememberPublishedThrough(parsed);
+  return parsed;
+}
+
+export async function resolveCampdPublishedThrough(
+  facilityId?: number,
+): Promise<string> {
+  if (publishedThroughCache && publishedThroughCache.expiresAt > Date.now()) {
+    return publishedThroughCache.iso;
+  }
+
+  const fallback = toIsoDate(new Date());
+  let probeId = facilityId;
+  if (!probeId) {
+    const [row] = await db
+      .select({ id: facilities.id })
+      .from(facilities)
+      .limit(1);
+    probeId = row?.id;
+  }
+
+  if (!probeId || !env.CAMPD_API) {
+    rememberPublishedThrough(fallback);
+    return fallback;
+  }
+
+  const year = new Date().getFullYear();
+  const result = await fetchCampdJson(
+    "/emissions-mgmt/emissions/apportioned/daily",
+    new URLSearchParams({
+      facilityId: String(probeId),
+      beginDate: `${year}-01-01`,
+      endDate: `${year}-12-31`,
+      page: "1",
+      perPage: "1",
+    }),
+  );
+  const parsed = learnFromCampdError(result.error);
+  const iso = parsed ?? (result.error ? fallback : `${year}-12-31`);
+  rememberPublishedThrough(iso);
+  return iso;
+}
+
+async function fetchCampdDateWindow(
+  path: string,
+  params: {
+    facilityId: number;
+    beginDate: string;
+    endDate: string;
+    publishedThrough: string;
+  },
+): Promise<CampdFetchResult> {
+  const range = clampCampdDateRange(
+    params.beginDate,
+    params.endDate,
+    params.publishedThrough,
+  );
+  const queryFor = (beginDate: string, endDate: string) =>
+    new URLSearchParams({
+      facilityId: params.facilityId.toString(),
+      beginDate,
+      endDate,
+    });
+
+  const result = await fetchAllCampdPages(
+    path,
+    queryFor(range.beginDate, range.endDate),
+  );
+  const learned = learnFromCampdError(result.error);
+  if (!learned || learned === params.publishedThrough) return result;
+
+  const retryRange = clampCampdDateRange(
+    params.beginDate,
+    params.endDate,
+    learned,
+  );
+  if (
+    retryRange.beginDate === range.beginDate &&
+    retryRange.endDate === range.endDate
+  ) {
+    return result;
+  }
+
+  return fetchAllCampdPages(
+    path,
+    queryFor(retryRange.beginDate, retryRange.endDate),
+  );
+}
+
 async function fetchCampdHourlyEmissions(params: {
   facilityId: number;
   beginDate: string;
   endDate: string;
-  page?: number;
-  perPage?: number;
-}): Promise<Record<string, unknown>[]> {
-  const key = env.CAMPD_API;
-  if (!key) return [];
-
-  const query = new URLSearchParams({
-    facilityId: params.facilityId.toString(),
-    beginDate: params.beginDate,
-    endDate: params.endDate,
-    page: (params.page ?? 1).toString(),
-    perPage: (params.perPage ?? 500).toString(),
-  });
-
-  try {
-    const res = await fetch(
-      `${CAMPD_BASE_URL}/emissions-mgmt/emissions/apportioned/hourly?${query.toString()}`,
-      {
-        headers: { "x-api-key": key, Accept: "application/json" },
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-
-    if (!res.ok) return [];
-    const data = (await res.json()) as { items?: Record<string, unknown>[] };
-    return data.items ?? [];
-  } catch {
-    return [];
-  }
+  publishedThrough: string;
+}): Promise<CampdFetchResult> {
+  return fetchCampdDateWindow(
+    "/emissions-mgmt/emissions/apportioned/hourly",
+    params,
+  );
 }
 
 async function fetchCampdDailyEmissions(params: {
   facilityId: number;
   beginDate: string;
   endDate: string;
-  page?: number;
-  perPage?: number;
-}): Promise<{ items: Record<string, unknown>[]; totalCount: number }> {
-  const key = env.CAMPD_API;
-  if (!key) return { items: [], totalCount: 0 };
-
-  const query = new URLSearchParams({
-    facilityId: params.facilityId.toString(),
-    beginDate: params.beginDate,
-    endDate: params.endDate,
-    page: (params.page ?? 1).toString(),
-    perPage: (params.perPage ?? 500).toString(),
-  });
-
-  try {
-    const res = await fetch(
-      `${CAMPD_BASE_URL}/emissions-mgmt/emissions/apportioned/daily?${query.toString()}`,
-      {
-        headers: { "x-api-key": key, Accept: "application/json" },
-        signal: AbortSignal.timeout(10000),
-      },
-    );
-
-    if (!res.ok) return { items: [], totalCount: 0 };
-    const totalCountHeader = res.headers.get("x-total-count");
-    const totalCount = totalCountHeader ? parseInt(totalCountHeader, 10) : 0;
-    const data = (await res.json()) as { items?: Record<string, unknown>[] };
-    return {
-      items: data.items ?? [],
-      totalCount: isNaN(totalCount) ? (data.items?.length ?? 0) : totalCount,
-    };
-  } catch {
-    return { items: [], totalCount: 0 };
-  }
+  publishedThrough: string;
+}): Promise<CampdFetchResult> {
+  return fetchCampdDateWindow(
+    "/emissions-mgmt/emissions/apportioned/daily",
+    params,
+  );
 }
 
 async function fetchCampdMonthlyEmissions(params: {
   facilityId: number;
   year: number;
-}): Promise<Record<string, unknown>[]> {
-  const key = env.CAMPD_API;
-  if (!key) return [];
+  publishedThrough: string;
+}): Promise<CampdFetchResult> {
+  const requestMonths = async (publishedThrough: string) => {
+    const months = getCampdValidMonthsForYear(params.year, publishedThrough);
+    if (months.length === 0) {
+      return {
+        items: [] as Record<string, unknown>[],
+        totalCount: 0,
+        error: `No published CAMPD months for ${params.year}.`,
+      };
+    }
 
-  const query = new URLSearchParams({
-    facilityId: params.facilityId.toString(),
-    year: params.year.toString(),
-    month: "1|2|3|4|5|6|7|8|9|10|11|12",
-    page: "1",
-    perPage: "500",
-  });
-
-  try {
-    const res = await fetch(
-      `${CAMPD_BASE_URL}/emissions-mgmt/emissions/apportioned/monthly?${query.toString()}`,
-      {
-        headers: { "x-api-key": key, Accept: "application/json" },
-        signal: AbortSignal.timeout(10000),
-      },
+    return fetchAllCampdPages(
+      "/emissions-mgmt/emissions/apportioned/monthly",
+      new URLSearchParams({
+        facilityId: params.facilityId.toString(),
+        year: params.year.toString(),
+        month: months.join("|"),
+      }),
     );
+  };
 
-    if (!res.ok) return [];
-    const data = (await res.json()) as { items?: Record<string, unknown>[] };
-    return data.items ?? [];
-  } catch {
-    return [];
-  }
+  const result = await requestMonths(params.publishedThrough);
+  const learned = learnFromCampdError(result.error);
+  if (!learned || learned === params.publishedThrough) return result;
+  return requestMonths(learned);
 }
 
 function parseNum(val: unknown, fallback = 0): number {
@@ -724,12 +902,53 @@ function toCleanString(val: unknown): string {
   return "";
 }
 
+function filterCampdRowsByUnit<T extends Record<string, unknown>>(
+  rows: T[],
+  unitId?: string,
+): T[] {
+  if (!unitId) return rows;
+  const target = unitId.toLowerCase();
+  return rows.filter((row) => {
+    const id = toCleanString(row.unitId ?? row.unit_id);
+    return id.toLowerCase() === target;
+  });
+}
+
+function summarizeGranularItems(
+  items: GranularEmissionsItem[],
+  options?: { operatingHoursDecimals?: number },
+): GranularEmissionsResult["summary"] {
+  const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
+  const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
+  const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
+  const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
+  const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
+  const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
+
+  return {
+    totalOperatingHours:
+      options?.operatingHoursDecimals === 1
+        ? Math.round(totHours * 10) / 10
+        : Math.round(totHours),
+    totalGenerationMWh: Math.round(totGen),
+    totalHeatInputMMBtu: Math.round(totHeat),
+    totalCo2Tons: Math.round(totCo2),
+    totalSo2Tons: Number(totSo2.toFixed(1)),
+    totalNoxTons: Number(totNox.toFixed(1)),
+    co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
+    heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
+    itemCount: items.length,
+  };
+}
+
 function emptyGranularResult(
   facilityId: number,
   granularity: "hourly" | "daily" | "weekly" | "monthly" | "yearly",
   year: number,
   unitId?: string,
   date?: string,
+  error?: string,
+  publishedThrough?: string,
 ): GranularEmissionsResult {
   return {
     facilityId,
@@ -737,7 +956,11 @@ function emptyGranularResult(
     year,
     date,
     unitId,
-    source: "EPA_CAMPD_API",
+    publishedThrough: currentPublishedThrough(
+      publishedThrough ?? toIsoDate(new Date()),
+    ),
+    source: error ? "UNAVAILABLE" : "EPA_CAMPD_API",
+    error,
     summary: {
       totalOperatingHours: 0,
       totalGenerationMWh: 0,
@@ -763,7 +986,11 @@ export async function fetchGranularEmissionsForFacility(
 ): Promise<GranularEmissionsResult> {
   const facilityId = options.facilityId;
   const granularity = options.granularity;
-  const year = options.year ?? 2022;
+  const publishedThrough = await resolveCampdPublishedThrough(facilityId);
+  const year = clampYearToCampdPublished(
+    options.year ?? getCampdPublishedYear(publishedThrough),
+    publishedThrough,
+  );
   const requestedUnitId =
     options.unitId && options.unitId !== "ALL" ? options.unitId : undefined;
 
@@ -839,148 +1066,117 @@ export async function fetchGranularEmissionsForFacility(
       };
     });
 
-    let totGen = 0;
-    let totHeat = 0;
-    let totCo2 = 0;
-    let totSo2 = 0;
-    let totNox = 0;
-    let totHours = 0;
-    for (const it of items) {
-      totGen += it.grossGenerationMWh;
-      totHeat += it.heatInputMMBtu;
-      totCo2 += it.co2MassTons;
-      totSo2 += it.so2MassTons;
-      totNox += it.noxMassTons;
-      totHours += it.operatingHours;
-    }
-
     return {
       facilityId,
       granularity: "yearly",
       year,
       unitId: requestedUnitId,
+      publishedThrough: currentPublishedThrough(publishedThrough),
       source: "LOCAL_RECORDS",
-      summary: {
-        totalOperatingHours: Math.round(totHours),
-        totalGenerationMWh: Math.round(totGen),
-        totalHeatInputMMBtu: Math.round(totHeat),
-        totalCo2Tons: Math.round(totCo2),
-        totalSo2Tons: Number(totSo2.toFixed(1)),
-        totalNoxTons: Number(totNox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-        itemCount: items.length,
-      },
+      summary: summarizeGranularItems(items),
       items,
     };
   }
 
   // 2. MONTHLY GRANULARITY
   if (granularity === "monthly") {
-    let rawMonthly: Record<string, unknown>[] = [];
-    try {
-      rawMonthly = await fetchCampdMonthlyEmissions({ facilityId, year });
-    } catch (err) {
-      console.warn("CAMPD monthly fetch failed:", err);
-    }
+    const monthlyResult = await fetchCampdMonthlyEmissions({
+      facilityId,
+      year,
+      publishedThrough,
+    });
+    let rawMonthly = monthlyResult.items;
 
-    if (requestedUnitId) {
-      rawMonthly = rawMonthly.filter(
-        (r) =>
-          toCleanString(r.unitId).toLowerCase() ===
-          requestedUnitId.toLowerCase(),
+    rawMonthly = filterCampdRowsByUnit(rawMonthly, requestedUnitId);
+
+    if (rawMonthly.length === 0) {
+      return emptyGranularResult(
+        facilityId,
+        "monthly",
+        year,
+        requestedUnitId,
+        undefined,
+        monthlyResult.error,
+        publishedThrough,
       );
     }
 
-    if (rawMonthly.length > 0) {
-      const monthBuckets = new Map<
-        number,
-        {
-          gen: number;
-          heat: number;
-          co2: number;
-          so2: number;
-          nox: number;
-          hours: number;
-        }
-      >();
-
-      for (let m = 1; m <= 12; m++) {
-        monthBuckets.set(m, {
-          gen: 0,
-          heat: 0,
-          co2: 0,
-          so2: 0,
-          nox: 0,
-          hours: 0,
-        });
+    const validMonths = getCampdValidMonthsForYear(
+      year,
+      currentPublishedThrough(publishedThrough),
+    );
+    const monthBuckets = new Map<
+      number,
+      {
+        gen: number;
+        heat: number;
+        co2: number;
+        so2: number;
+        nox: number;
+        hours: number;
       }
+    >();
 
-      for (const row of rawMonthly) {
-        const m = Number(row.month);
-        if (m >= 1 && m <= 12) {
-          const b = monthBuckets.get(m)!;
-          b.gen += parseNum(row.grossLoad);
-          b.heat += parseNum(row.heatInput);
-          b.co2 += parseNum(row.co2Mass);
-          b.so2 += parseNum(row.so2Mass);
-          b.nox += parseNum(row.noxMass);
-          b.hours += parseNum(row.sumOpTime);
-        }
-      }
-
-      const items: GranularEmissionsItem[] = Array.from(
-        monthBuckets.entries(),
-      ).map(([m, d]) => ({
-        periodKey: `month_${m}`,
-        periodLabel: MONTH_NAMES[m - 1] ?? `Month ${m}`,
-        subLabel: `${year}`,
-        operatingHours: Math.round(d.hours),
-        grossGenerationMWh: Math.round(d.gen),
-        heatInputMMBtu: Math.round(d.heat),
-        co2MassTons: Math.round(d.co2),
-        so2MassTons: Number(d.so2.toFixed(1)),
-        noxMassTons: Number(d.nox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(d.co2, d.gen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
-      }));
-
-      const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
-      const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
-      const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
-      const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
-      const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
-      const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
-
-      return {
-        facilityId,
-        granularity: "monthly",
-        year,
-        unitId: requestedUnitId,
-        source: "EPA_CAMPD_API",
-        summary: {
-          totalOperatingHours: Math.round(totHours),
-          totalGenerationMWh: Math.round(totGen),
-          totalHeatInputMMBtu: Math.round(totHeat),
-          totalCo2Tons: Math.round(totCo2),
-          totalSo2Tons: Number(totSo2.toFixed(1)),
-          totalNoxTons: Number(totNox.toFixed(1)),
-          co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-          heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-          itemCount: items.length,
-        },
-        items,
-      };
+    for (const m of validMonths) {
+      monthBuckets.set(m, {
+        gen: 0,
+        heat: 0,
+        co2: 0,
+        so2: 0,
+        nox: 0,
+        hours: 0,
+      });
     }
 
-    return emptyGranularResult(facilityId, "monthly", year, requestedUnitId);
+    for (const row of rawMonthly) {
+      const m = Number(row.month);
+      const b = monthBuckets.get(m);
+      if (!b) continue;
+      b.gen += parseNum(row.grossLoad);
+      b.heat += parseNum(row.heatInput);
+      b.co2 += parseNum(row.co2Mass);
+      b.so2 += parseNum(row.so2Mass);
+      b.nox += parseNum(row.noxMass);
+      b.hours += parseNum(row.sumOpTime);
+    }
+
+    const items: GranularEmissionsItem[] = Array.from(
+      monthBuckets.entries(),
+    ).map(([m, d]) => ({
+      periodKey: `month_${m}`,
+      periodLabel: MONTH_NAMES[m - 1] ?? `Month ${m}`,
+      subLabel: `${year}`,
+      operatingHours: Math.round(d.hours),
+      grossGenerationMWh: Math.round(d.gen),
+      heatInputMMBtu: Math.round(d.heat),
+      co2MassTons: Math.round(d.co2),
+      so2MassTons: Number(d.so2.toFixed(1)),
+      noxMassTons: Number(d.nox.toFixed(1)),
+      co2IntensityLbsMWh: computeCo2IntensityLbsMWh(d.co2, d.gen),
+      heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
+    }));
+
+    return {
+      facilityId,
+      granularity: "monthly",
+      year,
+      unitId: requestedUnitId,
+      publishedThrough: currentPublishedThrough(publishedThrough),
+      source: "EPA_CAMPD_API",
+      summary: summarizeGranularItems(items),
+      items,
+    };
   }
 
   // 3. DAILY GRANULARITY
   if (granularity === "daily") {
-    const targetDate = options.date ?? `${year}-07-15`;
-    const monthStr = targetDate.slice(5, 7) || "07";
-    const mNum = parseInt(monthStr, 10) || 7;
+    const targetDate = clampDateToYear(
+      options.date ?? getDefaultCampdDateForYear(year, publishedThrough),
+      year,
+      publishedThrough,
+    );
+    const monthStr = targetDate.slice(5, 7) || "01";
+    const mNum = parseInt(monthStr, 10) || 1;
     const daysInMonth = new Date(Date.UTC(year, mNum, 0)).getUTCDate();
     const beginDate = `${year}-${monthStr}-01`;
     const endDate = `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
@@ -989,16 +1185,11 @@ export async function fetchGranularEmissionsForFacility(
       facilityId,
       beginDate,
       endDate,
+      publishedThrough,
     });
     let rawDaily = dailyResult.items;
 
-    if (requestedUnitId) {
-      rawDaily = rawDaily.filter(
-        (r) =>
-          toCleanString(r.unitId).toLowerCase() ===
-          requestedUnitId.toLowerCase(),
-      );
-    }
+    rawDaily = filterCampdRowsByUnit(rawDaily, requestedUnitId);
 
     if (rawDaily.length === 0) {
       return emptyGranularResult(
@@ -1007,8 +1198,19 @@ export async function fetchGranularEmissionsForFacility(
         year,
         requestedUnitId,
         targetDate,
+        dailyResult.error,
+        publishedThrough,
       );
     }
+
+    const monthEndIso = `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+    const visibleEnd = clampIsoDateToCampdPublished(
+      monthEndIso,
+      currentPublishedThrough(publishedThrough),
+    );
+    const visibleDays = visibleEnd.startsWith(`${year}-${monthStr}-`)
+      ? parseInt(visibleEnd.slice(8, 10), 10)
+      : daysInMonth;
 
     const dayBuckets = new Map<
       number,
@@ -1023,7 +1225,7 @@ export async function fetchGranularEmissionsForFacility(
       }
     >();
 
-    for (let d = 1; d <= daysInMonth; d++) {
+    for (let d = 1; d <= visibleDays; d++) {
       dayBuckets.set(d, {
         gen: 0,
         heat: 0,
@@ -1038,25 +1240,24 @@ export async function fetchGranularEmissionsForFacility(
     for (const r of rawDaily) {
       const dateVal = toCleanString(r.date ?? r.opDate);
       const dayNum = parseInt(dateVal.slice(8, 10), 10);
-      if (dayNum >= 1 && dayNum <= daysInMonth) {
-        const b = dayBuckets.get(dayNum)!;
-        b.gen += parseNum(r.grossLoad ?? r.grossGenerationMWh);
-        b.heat += parseNum(r.heatInput ?? r.heatInputMMBtu);
-        b.co2 += parseNum(r.co2Mass ?? r.co2MassTons);
-        b.so2 += parseNum(r.so2Mass ?? r.so2MassTons);
-        b.nox += parseNum(r.noxMass ?? r.noxMassTons);
-        b.hours += parseNum(r.operatingTime ?? r.sumOpTime, 1.0);
-      }
+      const b = dayBuckets.get(dayNum);
+      if (!b) continue;
+      b.gen += parseNum(r.grossLoad ?? r.grossGenerationMWh);
+      b.heat += parseNum(r.heatInput ?? r.heatInputMMBtu);
+      b.co2 += parseNum(r.co2Mass ?? r.co2MassTons);
+      b.so2 += parseNum(r.so2Mass ?? r.so2MassTons);
+      b.nox += parseNum(r.noxMass ?? r.noxMassTons);
+      b.hours += parseNum(r.operatingTime ?? r.sumOpTime, 1.0);
     }
 
     const items: GranularEmissionsItem[] = [];
-    for (let d = 1; d <= daysInMonth; d++) {
+    for (let d = 1; d <= visibleDays; d++) {
       const b = dayBuckets.get(d)!;
       items.push({
         periodKey: `day_${d}`,
         periodLabel: `Day ${d}`,
         subLabel: b.dateStr.slice(5),
-        operatingHours: Math.min(24, Math.round(b.hours * 10) / 10),
+        operatingHours: Math.round(b.hours * 10) / 10,
         grossGenerationMWh: Math.round(b.gen),
         heatInputMMBtu: Math.round(b.heat),
         co2MassTons: Math.round(b.co2 * 10) / 10,
@@ -1067,77 +1268,46 @@ export async function fetchGranularEmissionsForFacility(
       });
     }
 
-    const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
-    const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
-    const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
-    const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
-    const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
-    const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
-
     return {
       facilityId,
       granularity: "daily",
       year,
       date: targetDate,
       unitId: requestedUnitId,
+      publishedThrough: currentPublishedThrough(publishedThrough),
       source: "EPA_CAMPD_API",
-      summary: {
-        totalOperatingHours: Math.round(totHours),
-        totalGenerationMWh: Math.round(totGen),
-        totalHeatInputMMBtu: Math.round(totHeat),
-        totalCo2Tons: Math.round(totCo2),
-        totalSo2Tons: Number(totSo2.toFixed(1)),
-        totalNoxTons: Number(totNox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-        itemCount: items.length,
-      },
+      summary: summarizeGranularItems(items),
       items,
     };
   }
 
   // 4. WEEKLY GRANULARITY
   if (granularity === "weekly") {
-    const firstPage = await fetchCampdDailyEmissions({
+    const weeklyRange = clampCampdDateRange(
+      `${year}-01-01`,
+      `${year}-12-31`,
+      publishedThrough,
+    );
+    const dailyResult = await fetchCampdDailyEmissions({
       facilityId,
-      beginDate: `${year}-01-01`,
-      endDate: `${year}-12-31`,
-      page: 1,
-      perPage: 500,
+      beginDate: weeklyRange.beginDate,
+      endDate: weeklyRange.endDate,
+      publishedThrough,
     });
+    let rawDaily = dailyResult.items;
 
-    let rawDaily = firstPage.items;
-    const totalCount = firstPage.totalCount;
-    if (totalCount > 500) {
-      const maxPages = Math.min(6, Math.ceil(totalCount / 500));
-      const pagePromises = [];
-      for (let p = 2; p <= maxPages; p++) {
-        pagePromises.push(
-          fetchCampdDailyEmissions({
-            facilityId,
-            beginDate: `${year}-01-01`,
-            endDate: `${year}-12-31`,
-            page: p,
-            perPage: 500,
-          }),
-        );
-      }
-      const restPages = await Promise.all(pagePromises);
-      for (const pg of restPages) {
-        rawDaily = rawDaily.concat(pg.items);
-      }
-    }
-
-    if (requestedUnitId) {
-      rawDaily = rawDaily.filter(
-        (r) =>
-          toCleanString(r.unitId).toLowerCase() ===
-          requestedUnitId.toLowerCase(),
-      );
-    }
+    rawDaily = filterCampdRowsByUnit(rawDaily, requestedUnitId);
 
     if (rawDaily.length === 0) {
-      return emptyGranularResult(facilityId, "weekly", year, requestedUnitId);
+      return emptyGranularResult(
+        facilityId,
+        "weekly",
+        year,
+        requestedUnitId,
+        undefined,
+        dailyResult.error,
+        publishedThrough,
+      );
     }
 
     const weekBuckets = new Map<
@@ -1171,27 +1341,22 @@ export async function fetchGranularEmissionsForFacility(
     }
 
     for (const row of rawDaily) {
-      const dateStr = toCleanString(row.date);
-      if (dateStr.length >= 10) {
-        const d = new Date(dateStr);
-        const startOfYear = new Date(Date.UTC(year, 0, 1));
-        const dayOfYear = Math.floor(
-          (d.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24),
-        );
-        const weekNum = Math.min(
-          52,
-          Math.max(1, Math.floor(dayOfYear / 7) + 1),
-        );
-        const b = weekBuckets.get(weekNum);
-        if (b) {
-          b.gen += parseNum(row.grossLoad);
-          b.heat += parseNum(row.heatInput);
-          b.co2 += parseNum(row.co2Mass);
-          b.so2 += parseNum(row.so2Mass);
-          b.nox += parseNum(row.noxMass);
-          b.hours += parseNum(row.sumOpTime ?? row.countOpTime);
-        }
-      }
+      const dateStr = toCleanString(row.date ?? row.opDate);
+      if (dateStr.length < 10) continue;
+      const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+      if (!y || !m || !d) continue;
+      const dayOfYear = Math.floor(
+        (Date.UTC(y, m - 1, d) - Date.UTC(year, 0, 1)) / (1000 * 60 * 60 * 24),
+      );
+      const weekNum = Math.min(52, Math.max(1, Math.floor(dayOfYear / 7) + 1));
+      const b = weekBuckets.get(weekNum);
+      if (!b) continue;
+      b.gen += parseNum(row.grossLoad);
+      b.heat += parseNum(row.heatInput);
+      b.co2 += parseNum(row.co2Mass);
+      b.so2 += parseNum(row.so2Mass);
+      b.nox += parseNum(row.noxMass);
+      b.hours += parseNum(row.sumOpTime ?? row.countOpTime);
     }
 
     const items: GranularEmissionsItem[] = Array.from(
@@ -1210,54 +1375,33 @@ export async function fetchGranularEmissionsForFacility(
       heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
     }));
 
-    const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
-    const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
-    const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
-    const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
-    const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
-    const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
-
     return {
       facilityId,
       granularity: "weekly",
       year,
       unitId: requestedUnitId,
+      publishedThrough: currentPublishedThrough(publishedThrough),
       source: "EPA_CAMPD_API",
-      summary: {
-        totalOperatingHours: Math.round(totHours),
-        totalGenerationMWh: Math.round(totGen),
-        totalHeatInputMMBtu: Math.round(totHeat),
-        totalCo2Tons: Math.round(totCo2),
-        totalSo2Tons: Number(totSo2.toFixed(1)),
-        totalNoxTons: Number(totNox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-        itemCount: items.length,
-      },
+      summary: summarizeGranularItems(items),
       items,
     };
   }
 
   // 5. HOURLY GRANULARITY
-  const targetDate = options.date ?? `${year}-07-15`;
-  let rawHourly: Record<string, unknown>[] = [];
-  try {
-    rawHourly = await fetchCampdHourlyEmissions({
-      facilityId,
-      beginDate: targetDate,
-      endDate: targetDate,
-    });
-  } catch (err) {
-    console.warn("CAMPD hourly fetch failed:", err);
-  }
+  const targetDate = clampDateToYear(
+    options.date ?? getDefaultCampdDateForYear(year, publishedThrough),
+    year,
+    publishedThrough,
+  );
+  const hourlyResult = await fetchCampdHourlyEmissions({
+    facilityId,
+    beginDate: targetDate,
+    endDate: targetDate,
+    publishedThrough,
+  });
+  let rawHourly = hourlyResult.items;
 
-  if (requestedUnitId) {
-    rawHourly = rawHourly.filter(
-      (r) =>
-        toCleanString(r.unitId ?? r.unit_id).toLowerCase() ===
-        requestedUnitId.toLowerCase(),
-    );
-  }
+  rawHourly = filterCampdRowsByUnit(rawHourly, requestedUnitId);
 
   if (rawHourly.length === 0) {
     return emptyGranularResult(
@@ -1266,6 +1410,8 @@ export async function fetchGranularEmissionsForFacility(
       year,
       requestedUnitId,
       targetDate,
+      hourlyResult.error,
+      publishedThrough,
     );
   }
 
@@ -1317,31 +1463,15 @@ export async function fetchGranularEmissionsForFacility(
     },
   );
 
-  const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
-  const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
-  const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
-  const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
-  const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
-  const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
-
   return {
     facilityId,
     granularity: "hourly",
     year,
     date: targetDate,
     unitId: requestedUnitId,
+    publishedThrough: currentPublishedThrough(publishedThrough),
     source: "EPA_CAMPD_API",
-    summary: {
-      totalOperatingHours: Math.round(totHours * 10) / 10,
-      totalGenerationMWh: Math.round(totGen),
-      totalHeatInputMMBtu: Math.round(totHeat),
-      totalCo2Tons: Math.round(totCo2),
-      totalSo2Tons: Number(totSo2.toFixed(1)),
-      totalNoxTons: Number(totNox.toFixed(1)),
-      co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-      heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-      itemCount: items.length,
-    },
+    summary: summarizeGranularItems(items, { operatingHoursDecimals: 1 }),
     items,
   };
 }

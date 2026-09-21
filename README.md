@@ -1,8 +1,8 @@
-# EPA CAMPD Power Generation & Emissions Management System
+# GridPulse — EPA CAMPD Power & Emissions Intelligence
 
-A modern, high-performance web application and relational registry for tracking power generation facilities, continuous emissions monitoring (CEMS), and automated data quality audits based on the EPA Clean Air Markets Program Data (CAMPD) API.
+A Next.js web application and relational registry for US power plants, continuous emissions monitoring (CEMS) data, and automated thermodynamic sanity audits, backed by the EPA Clean Air Markets Program Data (CAMPD) API.
 
-Built for **CS396 Phase 1 Core**.
+Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingestion details live in **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
 
 ---
 
@@ -21,7 +21,7 @@ Built for **CS396 Phase 1 Core**.
      - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
 
 3. **Automated Physical Sanity & Data Quality Auditing**:
-   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `client.ts`):
+   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `src/server/campd/client.ts`):
      - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO₂ emissions.
      - `PHANTOM_GENERATION` (`ERROR`): Generating power (> 0 MWh) with 0 operating hours recorded.
      - `EXTREME_HEAT_RATE` (`WARN`): Units operating outside thermodynamic boundaries (< 5.0 or > 25.0 MMBtu/MWh).
@@ -38,12 +38,16 @@ Built for **CS396 Phase 1 Core**.
    - Direct evaluation of grid region, generation capacity, fleet fuel diversity, gross carbon tonnage, carbon intensity, and thermal efficiency.
 
 6. **Granular Temporal Emissions Telemetry**:
-   - High-resolution continuous emissions intelligence across Hourly, Daily, Weekly, Monthly, and Yearly intervals.
-   - 100% direct querying of EPA CAMPD apportioned endpoints in real time with zero estimations.
+   - Hourly, daily, weekly, and monthly slices are fetched on demand from EPA CAMPD apportioned endpoints (no synthetic estimation).
+   - **Yearly** granularity is aggregated from local `annual_records` (synced via `npm run sync:campd`).
 
-7. **Clean, Modern UI (Tailwind CSS v4 & shadcn/ui)**:
-   - Built with DRY, accessible component primitives (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`).
-   - Clean dark and light aesthetic with zero distracting emoticons, fully powered by SVG icons from `lucide-react`.
+7. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
+   - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
+   - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare dialogs, audit table, EPA reference primer).
+   - Dark/light themes via `next-themes`; icons from `lucide-react`.
+
+8. **Type-safe API (tRPC)**:
+   - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getMapFacilities`, `getFacility`, `compareFacilities`, `getAuditLogs`, `getCampdPublishedThrough`, `getGranularEmissions`.
 
 ---
 
@@ -66,17 +70,17 @@ Bundled TopoJSON assets come from the BSD-licensed
 
 ## Database Architecture
 
-Six normalized SQLite tables (via LibSQL / Turso), managed with Drizzle ORM. For column-level usage, view mappings, and ingestion details, see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+Six normalized SQLite tables (via LibSQL), managed with Drizzle ORM. The `granular_records` table exists for future caching, but **granular UI data today comes from the EPA API** (plus `annual_records` for yearly rollups)—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
 
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
     FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
-    FACILITIES ||--o{ GRANULAR_RECORDS : "tracks"
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
-    UNITS ||--o{ GRANULAR_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
-    DATASETS ||--o{ GRANULAR_RECORDS : "originates"
+    FACILITIES ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
+    UNITS ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
+    DATASETS ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
 
     FACILITIES {
@@ -182,11 +186,16 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Ensure your `.env` contains:
+Ensure your `.env` matches `src/env.js` (see `.env.example`):
 
 ```env
 DATABASE_URL="file:./db.sqlite"
+# Optional for remote Turso; omit for local file DB
+DATABASE_AUTH_TOKEN=""
+# Required for sync + live granular CAMPD calls
 CAMPD_API="your_epa_campd_api_key_here"
+# Optional; improves CARTO basemap tiles on the Leaflet map
+NEXT_PUBLIC_CARTO_API=""
 ```
 
 ### 2. Install Dependencies
@@ -224,8 +233,24 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Verification & Testing
 
-Run formatting, linting, type checks, tests, and a production build:
+| Script             | Purpose                                                            |
+| :----------------- | :----------------------------------------------------------------- |
+| `npm run validate` | Format check, lint, typecheck, unit tests, production build        |
+| `npm test`         | Node test runner over `src/lib/domain-utils.test.ts` (lib helpers) |
+| `npm run check`    | ESLint + `tsc --noEmit`                                            |
 
 ```bash
 npm run validate
 ```
+
+## Repository Layout (high level)
+
+| Path                         | Role                                                                              |
+| :--------------------------- | :-------------------------------------------------------------------------------- |
+| `src/app/`                   | Next.js App Router pages and `_components` UI                                     |
+| `src/server/api/`            | tRPC router (`facilities`) and context                                            |
+| `src/server/db/`             | Drizzle schema, queries, LibSQL client (`resolveDatabaseUrl` lives in `index.ts`) |
+| `src/server/campd/client.ts` | EPA sync, granular fetch, ingestion audits                                        |
+| `src/lib/`                   | Domain helpers (emissions math, CAMPD dates, plant narrative, map theming)        |
+| `src/trpc/`                  | React + RSC tRPC clients (`query-client.ts` holds shared React Query setup)       |
+| `scripts/`                   | `db:migrate`, `db:seed`, `sync:campd` CLI entrypoints                             |

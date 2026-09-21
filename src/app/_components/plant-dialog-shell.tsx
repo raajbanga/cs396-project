@@ -8,7 +8,6 @@ import {
   DialogFooter,
   DialogHeader,
 } from "~/components/ui/dialog";
-import { InlineLoading } from "~/components/ui/inline-loading";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { cn } from "~/lib/utils";
 
@@ -94,25 +93,6 @@ export function PlantDialogFooter({
     >
       {children}
     </DialogFooter>
-  );
-}
-
-export function PlantDialogLoading({
-  title,
-  subtitle,
-  className,
-}: {
-  title: string;
-  subtitle?: string;
-  className?: string;
-}) {
-  return (
-    <InlineLoading
-      title={title}
-      subtitle={subtitle}
-      size="md"
-      className={className}
-    />
   );
 }
 

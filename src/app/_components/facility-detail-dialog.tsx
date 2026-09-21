@@ -15,6 +15,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DialogTitle } from "~/components/ui/dialog";
+import { InlineLoading } from "~/components/ui/inline-loading";
 import { KpiStrip } from "~/components/ui/kpi-strip";
 import { StatTile } from "~/components/ui/stat-tile";
 import { buildYearlyRollups } from "~/lib/annual-rollups";
@@ -36,7 +37,6 @@ import {
   PlantAnalysisTabs,
   PlantDialogFooter,
   PlantDialogHeader,
-  PlantDialogLoading,
   PlantDialogScrollBody,
   PlantDialogShell,
 } from "./plant-dialog-shell";
@@ -124,9 +124,7 @@ export function FacilityDetailDialog({
       : null;
 
   const availableYears =
-    yearlyRollups.length > 0
-      ? yearlyRollups.map((r) => r.year)
-      : [2022, 2021, 2020];
+    yearlyRollups.length > 0 ? yearlyRollups.map((r) => r.year) : undefined;
 
   return (
     <PlantDialogShell
@@ -330,7 +328,7 @@ export function FacilityDetailDialog({
 
         <div className="space-y-4 pt-1">
           {isLoading ? (
-            <PlantDialogLoading title="Loading comprehensive plant records..." />
+            <InlineLoading title="Loading comprehensive plant records..." />
           ) : activeTab === "overview" ? (
             <InspectOverviewPanel story={story} />
           ) : activeTab === "fleet" ? (

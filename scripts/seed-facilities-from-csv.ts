@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/libsql";
 
 import * as schema from "~/server/db/schema";
 import { facilities, units } from "~/server/db/schema";
-import { resolveDatabaseUrl } from "~/server/db/url";
+import { resolveDatabaseUrl } from "~/server/db";
 
 function createSeedDb() {
   return drizzle(
