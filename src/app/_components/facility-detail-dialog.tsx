@@ -22,6 +22,7 @@ import {
 import { AuditSeverityBadge, Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { CarbonIntensityBadge } from "~/components/ui/carbon-intensity-badge";
+import { GranularEmissionsWindow } from "./granular-emissions-window";
 import {
   Dialog,
   DialogClose,
@@ -79,9 +80,9 @@ export function FacilityDetailDialog({
   onToggleCompare,
   isInCompare,
 }: FacilityDetailDialogProps) {
-  const [activeTab, setActiveTab] = useState<"units" | "emissions" | "audit">(
-    "units",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "emissions" | "fleet" | "granular" | "audit"
+  >("overview");
   const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
 
   const toggleYearExpanded = (year: number) => {
@@ -357,83 +358,26 @@ export function FacilityDetailDialog({
             </div>
           )}
 
-          {/* Plant Overview & Real-World Impact */}
-          {story && (
-            <div className="border-edge bg-surface/40 space-y-3 rounded-lg border p-3.5 sm:p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                  <span className="text-fg text-xs font-semibold tracking-wider uppercase">
-                    Plant Overview & Role
-                  </span>
-                </div>
-                <PlantRoleBadge roleInfo={story.roleInfo} />
-              </div>
-
-              <p className="text-fg text-sm leading-relaxed font-medium">
-                {story.headline}
-              </p>
-
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <div className="border-edge/60 bg-canvas/60 space-y-1 rounded-md border p-3">
-                  <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-400">
-                    <Zap className="h-3.5 w-3.5" />
-                    Grid & Operational Dispatch
-                  </span>
-                  <p className="text-fg-2 text-sm leading-relaxed">
-                    {story.gridStory}
-                  </p>
-                </div>
-
-                <div className="border-edge/60 bg-canvas/60 space-y-1 rounded-md border p-3">
-                  <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
-                    <Leaf className="h-3.5 w-3.5" />
-                    Environmental Footprint
-                  </span>
-                  <p className="text-fg-2 text-sm leading-relaxed">
-                    {story.environmentalStory}
-                  </p>
-                </div>
-              </div>
-
-              {/* Tangible Human Equivalents */}
-              <div className="border-edge/60 flex flex-wrap items-center gap-3 border-t pt-2.5 text-xs">
-                <div className="text-fg-2 flex items-center gap-1.5">
-                  <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                  <span>
-                    Powers{" "}
-                    <strong className="text-fg">
-                      {story.equivalents.homesPoweredFormatted}
-                    </strong>
-                  </span>
-                </div>
-                {story.equivalents.carsDrivenRaw > 0 && (
-                  <div className="text-fg-2 flex items-center gap-1.5">
-                    <Car className="h-3.5 w-3.5 shrink-0 text-sky-400" />
-                    <span>
-                      Emissions ≈{" "}
-                      <strong className="text-fg">
-                        {story.equivalents.carsDrivenFormatted}
-                      </strong>
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           <SegmentedControl
             variant="tabs"
             value={activeTab}
             onChange={setActiveTab}
             options={[
               {
-                value: "units",
-                label: `Fleet Units (${facility?.units.length ?? 0})`,
+                value: "overview",
+                label: "Plant Overview",
               },
               {
                 value: "emissions",
-                label: `Annual Timeline (${yearlyRollups.length} ${yearlyRollups.length === 1 ? "Yr" : "Yrs"})`,
+                label: `Emissions & Air Quality (${yearlyRollups.length} ${yearlyRollups.length === 1 ? "Yr" : "Yrs"})`,
+              },
+              {
+                value: "fleet",
+                label: `Fleet & Generation Units (${facility?.units.length ?? 0})`,
+              },
+              {
+                value: "granular",
+                label: "Granular Time Series",
               },
               {
                 value: "audit",
@@ -463,8 +407,77 @@ export function FacilityDetailDialog({
                   Loading comprehensive plant records...
                 </p>
               </div>
-            ) : activeTab === "units" ? (
-              /* TAB 1: FLEET UNITS */
+            ) : activeTab === "overview" ? (
+              /* TAB 1: PLANT OVERVIEW */
+              story ? (
+                <div className="border-edge bg-surface/40 space-y-3 rounded-lg border p-3.5 sm:p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                      <span className="text-fg text-xs font-semibold tracking-wider uppercase">
+                        Plant Overview & Role
+                      </span>
+                    </div>
+                    <PlantRoleBadge roleInfo={story.roleInfo} />
+                  </div>
+
+                  <p className="text-fg text-sm leading-relaxed font-medium">
+                    {story.headline}
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                    <div className="border-edge/60 bg-canvas/60 space-y-1 rounded-md border p-3">
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-400">
+                        <Zap className="h-3.5 w-3.5" />
+                        Grid & Operational Dispatch
+                      </span>
+                      <p className="text-fg-2 text-sm leading-relaxed">
+                        {story.gridStory}
+                      </p>
+                    </div>
+
+                    <div className="border-edge/60 bg-canvas/60 space-y-1 rounded-md border p-3">
+                      <span className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+                        <Leaf className="h-3.5 w-3.5" />
+                        Environmental Footprint
+                      </span>
+                      <p className="text-fg-2 text-sm leading-relaxed">
+                        {story.environmentalStory}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tangible Human Equivalents */}
+                  <div className="border-edge/60 flex flex-wrap items-center gap-3 border-t pt-2.5 text-xs">
+                    <div className="text-fg-2 flex items-center gap-1.5">
+                      <Home className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                      <span>
+                        Powers{" "}
+                        <strong className="text-fg">
+                          {story.equivalents.homesPoweredFormatted}
+                        </strong>
+                      </span>
+                    </div>
+                    {story.equivalents.carsDrivenRaw > 0 && (
+                      <div className="text-fg-2 flex items-center gap-1.5">
+                        <Car className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                        <span>
+                          Emissions ≈{" "}
+                          <strong className="text-fg">
+                            {story.equivalents.carsDrivenFormatted}
+                          </strong>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="border-edge text-fg-muted rounded-lg border border-dashed p-8 text-center text-xs">
+                  Generating plant operational profile...
+                </div>
+              )
+            ) : activeTab === "fleet" ? (
+              /* TAB 2: FLEET UNITS */
               facility?.units.length === 0 ? (
                 <div className="border-edge text-fg-muted rounded-lg border border-dashed p-8 text-center text-xs">
                   No generation units recorded for this facility.
@@ -535,7 +548,7 @@ export function FacilityDetailDialog({
                                 {unit.noxControls && (
                                   <div className="text-fg-2 truncate">
                                     <span className="text-fg-muted font-medium">
-                                      NOx:
+                                      NOₓ:
                                     </span>{" "}
                                     {unit.noxControls}
                                   </div>
@@ -730,6 +743,20 @@ export function FacilityDetailDialog({
                   </Table>
                 </div>
               )
+            ) : activeTab === "granular" ? (
+              /* TAB: GRANULAR TIME SERIES */
+              facility ? (
+                <GranularEmissionsWindow
+                  facilityId={facility.id}
+                  facilityName={facility.name}
+                  units={facility.units}
+                  availableYears={
+                    yearlyRollups.length > 0
+                      ? yearlyRollups.map((r) => r.year)
+                      : [2022, 2021, 2020]
+                  }
+                />
+              ) : null
             ) : activeTab === "audit" ? (
               /* TAB 3: SANITY AUDITS */
               allAuditLogs.length === 0 ? (

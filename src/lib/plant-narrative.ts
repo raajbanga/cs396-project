@@ -159,8 +159,8 @@ export function getCarbonIntensityTier(
       label: "Low Carbon CCGT",
       badgeClass:
         "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300/60 dark:border-emerald-500/20",
-      description: `${intensity} lbs CO2 emitted per MWh generated (Highly efficient CCGT)`,
-      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, typical of modern, high-efficiency combined-cycle natural gas generation.`,
+      description: `${intensity} lbs CO₂ emitted per MWh generated (Highly efficient CCGT)`,
+      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, typical of modern, high-efficiency combined-cycle natural gas generation.`,
     };
   }
   if (intensity <= 1600) {
@@ -169,8 +169,8 @@ export function getCarbonIntensityTier(
       label: "Intermediate Peaker",
       badgeClass:
         "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-300/60 dark:border-amber-500/20",
-      description: `${intensity} lbs CO2 emitted per MWh generated (Peaker / Intermediate)`,
-      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, indicative of load-following or simple-cycle gas peakers.`,
+      description: `${intensity} lbs CO₂ emitted per MWh generated (Peaker / Intermediate)`,
+      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, indicative of load-following or simple-cycle gas peakers.`,
     };
   }
   return {
@@ -178,15 +178,15 @@ export function getCarbonIntensityTier(
     label: "High Carbon Coal",
     badgeClass:
       "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-300/60 dark:border-red-500/20",
-    description: `${intensity} lbs CO2 emitted per MWh generated (High-emission fossil / coal)`,
-    narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO2/MWh, characteristic of carbon-dense coal or older thermal generation.`,
+    description: `${intensity} lbs CO₂ emitted per MWh generated (High-emission fossil / coal)`,
+    narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, characteristic of carbon-dense coal or older thermal generation.`,
   };
 }
 
 /**
  * Translates megawatts and carbon tonnage into tangible, real-world human equivalents.
  * Formulas derived from EPA Greenhouse Gas Equivalencies Calculator:
- * - 1 ton CO2 ≈ 0.217 passenger vehicles driven for 1 year
+ * - 1 ton CO₂ ≈ 0.217 passenger vehicles driven for 1 year
  * - 1 MW capacity ≈ 750 average American homes powered
  */
 export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
@@ -327,7 +327,7 @@ export function generatePlantStory(params: {
   // 3. Environmental footprint & Air quality
   let environmentalStory = "";
   if (params.co2Tons > 0) {
-    environmentalStory = `The plant emitted ${params.co2Tons.toLocaleString()} tons of carbon dioxide (CO2), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
+    environmentalStory = `The plant emitted ${params.co2Tons.toLocaleString()} tons of carbon dioxide (CO₂), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
     if (params.carbonIntensity) {
       const tier = getCarbonIntensityTier(params.carbonIntensity);
       environmentalStory += `${tier.narrativeDescription} `;
@@ -340,7 +340,7 @@ export function generatePlantStory(params: {
 
   if (params.hasControls) {
     environmentalStory +=
-      "Its smokestacks are equipped with environmental control scrubbers to capture sulfur dioxide (SO2) and catalytic converters to neutralize smog-forming nitrogen oxides (NOx).";
+      "Its smokestacks are equipped with environmental control scrubbers to capture sulfur dioxide (SO₂) and catalytic converters to neutralize smog-forming nitrogen oxides (NOₓ).";
   } else {
     environmentalStory +=
       "It operates with standard emissions controls configured for its generator units.";

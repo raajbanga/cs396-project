@@ -37,3 +37,17 @@ void test("unit status and controls use shared rules", () => {
   assert.equal(hasAirQualityControls({ pmControls: "Baghouse" }), true);
   assert.equal(hasAirQualityControls({}), false);
 });
+
+void test("granular temporal intensity calculations adhere to bounds", () => {
+  // Test valid intensity derivation for hourly / monthly slices
+  const hourlyIntensity = computeCo2IntensityLbsMWh(12.5, 25);
+  assert.equal(hourlyIntensity, 1000);
+
+  // When zero generation occurs, intensity must be null rather than NaN or Infinity
+  const zeroGenIntensity = computeCo2IntensityLbsMWh(5.0, 0);
+  assert.equal(zeroGenIntensity, null);
+
+  // Heat rate calculations for thermal efficiency
+  const heatRate = computeHeatRateMMBtuMWh(160, 20);
+  assert.equal(heatRate, 8.0);
+});
