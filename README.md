@@ -42,7 +42,7 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
    - **Yearly** granularity is aggregated from local `annual_records` (synced via `npm run sync:campd`).
 
 7. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
-   - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Card`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
+   - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
    - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare dialogs, audit table, EPA reference primer).
    - Dark/light themes via `next-themes`; icons from `lucide-react`.
 

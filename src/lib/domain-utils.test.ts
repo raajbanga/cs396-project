@@ -1,23 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildYearlyRollups } from "./annual-rollups";
 import {
+  buildDateOptionsForYear,
   clampCampdDateRange,
+  clampDateToYear,
   clampIsoDateToCampdPublished,
-  clampYearToCampdPublished,
   getCampdValidMonthsForYear,
   getDefaultCampdDateForYear,
   parseCampdQuarterEndFromError,
   toIsoDate,
 } from "./campd-reporting-period";
-import { buildDateOptionsForYear, clampDateToYear } from "./date-options";
 import {
+  buildYearlyRollups,
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
   pickCleanestByCarbonIntensity,
 } from "./emissions-metrics";
 import { FUEL_CATEGORIES, getFuelTheme, getMarkerRadius } from "./map-utils";
-import { hasAirQualityControls, isOperatingStatus } from "./plant-narrative";
+import {
+  cleanOwnerOperator,
+  getCarbonIntensityTier,
+  hasAirQualityControls,
+  isOperatingStatus,
+} from "./plant-narrative";
 
 void test("emissions metrics handle valid and missing generation", () => {
   assert.equal(computeCo2IntensityLbsMWh(1, 2), 1000);
@@ -47,6 +52,14 @@ void test("unit status and controls use shared rules", () => {
   assert.equal(isOperatingStatus("Non-Operating"), false);
   assert.equal(hasAirQualityControls({ pmControls: "Baghouse" }), true);
   assert.equal(hasAirQualityControls({}), false);
+  assert.equal(
+    cleanOwnerOperator("Acme (Owner) | acme (Operator) | Beta Co (Parent)"),
+    "Acme, Beta Co",
+  );
+  assert.equal(cleanOwnerOperator(null), "Owner unlisted");
+  assert.equal(getCarbonIntensityTier(0).label, "Zero-Carbon");
+  assert.equal(getCarbonIntensityTier(1600).variant, "warning");
+  assert.equal(getCarbonIntensityTier(2100).variant, "destructive");
 });
 
 void test("date options cover every day in a reporting year", () => {
@@ -56,6 +69,8 @@ void test("date options cover every day in a reporting year", () => {
   assert.equal(clampDateToYear("2023-03-10", 2024, "2026-06-30"), "2024-03-10");
   assert.equal(clampDateToYear("2024-02-29", 2025, "2026-06-30"), "2025-12-31");
   assert.equal(clampDateToYear("2026-07-15", 2026, "2026-06-30"), "2026-06-30");
+  assert.equal(clampDateToYear("", 2025, "2026-06-30"), "2025-12-31");
+  assert.equal(clampDateToYear("2025-05-01", 2027, "2026-06-30"), "2026-06-30");
   assert.equal(
     buildDateOptionsForYear(2026, "2026-06-30").at(-1)?.value,
     "2026-06-30",
@@ -80,7 +95,6 @@ void test("CAMPD published-through is parsed from EPA errors and used to clamp",
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   );
   assert.deepEqual(getCampdValidMonthsForYear(2027, publishedThrough), []);
-  assert.equal(clampYearToCampdPublished(2027, publishedThrough), 2026);
   assert.equal(
     clampIsoDateToCampdPublished("2026-07-15", publishedThrough),
     "2026-06-30",
@@ -133,4 +147,6 @@ void test("yearly rollups aggregate records by reporting year", () => {
   assert.equal(rollups[0]?.co2MassTons, 75);
   assert.equal(rollups[0]?.unitCount, 2);
   assert.equal(rollups[0]?.co2IntensityLbsMWh, 1000);
+  assert.equal(rollups[0]?.maxOperatingHours, 4000);
+  assert.equal(rollups[0]?.heatRateMMBtuMWh, 8);
 });

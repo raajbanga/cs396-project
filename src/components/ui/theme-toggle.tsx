@@ -1,36 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "~/components/ui/button";
 
+/** Icons swap via the `dark:` variant, so no mount guard is needed to avoid hydration mismatches. */
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // Avoid hydration mismatch — next-themes resolves theme client-side
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) {
-    return <div className="h-8 w-8 shrink-0" />;
-  }
-
-  const isDark = theme === "dark";
-
+  const { resolvedTheme, setTheme } = useTheme();
   return (
     <Button
       variant="outline"
       size="icon"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-      className="h-8 w-8 shrink-0"
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      title="Toggle light/dark mode"
     >
-      {isDark ? (
-        <Sun className="h-3.5 w-3.5 text-amber-400" />
-      ) : (
-        <Moon className="text-fg-muted h-3.5 w-3.5" />
-      )}
+      <Sun className="hidden h-3.5 w-3.5 text-amber-400 dark:block" />
+      <Moon className="text-fg-muted h-3.5 w-3.5 dark:hidden" />
       <span className="sr-only">Toggle theme</span>
     </Button>
   );

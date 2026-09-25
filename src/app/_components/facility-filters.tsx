@@ -4,170 +4,114 @@ import { useState } from "react";
 import { RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { Select, toOptions } from "~/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+  DEFAULT_FILTERS,
+  type FacilityFilters,
+  type FilterChangeHandler,
+} from "~/lib/facility-filters";
+import { cn } from "~/lib/utils";
+import { type RouterOutputs } from "~/trpc/react";
 
-interface FilterOptions {
-  states: string[];
-  fuels: string[];
-  nercRegions: string[];
-}
-
-interface FacilityFiltersProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  selectedState: string;
-  onStateChange: (value: string) => void;
-  selectedNerc: string;
-  onNercChange: (value: string) => void;
-  selectedFuel: string;
-  onFuelChange: (value: string) => void;
-  filterOptions?: FilterOptions;
-  totalMatching?: number;
-  isLoading: boolean;
-  hasActiveFilters: boolean;
-  onResetFilters: () => void;
-}
-
-interface FilterSelectsProps {
-  variant: "inline" | "drawer";
-  filterOptions?: FilterOptions;
-  selectedState: string;
-  selectedNerc: string;
-  selectedFuel: string;
-  onStateChange: (value: string) => void;
-  onNercChange: (value: string) => void;
-  onFuelChange: (value: string) => void;
-  hasActiveFilters: boolean;
-  onResetFilters: () => void;
-}
+type FilterOptions = RouterOutputs["facilities"]["getFilterOptions"];
 
 function FilterSelects({
-  variant,
+  drawer,
+  filters,
   filterOptions,
-  selectedState,
-  selectedNerc,
-  selectedFuel,
-  onStateChange,
-  onNercChange,
-  onFuelChange,
-  hasActiveFilters,
+  onFilterChange,
   onResetFilters,
-}: FilterSelectsProps) {
-  const isDrawer = variant === "drawer";
+}: {
+  drawer: boolean;
+  filters: FacilityFilters;
+  filterOptions?: FilterOptions;
+  onFilterChange: FilterChangeHandler;
+  onResetFilters: () => void;
+}) {
+  const selects = [
+    {
+      key: "stateCode",
+      width: "w-[130px]",
+      options: toOptions(
+        filterOptions?.states,
+        drawer
+          ? "All States"
+          : `All States (${filterOptions?.states.length ?? 0})`,
+      ),
+    },
+    {
+      key: "nercRegion",
+      width: "w-[135px]",
+      options: [
+        { value: "ALL", label: "All Grids" },
+        ...(filterOptions?.nercRegions ?? []).map((n) => ({
+          value: n,
+          label: drawer ? n : `Grid: ${n}`,
+        })),
+      ],
+    },
+    {
+      key: "primaryFuel",
+      width: "w-[135px]",
+      options: toOptions(filterOptions?.fuels, "All Fuels"),
+    },
+  ] as const;
+  const hasActiveFilters = (
+    Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
+  ).some((key) => filters[key].trim() !== DEFAULT_FILTERS[key]);
 
   return (
     <>
-      <Select value={selectedState} onValueChange={onStateChange}>
-        <SelectTrigger
-          sizeVariant={isDrawer ? "drawer" : "toolbar"}
-          className={isDrawer ? undefined : "w-[130px]"}
-        >
-          <SelectValue placeholder="All States" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="ALL">
-            {isDrawer
-              ? "All States"
-              : `All States (${filterOptions?.states.length ?? 0})`}
-          </SelectItem>
-          {filterOptions?.states.map((st) => (
-            <SelectItem key={st} value={st}>
-              {st}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={selectedNerc} onValueChange={onNercChange}>
-        <SelectTrigger
-          sizeVariant={isDrawer ? "drawer" : "toolbar"}
-          className={isDrawer ? undefined : "w-[135px]"}
-        >
-          <SelectValue placeholder="All Grids" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="ALL">All Grids</SelectItem>
-          {filterOptions?.nercRegions.map((n) => (
-            <SelectItem key={n} value={n}>
-              {isDrawer ? n : `Grid: ${n}`}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={selectedFuel} onValueChange={onFuelChange}>
-        <SelectTrigger
-          sizeVariant={isDrawer ? "drawer" : "toolbar"}
-          className={isDrawer ? "col-span-2" : "w-[135px]"}
-        >
-          <SelectValue placeholder="All Fuels" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="ALL">All Fuels</SelectItem>
-          {filterOptions?.fuels.map((f) => (
-            <SelectItem key={f} value={f}>
-              {f}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
+      {selects.map(({ key, width, options }) => (
+        <Select
+          key={key}
+          value={filters[key]}
+          onValueChange={(value) => onFilterChange(key, value)}
+          options={options}
+          size={drawer ? "drawer" : "toolbar"}
+          className={
+            drawer ? (key === "primaryFuel" ? "col-span-2" : "") : width
+          }
+        />
+      ))}
       {hasActiveFilters && (
         <Button
-          type="button"
-          variant={isDrawer ? "outline" : "ghost"}
+          variant={drawer ? "outline" : "ghost"}
           size="sm"
           onClick={onResetFilters}
-          className={
-            isDrawer
-              ? "text-fg-2 col-span-2 h-8 gap-1 text-xs"
-              : "text-fg-muted hover:text-fg h-9 gap-1 px-2.5 text-xs"
-          }
+          className={cn("gap-1 text-xs", drawer ? "col-span-2" : "h-9 px-2.5")}
         >
           <RotateCcw className="h-3 w-3" />
-          <span>{isDrawer ? "Reset all filters" : "Reset"}</span>
+          {drawer ? "Reset all filters" : "Reset"}
         </Button>
       )}
     </>
   );
 }
 
-export function FacilityFilters({
-  search,
-  onSearchChange,
-  selectedState,
-  onStateChange,
-  selectedNerc,
-  onNercChange,
-  selectedFuel,
-  onFuelChange,
+export function FacilityFilterBar({
+  filters,
   filterOptions,
+  onFilterChange,
+  onResetFilters,
   totalMatching,
   isLoading,
-  hasActiveFilters,
-  onResetFilters,
-}: FacilityFiltersProps) {
+}: {
+  filters: FacilityFilters;
+  filterOptions?: FilterOptions;
+  onFilterChange: FilterChangeHandler;
+  onResetFilters: () => void;
+  totalMatching?: number;
+  isLoading: boolean;
+}) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
-
-  const activeFilterCount = [selectedState, selectedNerc, selectedFuel].filter(
-    (value) => value !== "ALL",
-  ).length;
-
-  const filterSelectProps = {
+  const activeSelectCount = (
+    ["stateCode", "nercRegion", "primaryFuel"] as const
+  ).filter((key) => filters[key] !== "ALL").length;
+  const selectProps = {
+    filters,
     filterOptions,
-    selectedState,
-    selectedNerc,
-    selectedFuel,
-    onStateChange,
-    onNercChange,
-    onFuelChange,
-    hasActiveFilters,
+    onFilterChange,
     onResetFilters,
   };
 
@@ -178,15 +122,15 @@ export function FacilityFilters({
           <div className="relative w-full sm:w-64 md:w-72">
             <Search className="text-fg-muted pointer-events-none absolute top-2.5 left-3 h-4 w-4" />
             <Input
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
+              value={filters.search}
+              onChange={(e) => onFilterChange("search", e.target.value)}
               placeholder="Search plant, operator, state..."
-              className="bg-surface/60 border-edge h-9 pr-8 pl-9"
+              className="bg-surface/60 pr-8 pl-9"
             />
-            {search && (
+            {filters.search && (
               <button
                 type="button"
-                onClick={() => onSearchChange("")}
+                onClick={() => onFilterChange("search", "")}
                 className="text-fg-muted hover:text-fg absolute top-2.5 right-2.5 cursor-pointer"
                 aria-label="Clear search"
               >
@@ -196,43 +140,42 @@ export function FacilityFilters({
           </div>
 
           <div className="hidden items-center gap-2 sm:flex">
-            <FilterSelects variant="inline" {...filterSelectProps} />
+            <FilterSelects drawer={false} {...selectProps} />
           </div>
 
           <Button
-            type="button"
             variant="outline"
             size="sm"
             onClick={() => setIsMobileFiltersOpen((prev) => !prev)}
-            className="border-edge bg-surface/60 text-fg-2 h-9 gap-1.5 px-3 text-xs sm:hidden"
+            className="bg-surface/60 h-9 sm:hidden"
           >
             <SlidersHorizontal className="text-fg-muted h-3.5 w-3.5" />
-            <span>Filters</span>
-            {activeFilterCount > 0 && (
-              <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20 text-xs font-semibold text-emerald-400">
-                {activeFilterCount}
+            Filters
+            {activeSelectCount > 0 && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/20 text-xs font-semibold text-emerald-400">
+                {activeSelectCount}
               </span>
             )}
           </Button>
         </div>
 
-        <div className="text-fg-muted ml-auto flex items-center gap-2 text-xs whitespace-nowrap sm:text-sm">
+        <div className="text-fg-muted ml-auto text-xs whitespace-nowrap sm:text-sm">
           {isLoading ? (
-            <span className="text-fg-muted text-xs">Updating...</span>
+            "Updating..."
           ) : (
-            <span>
+            <>
               <strong className="text-fg font-semibold">
                 {totalMatching?.toLocaleString() ?? 0}
               </strong>{" "}
               facilities
-            </span>
+            </>
           )}
         </div>
       </div>
 
       {isMobileFiltersOpen && (
         <div className="animate-in fade-in slide-in-from-top-1 grid grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
-          <FilterSelects variant="drawer" {...filterSelectProps} />
+          <FilterSelects drawer {...selectProps} />
         </div>
       )}
     </div>
