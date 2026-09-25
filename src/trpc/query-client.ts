@@ -2,6 +2,7 @@ import {
   defaultShouldDehydrateQuery,
   QueryClient,
 } from "@tanstack/react-query";
+import { cache } from "react";
 import SuperJSON from "superjson";
 
 export const createQueryClient = () =>
@@ -23,3 +24,6 @@ export const createQueryClient = () =>
       },
     },
   });
+
+/** One React Query client per RSC request (shared by tRPC server helpers and SSR). */
+export const getRequestQueryClient = cache(createQueryClient);
