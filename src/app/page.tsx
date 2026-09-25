@@ -1,34 +1,23 @@
 import { DatabaseExplorer } from "~/app/_components/database-explorer";
+import { DEFAULT_FILTERS, DEFAULT_TABLE_STATE } from "~/lib/facility-filters";
 import { api, HydrateClient } from "~/trpc/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const stats = await api.facilities.getStats();
-
   await Promise.all([
+    api.facilities.getStats.prefetch(),
     api.facilities.getFilterOptions.prefetch(),
     api.facilities.getFacilities.prefetch({
-      page: 1,
-      pageSize: 10,
-      search: "",
-      stateCode: "ALL",
-      primaryFuel: "ALL",
-      nercRegion: "ALL",
-      sortBy: "name",
-      sortDir: "asc",
+      ...DEFAULT_TABLE_STATE,
+      ...DEFAULT_FILTERS,
     }),
-    api.facilities.getMapFacilities.prefetch({
-      search: "",
-      stateCode: "ALL",
-      primaryFuel: "ALL",
-      nercRegion: "ALL",
-    }),
+    api.facilities.getMapFacilities.prefetch(DEFAULT_FILTERS),
   ]);
 
   return (
     <HydrateClient>
-      <DatabaseExplorer initialAnomalyCount={stats.totalAnomalies} />
+      <DatabaseExplorer />
     </HydrateClient>
   );
 }

@@ -1,20 +1,13 @@
-import {
-  and,
-  asc,
-  count,
-  countDistinct,
-  desc,
-  eq,
-  inArray,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
 import {
-  computeCo2IntensityLbsMWh,
-  computeHeatRateMMBtuMWh,
-} from "~/lib/emissions-metrics";
-import { getCampdPublishedYear } from "~/lib/campd-reporting-period";
+  getCampdPublishedYear,
+  GRANULARITIES,
+} from "~/lib/campd-reporting-period";
+import { deriveRates, sumTotals } from "~/lib/emissions-metrics";
+import { facilityFilterSchema, SORT_FIELDS } from "~/lib/facility-filters";
 import {
   hasAirQualityControls,
   isOperatingStatus,
@@ -24,15 +17,7 @@ import {
   fetchGranularEmissionsForFacility,
   resolveCampdPublishedThrough,
 } from "~/server/campd/client";
-import {
-  buildFacilityFilterConditions,
-  facilityCarbonIntensitySubquery,
-  facilityFilterSchema,
-  facilityTotalCapacitySubquery,
-  facilityTotalCo2Subquery,
-  facilityUnitCountSubquery,
-  fetchFacilityWithRelations,
-} from "~/server/db/facility-queries";
+import { type db as Database } from "~/server/db";
 import {
   annualRecords,
   dataAuditLogs,
@@ -40,123 +25,116 @@ import {
   units,
 } from "~/server/db/schema";
 
+/** Correlated per-facility subqueries over child tables. */
+const perFacility = {
+  unitCount: sql<number>`(
+    SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id"
+  )`.as("unit_count"),
+  totalCapacityMW: sql<number>`(
+    SELECT COALESCE(ROUND(SUM("units"."nameplate_capacity_mw"), 1), 0)
+    FROM "units" WHERE "units"."facility_id" = "facilities"."id"
+  )`.as("total_capacity_mw"),
+  totalCo2Tons: sql<number>`(
+    SELECT COALESCE(ROUND(SUM("annual_records"."co2_mass_tons"), 0), 0)
+    FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
+  )`.as("total_co2_tons"),
+};
+
+const SORT_COLUMNS = {
+  name: facilities.name,
+  id: facilities.id,
+  capacity: sql`total_capacity_mw`,
+  co2: sql`total_co2_tons`,
+};
+
+const notBlank = (col: SQLiteColumn) =>
+  sql`${col} IS NOT NULL AND ${col} != ''`;
+
+function filterConditions(
+  filter: z.infer<typeof facilityFilterSchema> = {},
+): SQL[] {
+  const conditions: SQL[] = [];
+  const active = (v?: string) => v && v !== "ALL";
+
+  if (active(filter.stateCode)) {
+    conditions.push(eq(facilities.stateCode, filter.stateCode!));
+  }
+  if (active(filter.nercRegion)) {
+    conditions.push(eq(facilities.nercRegion, filter.nercRegion!));
+  }
+  if (active(filter.primaryFuel)) {
+    conditions.push(
+      sql`${facilities.id} IN (SELECT ${units.facilityId} FROM ${units} WHERE ${units.primaryFuel} = ${filter.primaryFuel})`,
+    );
+  }
+  const search = filter.search?.trim();
+  if (search) {
+    const term = `%${search.toLowerCase()}%`;
+    const textCond = sql`(lower(${facilities.name}) LIKE ${term} OR lower(${facilities.county}) LIKE ${term} OR lower(${facilities.ownerOperator}) LIKE ${term})`;
+    const num = Number.parseInt(search, 10);
+    conditions.push(
+      Number.isNaN(num)
+        ? textCond
+        : sql`(${facilities.id} = ${num} OR ${textCond})`,
+    );
+  }
+  return conditions;
+}
+
+async function distinctValues(database: typeof Database, column: SQLiteColumn) {
+  const rows = await database
+    .selectDistinct({ value: column })
+    .from(column.table)
+    .where(notBlank(column))
+    .orderBy(asc(column));
+  return rows.map((r) => String(r.value));
+}
+
+const uniqueStrings = (values: (string | null)[]) =>
+  [...new Set(values)].filter((v): v is string => Boolean(v));
+
 export const facilitiesRouter = createTRPCRouter({
   getStats: publicProcedure.query(async ({ ctx }) => {
-    const [facilitiesCountRes] = await ctx.db
-      .select({ total: count() })
-      .from(facilities);
-
-    const [unitsCountRes] = await ctx.db
+    const [stats] = await ctx.db
       .select({
-        total: count(),
-        totalCapacity: sql<number>`COALESCE(SUM(${units.nameplateCapacityMW}), 0)`,
+        totalFacilities: count(),
+        totalStates: sql<number>`COUNT(DISTINCT ${facilities.stateCode})`,
+        totalNercRegions: sql<number>`COUNT(DISTINCT NULLIF(${facilities.nercRegion}, ''))`,
+        totalUnits: sql<number>`(SELECT COUNT(*) FROM ${units})`,
+        totalCapacityMW: sql<number>`(SELECT ROUND(COALESCE(SUM(${units.nameplateCapacityMW}), 0)) FROM ${units})`,
+        totalCo2Tons: sql<number>`(SELECT ROUND(COALESCE(SUM(${annualRecords.co2MassTons}), 0)) FROM ${annualRecords})`,
+        totalAnomalies: sql<number>`(SELECT COUNT(*) FROM ${dataAuditLogs})`,
       })
-      .from(units);
-
-    const [statesCountRes] = await ctx.db
-      .select({ total: countDistinct(facilities.stateCode) })
       .from(facilities);
-
-    const [nercCountRes] = await ctx.db
-      .select({ total: countDistinct(facilities.nercRegion) })
-      .from(facilities)
-      .where(
-        sql`${facilities.nercRegion} IS NOT NULL AND ${facilities.nercRegion} != ''`,
-      );
-
-    const [emissionsRes] = await ctx.db
-      .select({
-        totalCo2: sql<number>`COALESCE(SUM(${annualRecords.co2MassTons}), 0)`,
-      })
-      .from(annualRecords);
-
-    const [anomaliesRes] = await ctx.db
-      .select({ total: count() })
-      .from(dataAuditLogs);
-
-    return {
-      totalFacilities: facilitiesCountRes?.total ?? 0,
-      totalUnits: unitsCountRes?.total ?? 0,
-      totalStates: statesCountRes?.total ?? 0,
-      totalNercRegions: nercCountRes?.total ?? 0,
-      totalCapacityMW: Math.round(unitsCountRes?.totalCapacity ?? 0),
-      totalCo2Tons: Math.round(emissionsRes?.totalCo2 ?? 0),
-      totalAnomalies: anomaliesRes?.total ?? 0,
-    };
+    return stats!;
   }),
 
-  getFilterOptions: publicProcedure.query(async ({ ctx }) => {
-    const stateRows = await ctx.db
-      .selectDistinct({ stateCode: facilities.stateCode })
-      .from(facilities)
-      .orderBy(asc(facilities.stateCode));
-
-    const fuelRows = await ctx.db
-      .selectDistinct({ primaryFuel: units.primaryFuel })
-      .from(units)
-      .where(
-        sql`${units.primaryFuel} IS NOT NULL AND ${units.primaryFuel} != ''`,
-      )
-      .orderBy(asc(units.primaryFuel));
-
-    const nercRows = await ctx.db
-      .selectDistinct({ nercRegion: facilities.nercRegion })
-      .from(facilities)
-      .where(
-        sql`${facilities.nercRegion} IS NOT NULL AND ${facilities.nercRegion} != ''`,
-      )
-      .orderBy(asc(facilities.nercRegion));
-
-    return {
-      states: stateRows.map((r) => r.stateCode).filter(Boolean),
-      fuels: fuelRows
-        .map((r) => r.primaryFuel)
-        .filter((f): f is string => Boolean(f)),
-      nercRegions: nercRows
-        .map((r) => r.nercRegion)
-        .filter((n): n is string => Boolean(n)),
-    };
-  }),
+  getFilterOptions: publicProcedure.query(async ({ ctx }) => ({
+    states: await distinctValues(ctx.db, facilities.stateCode),
+    fuels: await distinctValues(ctx.db, units.primaryFuel),
+    nercRegions: await distinctValues(ctx.db, facilities.nercRegion),
+  })),
 
   getFacilities: publicProcedure
     .input(
       facilityFilterSchema.extend({
         page: z.number().min(1).default(1),
         pageSize: z.number().min(5).max(100).default(10),
-        sortBy: z
-          .enum(["name", "id", "capacity", "co2"])
-          .optional()
-          .default("name"),
-        sortDir: z.enum(["asc", "desc"]).optional().default("asc"),
+        sortBy: z.enum(SORT_FIELDS).default("name"),
+        sortDir: z.enum(["asc", "desc"]).default("asc"),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, pageSize, sortBy = "name", sortDir = "asc" } = input;
-      const offset = (page - 1) * pageSize;
-
-      const conditions = buildFacilityFilterConditions(input);
-      const whereClause =
-        conditions.length > 0 ? and(...conditions) : undefined;
+      const { page, pageSize, sortBy, sortDir } = input;
+      const where = and(...filterConditions(input));
 
       const [countResult] = await ctx.db
         .select({ total: count() })
         .from(facilities)
-        .where(whereClause);
-
+        .where(where);
       const totalCount = countResult?.total ?? 0;
-      const totalPages = Math.ceil(totalCount / pageSize);
 
-      const orderCol =
-        sortBy === "capacity"
-          ? sql`total_capacity_mw`
-          : sortBy === "co2"
-            ? sql`total_co2_tons`
-            : sortBy === "id"
-              ? facilities.id
-              : facilities.name;
-      const orderClause = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
-
-      const facilityRows = await ctx.db
+      const rows = await ctx.db
         .select({
           id: facilities.id,
           name: facilities.name,
@@ -165,13 +143,14 @@ export const facilitiesRouter = createTRPCRouter({
           nercRegion: facilities.nercRegion,
           sourceCategory: facilities.sourceCategory,
           ownerOperator: facilities.ownerOperator,
-          unitCount: facilityUnitCountSubquery,
-          totalCapacityMW: facilityTotalCapacitySubquery,
-          totalCo2Tons: facilityTotalCo2Subquery,
+          ...perFacility,
           primaryFuelsRaw: sql<string | null>`(
             SELECT GROUP_CONCAT(DISTINCT "units"."primary_fuel") FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
           )`.as("primary_fuels_raw"),
-          carbonIntensityLbsMWh: facilityCarbonIntensitySubquery,
+          carbonIntensityLbsMWh: sql<number | null>`(
+            SELECT ROUND(SUM("annual_records"."co2_mass_tons") * 2000.0 / NULLIF(SUM("annual_records"."gross_generation_mwh"), 0))
+            FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"
+          )`.as("carbon_intensity_lbs_mwh"),
           controlledUnitsCount: sql<number>`(
             SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
           )`.as("controlled_units_count"),
@@ -180,34 +159,24 @@ export const facilitiesRouter = createTRPCRouter({
           )`.as("total_operating_hours"),
         })
         .from(facilities)
-        .where(whereClause)
-        .orderBy(orderClause)
+        .where(where)
+        .orderBy((sortDir === "asc" ? asc : desc)(SORT_COLUMNS[sortBy]))
         .limit(pageSize)
-        .offset(offset);
+        .offset((page - 1) * pageSize);
 
       return {
-        items: facilityRows.map((row) => ({
+        items: rows.map(({ primaryFuelsRaw, ...row }) => ({
           ...row,
-          primaryFuels: row.primaryFuelsRaw
-            ? row.primaryFuelsRaw.split(",").filter(Boolean)
-            : [],
+          primaryFuels: primaryFuelsRaw?.split(",").filter(Boolean) ?? [],
         })),
         totalCount,
-        page,
-        pageSize,
-        totalPages,
+        totalPages: Math.ceil(totalCount / pageSize),
       };
     }),
 
   getMapFacilities: publicProcedure
     .input(facilityFilterSchema.optional())
     .query(async ({ ctx, input }) => {
-      const conditions = [
-        sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
-        ...buildFacilityFilterConditions(input),
-      ];
-      const whereClause = and(...conditions);
-
       const rows = await ctx.db
         .select({
           id: facilities.id,
@@ -224,12 +193,15 @@ export const facilitiesRouter = createTRPCRouter({
             WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
             LIMIT 1
           )`.as("primary_fuel"),
-          totalCapacityMW: facilityTotalCapacitySubquery,
-          totalCo2Tons: facilityTotalCo2Subquery,
-          unitCount: facilityUnitCountSubquery,
+          ...perFacility,
         })
         .from(facilities)
-        .where(whereClause);
+        .where(
+          and(
+            sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
+            ...filterConditions(input),
+          ),
+        );
 
       return rows.map((r) => ({
         ...r,
@@ -241,63 +213,39 @@ export const facilitiesRouter = createTRPCRouter({
 
   getFacility: publicProcedure
     .input(z.object({ id: z.number() }))
-    .query(({ ctx, input }) => fetchFacilityWithRelations(ctx.db, input.id)),
+    .query(({ ctx, input }) =>
+      ctx.db.query.facilities.findFirst({
+        where: eq(facilities.id, input.id),
+        with: {
+          units: true,
+          annualRecords: {
+            orderBy: (rec, { desc }) => [desc(rec.year)],
+            with: { unit: true, auditLogs: true },
+          },
+        },
+      }),
+    ),
 
   compareFacilities: publicProcedure
     .input(z.object({ ids: z.array(z.number()).min(2).max(4) }))
     .query(async ({ ctx, input }) => {
       const plants = await ctx.db.query.facilities.findMany({
         where: inArray(facilities.id, input.ids),
-        with: {
-          units: true,
-          annualRecords: true,
-        },
+        with: { units: true, annualRecords: true },
       });
 
       return plants.map((plant) => {
-        let totalCapacityMW = 0;
-        let operatingUnitsCount = 0;
-        let so2ControlledUnits = 0;
-        let noxControlledUnits = 0;
-        let pmControlledUnits = 0;
-        let controlledUnitsCount = 0;
-        const primaryFuels = new Set<string>();
-        const secondaryFuels = new Set<string>();
-
-        for (const u of plant.units) {
-          totalCapacityMW += u.nameplateCapacityMW ?? 0;
-          if (u.primaryFuel) primaryFuels.add(u.primaryFuel);
-          if (u.secondaryFuel) secondaryFuels.add(u.secondaryFuel);
-          if (isOperatingStatus(u.operatingStatus)) operatingUnitsCount++;
-          if (u.so2Controls) so2ControlledUnits++;
-          if (u.noxControls) noxControlledUnits++;
-          if (u.pmControls) pmControlledUnits++;
-          if (hasAirQualityControls(u)) controlledUnitsCount++;
-        }
-
-        const years = Array.from(
-          new Set(plant.annualRecords.map((r) => r.year)),
-        ).sort((a, b) => b - a);
-        const latestYear = years.length > 0 ? years[0]! : null;
-        const targetRecords =
-          latestYear !== null
-            ? plant.annualRecords.filter((r) => r.year === latestYear)
-            : plant.annualRecords;
-
-        let totalGen = 0;
-        let totalHours = 0;
-        let totalCo2 = 0;
-        let totalSo2 = 0;
-        let totalNox = 0;
-        let totalHeat = 0;
-        for (const r of targetRecords) {
-          totalGen += r.grossGenerationMWh;
-          totalHours += r.operatingHours;
-          totalCo2 += r.co2MassTons;
-          totalSo2 += r.so2MassTons;
-          totalNox += r.noxMassTons;
-          totalHeat += r.heatInputMMBtu;
-        }
+        const countUnits = (
+          pred: (u: (typeof plant.units)[number]) => unknown,
+        ) => plant.units.filter(pred).length;
+        const availableYears = [
+          ...new Set(plant.annualRecords.map((r) => r.year)),
+        ].sort((a, b) => b - a);
+        const latestYear = availableYears[0] ?? null;
+        const totals = sumTotals(
+          plant.annualRecords.filter((r) => r.year === latestYear),
+        );
+        const rates = deriveRates(totals);
 
         return {
           id: plant.id,
@@ -309,22 +257,31 @@ export const facilitiesRouter = createTRPCRouter({
           sourceCategory: plant.sourceCategory ?? "Unassigned",
           ownerOperator: plant.ownerOperator ?? "Unspecified",
           unitCount: plant.units.length,
-          operatingUnitsCount,
-          totalCapacityMW: Math.round(totalCapacityMW),
-          primaryFuels: Array.from(primaryFuels),
-          secondaryFuels: Array.from(secondaryFuels),
-          totalOperatingHours: Math.round(totalHours),
-          totalGenerationMWh: Math.round(totalGen),
-          totalCo2Tons: Math.round(totalCo2),
-          totalSo2Tons: Math.round(totalSo2),
-          totalNoxTons: Math.round(totalNox),
-          carbonIntensityLbsMWh: computeCo2IntensityLbsMWh(totalCo2, totalGen),
-          heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totalHeat, totalGen),
-          so2ControlledUnits,
-          noxControlledUnits,
-          pmControlledUnits,
-          controlledUnitsCount,
-          availableYears: years,
+          operatingUnitsCount: countUnits((u) =>
+            isOperatingStatus(u.operatingStatus),
+          ),
+          totalCapacityMW: Math.round(
+            plant.units.reduce(
+              (sum, u) => sum + (u.nameplateCapacityMW ?? 0),
+              0,
+            ),
+          ),
+          primaryFuels: uniqueStrings(plant.units.map((u) => u.primaryFuel)),
+          secondaryFuels: uniqueStrings(
+            plant.units.map((u) => u.secondaryFuel),
+          ),
+          totalOperatingHours: Math.round(totals.operatingHours),
+          totalGenerationMWh: Math.round(totals.grossGenerationMWh),
+          totalCo2Tons: Math.round(totals.co2MassTons),
+          totalSo2Tons: Math.round(totals.so2MassTons),
+          totalNoxTons: Math.round(totals.noxMassTons),
+          carbonIntensityLbsMWh: rates.co2IntensityLbsMWh,
+          heatRateMMBtuMWh: rates.heatRateMMBtuMWh,
+          so2ControlledUnits: countUnits((u) => u.so2Controls),
+          noxControlledUnits: countUnits((u) => u.noxControls),
+          pmControlledUnits: countUnits((u) => u.pmControls),
+          controlledUnitsCount: countUnits(hasAirQualityControls),
+          availableYears,
           units: plant.units,
         };
       });
@@ -332,8 +289,8 @@ export const facilitiesRouter = createTRPCRouter({
 
   getAuditLogs: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
-    .query(async ({ ctx, input }) => {
-      const logs = await ctx.db
+    .query(({ ctx, input }) =>
+      ctx.db
         .select({
           id: dataAuditLogs.id,
           flagType: dataAuditLogs.flagType,
@@ -353,10 +310,8 @@ export const facilitiesRouter = createTRPCRouter({
         .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
         .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
         .orderBy(desc(dataAuditLogs.createdAt))
-        .limit(input.limit);
-
-      return logs;
-    }),
+        .limit(input.limit),
+    ),
 
   getCampdPublishedThrough: publicProcedure
     .input(z.object({ facilityId: z.number().optional() }).optional())
@@ -374,15 +329,11 @@ export const facilitiesRouter = createTRPCRouter({
     .input(
       z.object({
         facilityId: z.number(),
-        granularity: z
-          .enum(["hourly", "daily", "weekly", "monthly", "yearly"])
-          .default("monthly"),
+        granularity: z.enum(GRANULARITIES).default("monthly"),
         year: z.number().optional(),
         date: z.string().optional(),
         unitId: z.string().optional(),
       }),
     )
-    .query(async ({ input }) => {
-      return fetchGranularEmissionsForFacility(input);
-    }),
+    .query(({ input }) => fetchGranularEmissionsForFacility(input)),
 });

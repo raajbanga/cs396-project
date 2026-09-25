@@ -1,198 +1,151 @@
+import type { BadgeVariant } from "~/components/ui/badge";
 import { isZeroCarbonFuel } from "~/lib/map-utils";
 
 /**
- * Plant Narrative & Real-World Impact Engine
- *
- * Translates complex technical EPA CEMS data into plain-English stories
- * and tangible real-world equivalents for laypeople.
+ * Plant Narrative & Real-World Impact Engine: translates technical EPA CEMS
+ * data into plain-English stories and tangible real-world equivalents.
  */
 
 export interface PlantRoleInfo {
   role: string;
   badgeLabel: string;
-  badgeClass: string;
+  variant: BadgeVariant;
   icon: "zap" | "clock" | "activity" | "factory" | "power";
   description: string;
 }
 
-export function isOperatingStatus(status: string | null | undefined) {
-  return /^operating\b/i.test(status?.trim() ?? "");
-}
+const PLANT_ROLES = {
+  cogen: {
+    role: "Industrial Cogenerator",
+    badgeLabel: "Industrial Cogen",
+    variant: "purple",
+    icon: "factory",
+    description:
+      "Generates electricity while capturing waste heat to power on-site manufacturing, refining, or heating.",
+  },
+  zeroCarbon: {
+    role: "Zero-Carbon Generator",
+    badgeLabel: "Zero-Carbon",
+    variant: "success",
+    icon: "zap",
+    description:
+      "Generates clean, carbon-free electricity without direct fossil combustion.",
+  },
+  baseload: {
+    role: "Baseload Workhorse",
+    badgeLabel: "Baseload Plant",
+    variant: "sky",
+    icon: "zap",
+    description:
+      "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
+  },
+  peaker: {
+    role: "On-Demand Peaker",
+    badgeLabel: "On-Demand Peaker",
+    variant: "warning",
+    icon: "clock",
+    description:
+      "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
+  },
+  standby: {
+    role: "Standby / Reserve",
+    badgeLabel: "Standby Reserve",
+    variant: "secondary",
+    icon: "power",
+    description:
+      "Held in operational reserve or pending seasonal activation with minimal reported generation.",
+  },
+  loadFollowing: {
+    role: "Load-Following Plant",
+    badgeLabel: "Load-Following",
+    variant: "success",
+    icon: "activity",
+    description:
+      "Ramps power output up and down throughout the day to match fluctuating consumer demand and balance solar/wind.",
+  },
+} satisfies Record<string, PlantRoleInfo>;
 
-export function hasAirQualityControls(unit: {
+export const isOperatingStatus = (status: string | null | undefined) =>
+  /^operating\b/i.test(status?.trim() ?? "");
+
+export const hasAirQualityControls = (unit: {
   so2Controls?: string | null;
   noxControls?: string | null;
   pmControls?: string | null;
   hgControls?: string | null;
-}) {
-  return Boolean(
+}) =>
+  Boolean(
     unit.so2Controls ?? unit.noxControls ?? unit.pmControls ?? unit.hgControls,
   );
-}
 
-/**
- * Determine the plain-English grid role of a power plant
- */
+/** Plain-English grid role, by category, fuel, and dispatch hours (baseload > 4,800 h/yr, peaker < 1,800 h/yr). */
 export function getPlantRole(params: {
   operatingHours?: number;
   capacityMW?: number;
   sourceCategory?: string | null;
   primaryFuels?: string[];
 }): PlantRoleInfo {
-  const category = (params.sourceCategory ?? "").toLowerCase();
   const hours = params.operatingHours ?? 0;
-  const fuels = params.primaryFuels?.map((f) => f.toLowerCase()) ?? [];
-
-  // Cogeneration / Industrial
-  if (
-    category.includes("cogeneration") ||
-    category.includes("industrial") ||
-    category.includes("commercial")
-  ) {
-    return {
-      role: "Industrial Cogenerator",
-      badgeLabel: "Industrial Cogen",
-      badgeClass:
-        "bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-300/60 dark:border-purple-500/20",
-      icon: "factory",
-      description:
-        "Generates electricity while capturing waste heat to power on-site manufacturing, refining, or heating.",
-    };
+  const capacity = params.capacityMW ?? 0;
+  if (/cogeneration|industrial|commercial/i.test(params.sourceCategory ?? "")) {
+    return PLANT_ROLES.cogen;
   }
+  if (params.primaryFuels?.some(isZeroCarbonFuel))
+    return PLANT_ROLES.zeroCarbon;
+  if (hours >= 4800 || capacity > 1200) return PLANT_ROLES.baseload;
+  if (hours > 0 && hours < 1800) return PLANT_ROLES.peaker;
+  if (hours === 0 && capacity > 0) return PLANT_ROLES.standby;
+  return PLANT_ROLES.loadFollowing;
+}
 
-  if (fuels.some(isZeroCarbonFuel)) {
-    return {
-      role: "Zero-Carbon Generator",
-      badgeLabel: "Zero-Carbon",
-      badgeClass:
-        "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-500/20",
-      icon: "zap",
-      description:
-        "Generates clean, carbon-free electricity without direct fossil combustion.",
-    };
-  }
+function formatLargeNumber(num: number, suffix: string) {
+  if (num <= 0) return `0${suffix}`;
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M${suffix}`;
+  if (num >= 1_000)
+    return `${Math.round(num / 1_000).toLocaleString()}K${suffix}`;
+  return `${num.toLocaleString()}${suffix}`;
+}
 
-  // Baseload workhorse: runs continuously (> 4,800 hours/year) or high capacity (> 1,200 MW)
-  if (hours >= 4800 || (params.capacityMW ?? 0) > 1200) {
-    return {
-      role: "Baseload Workhorse",
-      badgeLabel: "Baseload Plant",
-      badgeClass:
-        "bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-300/60 dark:border-sky-500/20",
-      icon: "zap",
-      description:
-        "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
-    };
-  }
-
-  // Peaking plant: runs fewer than 1,800 hours/year (or mostly sits idle until demand surges)
-  if (hours > 0 && hours < 1800) {
-    return {
-      role: "On-Demand Peaker",
-      badgeLabel: "On-Demand Peaker",
-      badgeClass:
-        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-300/60 dark:border-amber-500/20",
-      icon: "clock",
-      description:
-        "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
-    };
-  }
-
-  // Standby or minimal operation
-  if (hours === 0 && (params.capacityMW ?? 0) > 0) {
-    return {
-      role: "Standby / Reserve",
-      badgeLabel: "Standby Reserve",
-      badgeClass: "bg-surface-2 text-fg-muted border-edge",
-      icon: "power",
-      description:
-        "Held in operational reserve or pending seasonal activation with minimal reported generation.",
-    };
-  }
-
-  // Default: Load-following / Intermediate
+export function getCarbonIntensityTier(intensity: number) {
+  const tier: { label: string; variant: BadgeVariant; typicalOf: string } =
+    intensity === 0
+      ? { label: "Zero-Carbon", variant: "success", typicalOf: "" }
+      : intensity < 950
+        ? {
+            label: "Low Carbon CCGT",
+            variant: "success",
+            typicalOf:
+              "typical of modern, high-efficiency combined-cycle natural gas generation",
+          }
+        : intensity <= 1600
+          ? {
+              label: "Intermediate Peaker",
+              variant: "warning",
+              typicalOf:
+                "indicative of load-following or simple-cycle gas peakers",
+            }
+          : {
+              label: "High Carbon Coal",
+              variant: "destructive",
+              typicalOf:
+                "characteristic of carbon-dense coal or older thermal generation",
+            };
   return {
-    role: "Load-Following Plant",
-    badgeLabel: "Load-Following",
-    badgeClass:
-      "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/60 dark:border-emerald-500/20",
-    icon: "activity",
+    ...tier,
     description:
-      "Ramps power output up and down throughout the day to match fluctuating consumer demand and balance solar/wind.",
-  };
-}
-
-export function formatLargeNumber(num: number, suffix = "") {
-  if (num <= 0) return "0" + suffix;
-  if (num >= 1_000_000) {
-    return (num / 1_000_000).toFixed(1) + "M" + suffix;
-  }
-  if (num >= 1_000) {
-    return Math.round(num / 1_000).toLocaleString() + "K" + suffix;
-  }
-  return num.toLocaleString() + suffix;
-}
-
-export interface CarbonIntensityTier {
-  tier: "clean" | "intermediate" | "high" | "unknown";
-  label: string;
-  badgeClass: string;
-  description: string;
-  narrativeDescription: string;
-}
-
-export function getCarbonIntensityTier(
-  intensity: number | null,
-): CarbonIntensityTier {
-  if (intensity === null || intensity === 0) {
-    return {
-      tier: "unknown",
-      label: "Zero / Unreported",
-      badgeClass: "bg-surface-2 text-fg-muted border-edge",
-      description: "No direct fossil carbon intensity reported.",
-      narrativeDescription: "No direct annual carbon emissions were reported.",
-    };
-  }
-  if (intensity < 950) {
-    return {
-      tier: "clean",
-      label: "Low Carbon CCGT",
-      badgeClass:
-        "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-300/60 dark:border-emerald-500/20",
-      description: `${intensity} lbs CO₂ emitted per MWh generated (Highly efficient CCGT)`,
-      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, typical of modern, high-efficiency combined-cycle natural gas generation.`,
-    };
-  }
-  if (intensity <= 1600) {
-    return {
-      tier: "intermediate",
-      label: "Intermediate Peaker",
-      badgeClass:
-        "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-300/60 dark:border-amber-500/20",
-      description: `${intensity} lbs CO₂ emitted per MWh generated (Peaker / Intermediate)`,
-      narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, indicative of load-following or simple-cycle gas peakers.`,
-    };
-  }
-  return {
-    tier: "high",
-    label: "High Carbon Coal",
-    badgeClass:
-      "bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-300/60 dark:border-red-500/20",
-    description: `${intensity} lbs CO₂ emitted per MWh generated (High-emission fossil / coal)`,
-    narrativeDescription: `Its emissions intensity is ${intensity.toLocaleString()} lbs CO₂/MWh, characteristic of carbon-dense coal or older thermal generation.`,
+      intensity === 0
+        ? "Zero direct stack CO₂ emissions per MWh generated"
+        : `${intensity} lbs CO₂ emitted per MWh generated (${tier.label})`,
   };
 }
 
 /**
- * Translates megawatts and carbon tonnage into tangible, real-world human equivalents.
- * Formulas derived from EPA Greenhouse Gas Equivalencies Calculator:
- * - 1 ton CO₂ ≈ 0.217 passenger vehicles driven for 1 year
- * - 1 MW capacity ≈ 750 average American homes powered
+ * EPA Greenhouse Gas Equivalencies: 1 ton CO₂ ≈ 0.217 passenger vehicles/yr,
+ * 1 MW capacity ≈ 750 average American homes.
  */
 export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
   const homes = Math.round(capacityMW * 750);
   const cars = Math.round(co2Tons * 0.217);
-
   return {
     homesPoweredRaw: homes,
     homesPoweredFormatted: formatLargeNumber(homes, " homes"),
@@ -201,55 +154,27 @@ export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
   };
 }
 
-export function formatCounty(county: string | null | undefined): string {
-  if (!county) return "";
-  const trimmed = county.trim();
-  return /\bcounty\b/i.test(trimmed) ? trimmed : `${trimmed} County`;
-}
-
 export function formatCountyShort(county: string | null | undefined): string {
   if (!county) return "County N/A";
-  const trimmed = county.trim().replace(/\s+(?:county|co\.?)$/i, "");
-  return `${trimmed} Co.`;
+  return `${county.trim().replace(/\s+(?:county|co\.?)$/i, "")} Co.`;
 }
 
-/**
- * Cleans raw EPA CAMPD owner/operator strings by stripping repetitive
- * metadata tags like "(Owner)", "(Operator)", and deduplicating entities.
- */
+const OWNER_ROLE_TAG_RE =
+  /\s*\((?:Owner|Operator|Holding Company|Parent|Subsidiary|Joint Owner|Managing Partner)\)/gi;
+
+/** Strips "(Owner)"/"(Operator)" tags from EPA owner strings and dedupes entities. */
 export function cleanOwnerOperator(raw: string | null | undefined): string {
-  if (!raw) return "Owner unlisted";
-  const parts = raw
-    .split("|")
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return "Owner unlisted";
-
-  const cleaned = parts.map((p) =>
-    p
-      .replace(
-        /\s*\((?:Owner|Operator|Holding Company|Parent|Subsidiary|Joint Owner|Managing Partner)\)/gi,
-        "",
-      )
-      .trim(),
-  );
-
-  const unique: string[] = [];
-  const seen = new Set<string>();
-  for (const item of cleaned) {
-    const lower = item.toLowerCase();
-    if (lower && !seen.has(lower)) {
-      seen.add(lower);
-      unique.push(item);
+  const unique = new Map<string, string>();
+  for (const part of (raw ?? "").split("|")) {
+    const name = part.replace(OWNER_ROLE_TAG_RE, "").trim();
+    if (name && !unique.has(name.toLowerCase())) {
+      unique.set(name.toLowerCase(), name);
     }
   }
-
-  return unique.length > 0 ? unique.join(", ") : "Owner unlisted";
+  return unique.size > 0 ? [...unique.values()].join(", ") : "Owner unlisted";
 }
 
-/**
- * Generate a 3-part plain-English storytelling narrative for a facility
- */
+/** 3-part plain-English narrative: headline, grid role, environmental footprint. */
 export function generatePlantStory(params: {
   name: string;
   county: string | null;
@@ -258,7 +183,6 @@ export function generatePlantStory(params: {
   sourceCategory: string | null;
   ownerOperator: string | null;
   totalCapacityMW: number;
-  unitCount: number;
   primaryFuels: string[];
   co2Tons: number;
   operatingHours: number;
@@ -273,84 +197,58 @@ export function generatePlantStory(params: {
     sourceCategory: params.sourceCategory,
     primaryFuels: params.primaryFuels,
   });
-
   const equivalents = getHumanEquivalents(
     params.totalCapacityMW,
     params.co2Tons,
   );
-
-  const fuelString =
-    params.primaryFuels.length > 0
-      ? params.primaryFuels.join(" & ")
-      : "fossil fuel";
-
-  const locationString = params.county
-    ? `${formatCounty(params.county)}, ${params.stateCode}`
+  const fuels = params.primaryFuels.join(" & ") || "fossil fuel";
+  const county = params.county?.trim();
+  const location = county
+    ? `${/\bcounty\b/i.test(county) ? county : `${county} County`}, ${params.stateCode}`
     : params.stateCode;
-
-  // 1. Headline
+  const grid = params.nercRegion ?? "regional";
   const article = /^[aeiou]/i.test(roleInfo.role) ? "an" : "a";
+
   const headline = `${params.name} is a ${
     params.totalCapacityMW > 0
       ? `${params.totalCapacityMW.toLocaleString()} MW `
       : ""
-  }${fuelString} facility in ${locationString}, operating as ${article} ${roleInfo.role}.`;
+  }${fuels} facility in ${location}, operating as ${article} ${roleInfo.role}.`;
 
-  // 2. What it does on the grid
-  let gridStory = "";
-  if (params.totalCapacityMW > 0) {
-    gridStory = `At full capacity, it can supply electricity to approximately ${equivalents.homesPoweredFormatted}. `;
-  }
-  const yearPrefix = params.year
-    ? `In ${params.year},`
-    : "In recent reporting,";
+  let gridStory =
+    params.totalCapacityMW > 0
+      ? `At full capacity, it can supply electricity to approximately ${equivalents.homesPoweredFormatted}. `
+      : "";
   if (params.operatingHours > 0) {
     const pctYear = Math.min(
       Math.round((params.operatingHours / 8760) * 100),
       100,
     );
-    gridStory += `${yearPrefix} it was actively generating power for ${params.operatingHours.toLocaleString()} hours (about ${pctYear}% of the year), producing ${
+    const output =
       params.grossGenerationMWh > 0
         ? `${(params.grossGenerationMWh / 1_000_000).toFixed(2)} million MWh`
-        : "energy"
-    } into the ${params.nercRegion ?? "regional"} electric grid.`;
+        : "energy";
+    gridStory += `${params.year ? `In ${params.year},` : "In recent reporting,"} it was actively generating power for ${params.operatingHours.toLocaleString()} hours (about ${pctYear}% of the year), producing ${output} into the ${grid} electric grid.`;
   } else {
-    gridStory += `It operates as part of the ${
-      params.nercRegion ?? "regional"
-    } electric reliability network, managed by ${
+    gridStory += `It operates as part of the ${grid} electric reliability network, managed by ${
       params.ownerOperator
         ? cleanOwnerOperator(params.ownerOperator)
         : "its utility operator"
     }.`;
   }
 
-  // 3. Environmental footprint & Air quality
-  let environmentalStory = "";
+  let environmentalStory: string;
   if (params.co2Tons > 0) {
     environmentalStory = `The plant emitted ${params.co2Tons.toLocaleString()} tons of carbon dioxide (CO₂), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
     if (params.carbonIntensity) {
-      const tier = getCarbonIntensityTier(params.carbonIntensity);
-      environmentalStory += `${tier.narrativeDescription} `;
+      environmentalStory += `Its emissions intensity is ${params.carbonIntensity.toLocaleString()} lbs CO₂/MWh, ${getCarbonIntensityTier(params.carbonIntensity).typicalOf}. `;
     }
   } else {
-    environmentalStory = params.year
-      ? `No direct annual carbon emissions were reported for ${params.year}. `
-      : "No direct annual carbon emissions were reported for this period. ";
+    environmentalStory = `No direct annual carbon emissions were reported for ${params.year ?? "this period"}. `;
   }
+  environmentalStory += params.hasControls
+    ? "Its smokestacks are equipped with environmental control scrubbers to capture sulfur dioxide (SO₂) and catalytic converters to neutralize smog-forming nitrogen oxides (NOₓ)."
+    : "It operates with standard emissions controls configured for its generator units.";
 
-  if (params.hasControls) {
-    environmentalStory +=
-      "Its smokestacks are equipped with environmental control scrubbers to capture sulfur dioxide (SO₂) and catalytic converters to neutralize smog-forming nitrogen oxides (NOₓ).";
-  } else {
-    environmentalStory +=
-      "It operates with standard emissions controls configured for its generator units.";
-  }
-
-  return {
-    roleInfo,
-    equivalents,
-    headline,
-    gridStory,
-    environmentalStory,
-  };
+  return { roleInfo, equivalents, headline, gridStory, environmentalStory };
 }

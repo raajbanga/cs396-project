@@ -1,20 +1,26 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import { env } from "~/env";
-import { clampDateToYear } from "~/lib/date-options";
 import {
   clampCampdDateRange,
+  clampDateToYear,
   clampIsoDateToCampdPublished,
-  clampYearToCampdPublished,
   getCampdPublishedYear,
   getCampdValidMonthsForYear,
   getDefaultCampdDateForYear,
+  pad2,
   parseCampdQuarterEndFromError,
   toIsoDate,
+  type Granularity,
 } from "~/lib/campd-reporting-period";
 import {
-  computeCo2IntensityLbsMWh,
-  computeHeatRateMMBtuMWh,
+  addTotals,
+  deriveRates,
+  emptyTotals,
+  sumTotals,
+  TOTAL_KEYS,
+  type EmissionTotals,
 } from "~/lib/emissions-metrics";
 import { db } from "~/server/db";
 import {
@@ -23,64 +29,125 @@ import {
   datasets,
   facilities,
   units,
-  type NewAnnualRecord,
-  type NewDataAuditLog,
 } from "~/server/db/schema";
 
-const CAMPD_BASE_URL = "https://api.epa.gov/easey";
+const CAMPD_BASE_URL =
+  "https://api.epa.gov/easey/emissions-mgmt/emissions/apportioned";
+
+type CampdRow = Record<string, unknown>;
+
+interface CampdFetchResult {
+  items: CampdRow[];
+  error?: string;
+}
+
+function parseNum(val: unknown, fallback = 0): number {
+  const n =
+    typeof val === "number"
+      ? val
+      : typeof val === "string"
+        ? Number.parseFloat(val.replace(/,/g, "").trim())
+        : Number.NaN;
+  return Number.isNaN(n) ? fallback : n;
+}
+
+function toStr(val: unknown): string | null {
+  if (typeof val === "string") return val.trim() || null;
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  return null;
+}
+
+/** First present, non-empty value among `keys`. */
+const pick = (row: CampdRow, ...keys: string[]) =>
+  keys
+    .map((k) => row[k])
+    .find((v) => v !== undefined && v !== null && v !== "");
 
 /**
- * Zod Ingestion & Normalization Schema (PRD Section 3.1):
- * Resolves malalignment across CAMPD REST API (camelCase), snake_case,
- * and bulk EPA Custom Data Download (CDD) CSV headers into unified internal fields.
+ * Field aliases across the CAMPD REST API (camelCase), snake_case, and bulk EPA
+ * Custom Data Download (CDD) CSV headers (PRD Section 3.1).
  */
+const METRIC_ALIASES: Record<keyof EmissionTotals, string[]> = {
+  operatingHours: [
+    "opTime",
+    "sumOpTime",
+    "operatingTime",
+    "operatingHours",
+    "Operating Time",
+    "countOpTime",
+  ],
+  grossGenerationMWh: ["grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"],
+  heatInputMMBtu: ["heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"],
+  co2MassTons: ["co2Mass", "co2MassTons", "CO2 (short tons)"],
+  so2MassTons: ["so2Mass", "so2MassTons", "SO2 (short tons)"],
+  noxMassTons: ["noxMass", "noxMassTons", "NOx (short tons)"],
+};
+
+const UNIT_ALIASES = {
+  unitType: ["unitType", "unit_type", "Unit Type"],
+  primaryFuel: [
+    "primaryFuelInfo",
+    "primaryFuel",
+    "primary_fuel",
+    "Primary Fuel Type",
+  ],
+  secondaryFuel: [
+    "secondaryFuelInfo",
+    "secondaryFuel",
+    "secondary_fuel",
+    "Secondary Fuel Type",
+  ],
+  so2Controls: [
+    "so2ControlInfo",
+    "so2Controls",
+    "so2_controls",
+    "SO2 Controls",
+  ],
+  noxControls: [
+    "noxControlInfo",
+    "noxControls",
+    "nox_controls",
+    "NOx Controls",
+  ],
+  pmControls: ["pmControlInfo", "pmControls", "pm_controls", "PM Controls"],
+  hgControls: ["hgControlInfo", "hgControls", "hg_controls", "Hg Controls"],
+  programCode: [
+    "programCodeInfo",
+    "programCode",
+    "program_code",
+    "Program Code",
+  ],
+};
+
+function readMetrics(row: CampdRow, missingHours = 0): EmissionTotals {
+  const totals = emptyTotals();
+  for (const key of TOTAL_KEYS) {
+    totals[key] = parseNum(
+      pick(row, ...METRIC_ALIASES[key]),
+      key === "operatingHours" ? missingHours : 0,
+    );
+  }
+  return totals;
+}
+
 const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
-  const get = (...keys: string[]): unknown => {
-    for (const k of keys) {
-      if (raw[k] !== undefined && raw[k] !== null && raw[k] !== "") {
-        return raw[k];
-      }
-    }
-    return undefined;
-  };
-
-  const toNum = (val: unknown, fallback = 0): number => {
-    if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
-    if (typeof val === "string") {
-      const n = Number.parseFloat(val.replace(/,/g, "").trim());
-      return Number.isNaN(n) ? fallback : n;
-    }
-    return fallback;
-  };
-
-  const toStr = (val: unknown): string | null => {
-    if (typeof val === "string") {
-      const s = val.trim();
-      return s.length > 0 ? s : null;
-    }
-    if (typeof val === "number" || typeof val === "boolean") {
-      return String(val);
-    }
-    return null;
-  };
-
-  const facIdVal = get(
-    "facilityId",
-    "facility_id",
-    "Facility ID (ORISPL)",
-    "Facility ID",
+  const str = (...keys: string[]) => toStr(pick(raw, ...keys));
+  const facilityId = Math.round(
+    parseNum(
+      pick(
+        raw,
+        "facilityId",
+        "facility_id",
+        "Facility ID (ORISPL)",
+        "Facility ID",
+      ),
+    ),
   );
-  const facilityId = Math.round(toNum(facIdVal, 0));
-
-  const unitId = toStr(get("unitId", "unit_id", "Unit ID"));
-  const stateCode = (toStr(get("stateCode", "state", "State")) ?? "US")
-    .toUpperCase()
-    .slice(0, 2);
-  const facilityName =
-    toStr(get("facilityName", "facility_name", "Facility Name")) ??
-    `Facility #${facilityId}`;
+  const unitId = str("unitId", "unit_id", "Unit ID");
   const year = Math.round(
-    toNum(get("year", "Year", "reportingYear", "opYear", "calendarYear"), 0),
+    parseNum(
+      pick(raw, "year", "Year", "reportingYear", "opYear", "calendarYear"),
+    ),
   );
 
   if (!facilityId || !unitId || !year) {
@@ -93,142 +160,80 @@ const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
 
   return {
     facilityId,
-    facilityName,
-    stateCode,
     unitId,
     year,
-    operatingHours: toNum(
-      get(
-        "sumOpTime",
-        "operatingTime",
-        "operatingHours",
-        "Operating Time",
-        "countOpTime",
-      ),
-      0,
-    ),
-    grossGenerationMWh: toNum(
-      get("grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"),
-      0,
-    ),
-    heatInputMMBtu: toNum(
-      get("heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"),
-      0,
-    ),
-    co2MassTons: toNum(get("co2Mass", "co2MassTons", "CO2 (short tons)"), 0),
-    so2MassTons: toNum(get("so2Mass", "so2MassTons", "SO2 (short tons)"), 0),
-    noxMassTons: toNum(get("noxMass", "noxMassTons", "NOx (short tons)"), 0),
-    primaryFuel: toStr(
-      get(
-        "primaryFuelInfo",
-        "primaryFuel",
-        "primary_fuel",
-        "Primary Fuel Type",
-      ),
-    ),
-    secondaryFuel: toStr(
-      get(
-        "secondaryFuelInfo",
-        "secondaryFuel",
-        "secondary_fuel",
-        "Secondary Fuel Type",
-      ),
-    ),
-    unitType: toStr(get("unitType", "unit_type", "Unit Type")),
-    so2Controls: toStr(
-      get("so2ControlInfo", "so2Controls", "so2_controls", "SO2 Controls"),
-    ),
-    noxControls: toStr(
-      get("noxControlInfo", "noxControls", "nox_controls", "NOx Controls"),
-    ),
-    pmControls: toStr(
-      get("pmControlInfo", "pmControls", "pm_controls", "PM Controls"),
-    ),
-    hgControls: toStr(
-      get("hgControlInfo", "hgControls", "hg_controls", "Hg Controls"),
-    ),
-    programCode: toStr(
-      get("programCodeInfo", "programCode", "program_code", "Program Code"),
-    ),
+    facilityName:
+      str("facilityName", "facility_name", "Facility Name") ??
+      `Facility #${facilityId}`,
+    stateCode: (str("stateCode", "state", "State") ?? "US")
+      .toUpperCase()
+      .slice(0, 2),
+    metrics: readMetrics(raw),
+    unit: Object.fromEntries(
+      Object.entries(UNIT_ALIASES).map(([field, keys]) => [
+        field,
+        str(...keys),
+      ]),
+    ) as Record<keyof typeof UNIT_ALIASES, string | null>,
   };
 });
 
 type NormalizedCampdRecord = z.infer<typeof rawCampdRecordSchema>;
 
-interface SyncOptions {
-  year: number;
-  stateCode?: string;
-  facilityId?: number;
-  perPage?: number;
-  maxPages?: number;
+function extractCampdError(body: unknown, status: number): string {
+  const message = (body as { message?: unknown } | null)?.message;
+  const text = Array.isArray(message)
+    ? message.filter((part) => typeof part === "string").join(" ")
+    : typeof message === "string"
+      ? message.trim()
+      : "";
+  return text || `CAMPD API error (${status})`;
 }
 
-async function fetchCampdAnnualEmissions(
-  params: {
-    year: number;
-    stateCode?: string;
-    facilityId?: number;
-    page: number;
-    perPage: number;
-  },
-  apiKey?: string,
-): Promise<{ items: Record<string, unknown>[]; totalCount: number }> {
-  const key = apiKey ?? env.CAMPD_API;
-  if (!key) {
-    throw new Error(
-      "CAMPD_API key is not configured in environment variables.",
-    );
+async function fetchCampd(
+  path: string,
+  query: URLSearchParams,
+): Promise<CampdFetchResult> {
+  if (!env.CAMPD_API) {
+    return { items: [], error: "CAMPD_API key is not configured." };
   }
-
-  const query = new URLSearchParams();
-  query.set("year", params.year.toString());
-  query.set("page", params.page.toString());
-  query.set("perPage", params.perPage.toString());
-
-  if (params.stateCode && params.stateCode !== "ALL") {
-    query.set("stateCode", params.stateCode.toUpperCase());
+  try {
+    const res = await fetch(`${CAMPD_BASE_URL}${path}?${query.toString()}`, {
+      headers: { "x-api-key": env.CAMPD_API, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(30000),
+    });
+    const body: unknown = await res.json().catch(() => null);
+    if (!res.ok)
+      return { items: [], error: extractCampdError(body, res.status) };
+    const items = Array.isArray(body)
+      ? body
+      : (body as { items?: unknown } | null)?.items;
+    return { items: Array.isArray(items) ? (items as CampdRow[]) : [] };
+  } catch (err) {
+    return {
+      items: [],
+      error: err instanceof Error ? err.message : "CAMPD request failed",
+    };
   }
-
-  if (params.facilityId) {
-    query.set("facilityId", params.facilityId.toString());
-  }
-
-  const url = `${CAMPD_BASE_URL}/emissions-mgmt/emissions/apportioned/annual?${query.toString()}`;
-
-  const response = await fetch(url, {
-    headers: {
-      "x-api-key": key,
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `CAMPD API error (${response.status} ${response.statusText}): ${errorText}`,
-    );
-  }
-
-  const totalCountHeader = response.headers.get("x-total-count");
-  const totalCount = totalCountHeader
-    ? Number.parseInt(totalCountHeader, 10)
-    : 0;
-  const data = (await response.json()) as { items?: Record<string, unknown>[] };
-
-  return {
-    items: data.items ?? [],
-    totalCount: Number.isNaN(totalCount)
-      ? (data.items?.length ?? 0)
-      : totalCount,
-  };
 }
 
-interface AnomalyInput {
-  heatInputMMBtu: number;
-  co2MassTons: number;
-  grossGenerationMWh: number;
-  operatingHours: number;
-  heatRateMMBtuMWh: number | null;
+async function fetchAllCampdPages(
+  path: string,
+  query: URLSearchParams,
+  perPage = 500,
+): Promise<CampdFetchResult> {
+  const items: CampdRow[] = [];
+  for (let page = 1; page <= 50; page++) {
+    const pageQuery = new URLSearchParams(query);
+    pageQuery.set("page", String(page));
+    pageQuery.set("perPage", String(perPage));
+    const result = await fetchCampd(path, pageQuery);
+    if (result.error) return { items, error: result.error };
+    items.push(...result.items);
+    if (result.items.length < perPage) break;
+  }
+  return { items };
 }
 
 /**
@@ -242,491 +247,220 @@ const AUDIT_THRESHOLDS = {
   HEAT_RATE_MAX_MMBTU_MWH: 25.0,
 } as const;
 
-type AuditFlagType =
-  "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE";
+function evaluatePhysicalSanityRules(
+  m: EmissionTotals & { heatRateMMBtuMWh: number | null },
+) {
+  const { HEAT_RATE_MIN_MMBTU_MWH: minRate, HEAT_RATE_MAX_MMBTU_MWH: maxRate } =
+    AUDIT_THRESHOLDS;
+  const flags: {
+    flagType: string;
+    severity: "WARN" | "ERROR";
+    details: string;
+  }[] = [];
 
-type AuditSeverity = "WARN" | "ERROR";
-
-interface AnomalyFlag {
-  flagType: AuditFlagType;
-  severity: AuditSeverity;
-  details: string;
-}
-
-/**
- * Pure evaluation function for EPA physical sanity checks (PRD Section 3.3)
- */
-function evaluatePhysicalSanityRules(input: AnomalyInput): AnomalyFlag[] {
-  const flags: AnomalyFlag[] = [];
-
-  // Rule 1: ZERO_EMISSIONS_HIGH_HEAT
   if (
-    input.heatInputMMBtu >
-      AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
-    input.co2MassTons === 0
+    m.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
+    m.co2MassTons === 0
   ) {
     flags.push({
       flagType: "ZERO_EMISSIONS_HIGH_HEAT",
       severity: "ERROR",
-      details: `Heat input was ${input.heatInputMMBtu.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
+      details: `Heat input was ${m.heatInputMMBtu.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
     });
   }
-
-  // Rule 2: PHANTOM_GENERATION
   if (
-    input.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
-    input.operatingHours === 0
+    m.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
+    m.operatingHours === 0
   ) {
     flags.push({
       flagType: "PHANTOM_GENERATION",
       severity: "ERROR",
-      details: `Gross generation was ${input.grossGenerationMWh.toLocaleString()} MWh while operating time was 0 hours.`,
+      details: `Gross generation was ${m.grossGenerationMWh.toLocaleString()} MWh while operating time was 0 hours.`,
     });
   }
-
-  // Rule 3: EXTREME_HEAT_RATE
-  if (
-    input.heatRateMMBtuMWh !== null &&
-    (input.heatRateMMBtuMWh > AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH ||
-      input.heatRateMMBtuMWh < AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH)
-  ) {
+  const rate = m.heatRateMMBtuMWh;
+  if (rate !== null && (rate > maxRate || rate < minRate)) {
     flags.push({
       flagType: "EXTREME_HEAT_RATE",
       severity: "WARN",
-      details: `Heat rate of ${input.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${AUDIT_THRESHOLDS.HEAT_RATE_MIN_MMBTU_MWH.toFixed(1)} - ${AUDIT_THRESHOLDS.HEAT_RATE_MAX_MMBTU_MWH.toFixed(1)}).`,
+      details: `Heat rate of ${rate.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${minRate.toFixed(1)} - ${maxRate.toFixed(1)}).`,
     });
   }
-
   return flags;
 }
 
+async function insertInChunks<T>(
+  rows: T[],
+  insert: (chunk: T[]) => Promise<unknown>,
+) {
+  // Chunks of 50 respect SQLite's bound-parameter limit.
+  for (let i = 0; i < rows.length; i += 50) await insert(rows.slice(i, i + 50));
+}
+
+const ANNUAL_UPSERT_COLUMNS = [
+  "datasetId",
+  ...TOTAL_KEYS,
+  "co2IntensityLbsMWh",
+  "heatRateMMBtuMWh",
+] as const;
+
 /**
- * Optimized Ingestion Engine:
- * Batches records in memory, executes physical sanity checks,
- * calculates derived efficiency metrics, and commits in high-throughput chunks.
+ * Ingestion engine: normalizes CAMPD annual records page by page, runs physical
+ * sanity checks, derives efficiency metrics, and upserts in chunked batches.
  */
-export async function syncCampdAnnualEmissions(options: SyncOptions) {
-  const year = options.year;
-  const perPage = Math.min(options.perPage ?? 500, 500);
-  const maxPages = options.maxPages ?? 10;
+export async function syncCampdAnnualEmissions({
+  year,
+  perPage = 500,
+  maxPages = 10,
+}: {
+  year: number;
+  perPage?: number;
+  maxPages?: number;
+}) {
+  const facilitySet = new Set(
+    (await db.select({ id: facilities.id }).from(facilities)).map((f) => f.id),
+  );
+  const unitMap = new Map(
+    (
+      await db
+        .select({
+          id: units.id,
+          facilityId: units.facilityId,
+          unitId: units.unitId,
+        })
+        .from(units)
+    ).map((u) => [`${u.facilityId}:${u.unitId}`, u.id]),
+  );
 
-  // 1. Preload facility IDs and unit keys into memory maps for fast O(1) resolution
-  const existingFacRows = await db
-    .select({ id: facilities.id })
-    .from(facilities);
-  const facilitySet = new Set(existingFacRows.map((f) => f.id));
-
-  const existingUnitRows = await db
-    .select({
-      id: units.id,
-      facilityId: units.facilityId,
-      unitId: units.unitId,
-    })
-    .from(units);
-  const unitMap = new Map<string, string>();
-  for (const u of existingUnitRows) {
-    unitMap.set(`${u.facilityId}:${u.unitId}`, u.id);
-  }
-
-  // 2. Create Dataset record for batch auditing
   const datasetId = crypto.randomUUID();
-  const datasetName =
-    options.stateCode && options.stateCode !== "ALL"
-      ? `CAMPD API ${year} [${options.stateCode.toUpperCase()}]`
-      : `CAMPD API ${year} Ingestion Batch`;
-
   await db.insert(datasets).values({
     id: datasetId,
-    name: datasetName,
+    name: `CAMPD API ${year} Ingestion Batch`,
     source: "API",
     reportingYear: year,
-    rawRecordCount: 0,
-    validRecords: 0,
-    flaggedRecords: 0,
   });
 
-  let page = 1;
-  let totalRawProcessed = 0;
-  let validRecordsCount = 0;
-  let flaggedRecordsCount = 0;
-  const anomaliesSummary: Array<{
-    facilityId: number;
-    unitId: string;
-    flagType: AuditFlagType;
-    severity: AuditSeverity;
-    details: string;
-  }> = [];
+  let rawRecordCount = 0;
+  let validRecords = 0;
+  let flaggedRecords = 0;
+  let anomalyCount = 0;
 
-  while (page <= maxPages) {
-    const { items } = await fetchCampdAnnualEmissions({
-      year,
-      stateCode: options.stateCode,
-      facilityId: options.facilityId,
-      page,
-      perPage,
-    });
+  for (let page = 1; page <= maxPages; page++) {
+    const { items, error } = await fetchCampd(
+      "/annual",
+      new URLSearchParams({
+        year: String(year),
+        page: String(page),
+        perPage: String(Math.min(perPage, 500)),
+      }),
+    );
+    if (error) throw new Error(`CAMPD API error: ${error}`);
+    if (items.length === 0) break;
+    rawRecordCount += items.length;
 
-    if (!items || items.length === 0) {
-      break;
+    // Dedupe on the natural key (facilityId, unitId, year).
+    const batch = new Map<string, NormalizedCampdRecord>();
+    for (const item of items) {
+      const res = rawCampdRecordSchema.safeParse(item);
+      if (res.success) {
+        batch.set(
+          `${res.data.facilityId}:${res.data.unitId}:${res.data.year}`,
+          res.data,
+        );
+      }
     }
 
-    const recordsToInsert: NewAnnualRecord[] = [];
-    const auditLogsToInsert: NewDataAuditLog[] = [];
-    const newFacilitiesToInsert: Array<typeof facilities.$inferInsert> = [];
-    const newUnitsToInsert: Array<typeof units.$inferInsert> = [];
+    const newFacilities: (typeof facilities.$inferInsert)[] = [];
+    const newUnits: (typeof units.$inferInsert)[] = [];
+    const records: (typeof annualRecords.$inferInsert)[] = [];
+    const auditLogs: (typeof dataAuditLogs.$inferInsert)[] = [];
 
-    // 1. Zod normalization & in-memory composite natural key (facilityId, unitId, year) deduplication
-    const dedupedBatch = new Map<string, NormalizedCampdRecord>();
-    for (const rawItem of items) {
-      totalRawProcessed++;
-      const res = rawCampdRecordSchema.safeParse(rawItem);
-      if (!res.success) continue;
-      const rec = res.data;
-      dedupedBatch.set(`${rec.facilityId}:${rec.unitId}:${rec.year}`, rec);
-    }
-
-    for (const item of dedupedBatch.values()) {
-      const { facilityId, unitId } = item;
-
-      // Auto-create facility stub if missing
+    for (const rec of batch.values()) {
+      const { facilityId, unitId } = rec;
       if (!facilitySet.has(facilityId)) {
         facilitySet.add(facilityId);
-        newFacilitiesToInsert.push({
+        newFacilities.push({
           id: facilityId,
-          name: item.facilityName,
-          stateCode: item.stateCode,
+          name: rec.facilityName,
+          stateCode: rec.stateCode,
         });
       }
 
-      // Auto-create unit if missing
       const unitKey = `${facilityId}:${unitId}`;
       let unitInternalId = unitMap.get(unitKey);
       if (!unitInternalId) {
         unitInternalId = crypto.randomUUID();
         unitMap.set(unitKey, unitInternalId);
-        newUnitsToInsert.push({
-          id: unitInternalId,
-          unitId,
-          facilityId,
-          unitType: item.unitType,
-          primaryFuel: item.primaryFuel,
-          secondaryFuel: item.secondaryFuel,
-          noxControls: item.noxControls,
-          so2Controls: item.so2Controls,
-          pmControls: item.pmControls,
-          hgControls: item.hgControls,
-          programCode: item.programCode,
-        });
+        newUnits.push({ id: unitInternalId, unitId, facilityId, ...rec.unit });
       }
 
-      // Normalized metrics from Zod output
-      const {
-        operatingHours,
-        grossGenerationMWh,
-        heatInputMMBtu,
-        co2MassTons,
-        so2MassTons,
-        noxMassTons,
-      } = item;
-
-      const co2IntensityLbsMWh = computeCo2IntensityLbsMWh(
-        co2MassTons,
-        grossGenerationMWh,
-      );
-      const heatRateMMBtuMWh = computeHeatRateMMBtuMWh(
-        heatInputMMBtu,
-        grossGenerationMWh,
-      );
-
-      // Physical Sanity Anomaly Engine (PRD Section 3.3)
-      const flags = evaluatePhysicalSanityRules({
-        heatInputMMBtu,
-        co2MassTons,
-        grossGenerationMWh,
-        operatingHours,
-        heatRateMMBtuMWh,
-      });
-
+      const metrics = { ...rec.metrics, ...deriveRates(rec.metrics) };
       const annualRecordId = `${unitInternalId}_${year}`;
-
-      recordsToInsert.push({
+      records.push({
         id: annualRecordId,
         datasetId,
         facilityId,
         unitInternalId,
         year,
-        operatingHours,
-        grossGenerationMWh,
-        heatInputMMBtu,
-        co2MassTons,
-        so2MassTons,
-        noxMassTons,
-        co2IntensityLbsMWh,
-        heatRateMMBtuMWh,
+        ...metrics,
       });
 
-      validRecordsCount++;
-
-      if (flags.length > 0) {
-        flaggedRecordsCount++;
-        for (const flag of flags) {
-          auditLogsToInsert.push({
-            id: crypto.randomUUID(),
-            annualRecordId,
-            flagType: flag.flagType,
-            severity: flag.severity,
-            details: flag.details,
-          });
-
-          anomaliesSummary.push({
-            facilityId,
-            unitId,
-            ...flag,
-          });
-        }
-      }
+      const flags = evaluatePhysicalSanityRules(metrics);
+      if (flags.length > 0) flaggedRecords++;
+      anomalyCount += flags.length;
+      auditLogs.push(
+        ...flags.map((flag) => ({
+          id: crypto.randomUUID(),
+          annualRecordId,
+          ...flag,
+        })),
+      );
     }
+    validRecords += batch.size;
 
-    // High throughput chunked batch commits
-    if (newFacilitiesToInsert.length > 0) {
-      await db.insert(facilities).values(newFacilitiesToInsert);
-    }
-    if (newUnitsToInsert.length > 0) {
-      await db.insert(units).values(newUnitsToInsert);
-    }
-    if (recordsToInsert.length > 0) {
-      // Chunk inserts in batches of 50 to respect SQLite parameter limits
-      for (let i = 0; i < recordsToInsert.length; i += 50) {
-        const chunk = recordsToInsert.slice(i, i + 50);
-        await db
-          .insert(annualRecords)
-          .values(chunk)
-          .onConflictDoUpdate({
-            target: [annualRecords.unitInternalId, annualRecords.year],
-            set: {
-              datasetId: sql`excluded.dataset_id`,
-              operatingHours: sql`excluded.operating_hours`,
-              grossGenerationMWh: sql`excluded.gross_generation_mwh`,
-              heatInputMMBtu: sql`excluded.heat_input_mmbtu`,
-              co2MassTons: sql`excluded.co2_mass_tons`,
-              so2MassTons: sql`excluded.so2_mass_tons`,
-              noxMassTons: sql`excluded.nox_mass_tons`,
-              co2IntensityLbsMWh: sql`excluded.co2_intensity_lbs_mwh`,
-              heatRateMMBtuMWh: sql`excluded.heat_rate_mmbtu_mwh`,
-            },
-          });
-      }
-
+    await insertInChunks(newFacilities, (c) => db.insert(facilities).values(c));
+    await insertInChunks(newUnits, (c) => db.insert(units).values(c));
+    await insertInChunks(records, (c) =>
+      db
+        .insert(annualRecords)
+        .values(c)
+        .onConflictDoUpdate({
+          target: [annualRecords.unitInternalId, annualRecords.year],
+          set: Object.fromEntries(
+            ANNUAL_UPSERT_COLUMNS.map((col) => [
+              col,
+              sql.raw(`excluded.${annualRecords[col].name}`),
+            ]),
+          ),
+        }),
+    );
+    if (records.length > 0) {
       await db.delete(dataAuditLogs).where(
         inArray(
           dataAuditLogs.annualRecordId,
-          recordsToInsert.map((record) => record.id!),
+          records.map((r) => r.id!),
         ),
       );
     }
-
-    if (auditLogsToInsert.length > 0) {
-      for (let i = 0; i < auditLogsToInsert.length; i += 50) {
-        const chunk = auditLogsToInsert.slice(i, i + 50);
-        await db.insert(dataAuditLogs).values(chunk);
-      }
-    }
-
-    page++;
+    await insertInChunks(auditLogs, (c) => db.insert(dataAuditLogs).values(c));
   }
 
-  // Update Dataset summary counts
   await db
     .update(datasets)
-    .set({
-      rawRecordCount: totalRawProcessed,
-      validRecords: validRecordsCount,
-      flaggedRecords: flaggedRecordsCount,
-    })
+    .set({ rawRecordCount, validRecords, flaggedRecords })
     .where(eq(datasets.id, datasetId));
 
   return {
     datasetId,
     year,
-    rawRecordCount: totalRawProcessed,
-    validRecords: validRecordsCount,
-    flaggedRecords: flaggedRecordsCount,
-    anomalies: anomaliesSummary,
-  };
-}
-
-export interface GranularOptions {
-  facilityId: number;
-  granularity: "hourly" | "daily" | "weekly" | "monthly" | "yearly";
-  year?: number;
-  date?: string; // YYYY-MM-DD for hourly or daily
-  unitId?: string; // Optional unit filter
-}
-
-export interface GranularEmissionsItem {
-  periodKey: string;
-  periodLabel: string;
-  subLabel?: string;
-  operatingHours: number;
-  grossGenerationMWh: number;
-  heatInputMMBtu: number;
-  co2MassTons: number;
-  so2MassTons: number;
-  noxMassTons: number;
-  co2IntensityLbsMWh: number | null;
-  heatRateMMBtuMWh: number | null;
-}
-
-export interface GranularEmissionsResult {
-  facilityId: number;
-  granularity: "hourly" | "daily" | "weekly" | "monthly" | "yearly";
-  year: number;
-  date?: string;
-  unitId?: string;
-  publishedThrough: string;
-  source: "EPA_CAMPD_API" | "LOCAL_RECORDS" | "UNAVAILABLE";
-  error?: string;
-  summary: {
-    totalOperatingHours: number;
-    totalGenerationMWh: number;
-    totalHeatInputMMBtu: number;
-    totalCo2Tons: number;
-    totalSo2Tons: number;
-    totalNoxTons: number;
-    co2IntensityLbsMWh: number | null;
-    heatRateMMBtuMWh: number | null;
-    itemCount: number;
-  };
-  items: GranularEmissionsItem[];
-}
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-interface CampdFetchResult {
-  items: Record<string, unknown>[];
-  totalCount: number;
-  error?: string;
-}
-
-function parseCampdItems(data: unknown): Record<string, unknown>[] {
-  if (Array.isArray(data)) return data as Record<string, unknown>[];
-  if (data && typeof data === "object" && "items" in data) {
-    const items = (data as { items?: unknown }).items;
-    if (Array.isArray(items)) return items as Record<string, unknown>[];
-  }
-  return [];
-}
-
-function extractCampdError(body: unknown, status: number): string {
-  if (body && typeof body === "object" && "message" in body) {
-    const message = (body as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message;
-    if (Array.isArray(message)) {
-      const joined = message
-        .filter((part): part is string => typeof part === "string")
-        .join(" ");
-      if (joined) return joined;
-    }
-  }
-  return `CAMPD API error (${status})`;
-}
-
-async function fetchCampdJson(
-  path: string,
-  query: URLSearchParams,
-): Promise<CampdFetchResult> {
-  const key = env.CAMPD_API;
-  if (!key) {
-    return {
-      items: [],
-      totalCount: 0,
-      error: "CAMPD_API key is not configured.",
-    };
-  }
-
-  try {
-    const res = await fetch(`${CAMPD_BASE_URL}${path}?${query.toString()}`, {
-      headers: { "x-api-key": key, Accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(30000),
-    });
-
-    const body: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      return {
-        items: [],
-        totalCount: 0,
-        error: extractCampdError(body, res.status),
-      };
-    }
-
-    const items = parseCampdItems(body);
-    const totalCountHeader = res.headers.get("x-total-count");
-    const parsedTotal = totalCountHeader
-      ? Number.parseInt(totalCountHeader, 10)
-      : items.length;
-    return {
-      items,
-      totalCount: Number.isNaN(parsedTotal) ? items.length : parsedTotal,
-    };
-  } catch (err) {
-    return {
-      items: [],
-      totalCount: 0,
-      error: err instanceof Error ? err.message : "CAMPD request failed",
-    };
-  }
-}
-
-async function fetchAllCampdPages(
-  path: string,
-  query: URLSearchParams,
-  perPage = 500,
-): Promise<CampdFetchResult> {
-  const allItems: Record<string, unknown>[] = [];
-  let page = 1;
-  let totalCount = 0;
-  let error: string | undefined;
-
-  while (page <= 50) {
-    const pageQuery = new URLSearchParams(query);
-    pageQuery.set("page", String(page));
-    pageQuery.set("perPage", String(perPage));
-    const result = await fetchCampdJson(path, pageQuery);
-    if (result.error) {
-      error = result.error;
-      break;
-    }
-
-    allItems.push(...result.items);
-    totalCount = result.totalCount || allItems.length;
-    if (result.items.length < perPage) break;
-    if (totalCount > 0 && allItems.length >= totalCount) break;
-    page += 1;
-  }
-
-  return {
-    items: allItems,
-    totalCount: totalCount || allItems.length,
-    error,
+    rawRecordCount,
+    validRecords,
+    flaggedRecords,
+    anomalyCount,
   };
 }
 
 const PUBLISHED_THROUGH_TTL_MS = 60 * 60 * 1000;
-
 let publishedThroughCache: { iso: string; expiresAt: number } | null = null;
 
 function rememberPublishedThrough(iso: string) {
@@ -734,17 +468,13 @@ function rememberPublishedThrough(iso: string) {
     iso,
     expiresAt: Date.now() + PUBLISHED_THROUGH_TTL_MS,
   };
+  return iso;
 }
 
-function currentPublishedThrough(fallback: string): string {
-  return publishedThroughCache?.iso ?? fallback;
-}
-
+/** EPA rejects out-of-range dates with the real "published through" quarter end; remember it. */
 function learnFromCampdError(error?: string): string | null {
-  if (!error) return null;
-  const parsed = parseCampdQuarterEndFromError(error);
-  if (parsed) rememberPublishedThrough(parsed);
-  return parsed;
+  const parsed = error ? parseCampdQuarterEndFromError(error) : null;
+  return parsed ? rememberPublishedThrough(parsed) : null;
 }
 
 export async function resolveCampdPublishedThrough(
@@ -755,23 +485,15 @@ export async function resolveCampdPublishedThrough(
   }
 
   const fallback = toIsoDate(new Date());
-  let probeId = facilityId;
-  if (!probeId) {
-    const [row] = await db
-      .select({ id: facilities.id })
-      .from(facilities)
-      .limit(1);
-    probeId = row?.id;
-  }
+  const probeId =
+    facilityId ??
+    (await db.select({ id: facilities.id }).from(facilities).limit(1))[0]?.id;
+  if (!probeId || !env.CAMPD_API) return rememberPublishedThrough(fallback);
 
-  if (!probeId || !env.CAMPD_API) {
-    rememberPublishedThrough(fallback);
-    return fallback;
-  }
-
+  // Probe with a full-year window; EPA's 400 names the latest published quarter.
   const year = new Date().getFullYear();
-  const result = await fetchCampdJson(
-    "/emissions-mgmt/emissions/apportioned/daily",
+  const { error } = await fetchCampd(
+    "/daily",
     new URLSearchParams({
       facilityId: String(probeId),
       beginDate: `${year}-01-01`,
@@ -780,698 +502,301 @@ export async function resolveCampdPublishedThrough(
       perPage: "1",
     }),
   );
-  const parsed = learnFromCampdError(result.error);
-  const iso = parsed ?? (result.error ? fallback : `${year}-12-31`);
-  rememberPublishedThrough(iso);
-  return iso;
+  return (
+    learnFromCampdError(error) ??
+    rememberPublishedThrough(error ? fallback : `${year}-12-31`)
+  );
 }
 
-async function fetchCampdDateWindow(
-  path: string,
-  params: {
-    facilityId: number;
-    beginDate: string;
-    endDate: string;
-    publishedThrough: string;
-  },
-): Promise<CampdFetchResult> {
-  const range = clampCampdDateRange(
-    params.beginDate,
-    params.endDate,
-    params.publishedThrough,
-  );
-  const queryFor = (beginDate: string, endDate: string) =>
-    new URLSearchParams({
-      facilityId: params.facilityId.toString(),
-      beginDate,
-      endDate,
-    });
-
-  const result = await fetchAllCampdPages(
-    path,
-    queryFor(range.beginDate, range.endDate),
-  );
+/** Runs `request`, retrying once if EPA reports a different published-through date. */
+async function fetchWithPublishedRetry(
+  publishedThrough: string,
+  request: (publishedThrough: string) => Promise<CampdFetchResult>,
+) {
+  const result = await request(publishedThrough);
   const learned = learnFromCampdError(result.error);
-  if (!learned || learned === params.publishedThrough) return result;
-
-  const retryRange = clampCampdDateRange(
-    params.beginDate,
-    params.endDate,
-    learned,
-  );
-  if (
-    retryRange.beginDate === range.beginDate &&
-    retryRange.endDate === range.endDate
-  ) {
-    return result;
-  }
-
-  return fetchAllCampdPages(
-    path,
-    queryFor(retryRange.beginDate, retryRange.endDate),
-  );
+  return learned && learned !== publishedThrough ? request(learned) : result;
 }
 
-async function fetchCampdHourlyEmissions(params: {
-  facilityId: number;
-  beginDate: string;
-  endDate: string;
-  publishedThrough: string;
-}): Promise<CampdFetchResult> {
-  return fetchCampdDateWindow(
-    "/emissions-mgmt/emissions/apportioned/hourly",
-    params,
-  );
+type RoundedTotals = EmissionTotals & ReturnType<typeof deriveRates>;
+
+export interface GranularEmissionsItem extends RoundedTotals {
+  periodKey: string;
+  periodLabel: string;
+  subLabel?: string;
 }
 
-async function fetchCampdDailyEmissions(params: {
-  facilityId: number;
-  beginDate: string;
-  endDate: string;
+export interface GranularEmissionsResult {
   publishedThrough: string;
-}): Promise<CampdFetchResult> {
-  return fetchCampdDateWindow(
-    "/emissions-mgmt/emissions/apportioned/daily",
-    params,
-  );
+  source: "EPA_CAMPD_API" | "LOCAL_RECORDS" | "UNAVAILABLE";
+  error?: string;
+  summary: RoundedTotals;
+  items: GranularEmissionsItem[];
 }
 
-async function fetchCampdMonthlyEmissions(params: {
-  facilityId: number;
-  year: number;
-  publishedThrough: string;
-}): Promise<CampdFetchResult> {
-  const requestMonths = async (publishedThrough: string) => {
-    const months = getCampdValidMonthsForYear(params.year, publishedThrough);
-    if (months.length === 0) {
+const round = (n: number, decimals = 0) => {
+  const f = 10 ** decimals;
+  return Math.round(n * f) / f;
+};
+
+/** Decimal places for [operating hours, CO₂, SO₂/NOₓ] per resolution. */
+const DECIMALS: Record<Granularity, readonly [number, number, number]> = {
+  hourly: [1, 1, 2],
+  daily: [1, 1, 1],
+  weekly: [0, 0, 1],
+  monthly: [0, 0, 1],
+  yearly: [0, 0, 1],
+};
+
+function roundTotals(
+  t: EmissionTotals,
+  [hours, co2, pollutants]: readonly [number, number, number],
+): RoundedTotals {
+  return {
+    operatingHours: round(t.operatingHours, hours),
+    grossGenerationMWh: round(t.grossGenerationMWh),
+    heatInputMMBtu: round(t.heatInputMMBtu),
+    co2MassTons: round(t.co2MassTons, co2),
+    so2MassTons: round(t.so2MassTons, pollutants),
+    noxMassTons: round(t.noxMassTons, pollutants),
+    ...deriveRates(t),
+  };
+}
+
+interface Period {
+  label: string;
+  subLabel?: string;
+}
+
+/** How to fetch EPA rows for a resolution and assign each row to a period bucket. */
+interface GranularPlan {
+  request: (publishedThrough: string) => Promise<CampdFetchResult>;
+  periods: (publishedThrough: string) => Period[];
+  periodIndex: (row: CampdRow) => number;
+  missingHours?: number;
+}
+
+const range = (n: number) => Array.from({ length: n }, (_, i) => i);
+const rowDate = (row: CampdRow) => toStr(row.date ?? row.opDate) ?? "";
+const monthName = (m: number) =>
+  new Date(Date.UTC(2000, m - 1)).toLocaleString("en-US", {
+    month: "long",
+    timeZone: "UTC",
+  });
+
+function planGranularFetch(
+  granularity: Exclude<Granularity, "yearly">,
+  facilityId: number,
+  year: number,
+  date: string,
+): GranularPlan {
+  const dateWindow =
+    (path: string, beginDate: string, endDate: string) => (pt: string) =>
+      fetchAllCampdPages(
+        path,
+        new URLSearchParams({
+          facilityId: String(facilityId),
+          ...clampCampdDateRange(beginDate, endDate, pt),
+        }),
+      );
+
+  switch (granularity) {
+    case "hourly":
       return {
-        items: [] as Record<string, unknown>[],
-        totalCount: 0,
-        error: `No published CAMPD months for ${params.year}.`,
+        request: dateWindow("/hourly", date, date),
+        periods: () =>
+          range(24).map((h) => ({
+            label: `${pad2(h)}:00 - ${pad2(h)}:59`,
+            subLabel: date,
+          })),
+        periodIndex: (row) => Number(row.hour),
+        missingHours: 1,
+      };
+
+    case "daily": {
+      const month = date.slice(0, 7);
+      const daysInMonth = new Date(
+        Date.UTC(year, Number(date.slice(5, 7)), 0),
+      ).getUTCDate();
+      const monthEnd = `${month}-${pad2(daysInMonth)}`;
+      return {
+        request: dateWindow("/daily", `${month}-01`, monthEnd),
+        periods: (pt) => {
+          const visibleEnd = clampIsoDateToCampdPublished(monthEnd, pt);
+          const visibleDays = visibleEnd.startsWith(`${month}-`)
+            ? Number(visibleEnd.slice(8, 10))
+            : daysInMonth;
+          return range(visibleDays).map((i) => ({
+            label: `Day ${i + 1}`,
+            subLabel: `${month.slice(5)}-${pad2(i + 1)}`,
+          }));
+        },
+        periodIndex: (row) => Number(rowDate(row).slice(8, 10)) - 1,
+        missingHours: 1,
       };
     }
 
-    return fetchAllCampdPages(
-      "/emissions-mgmt/emissions/apportioned/monthly",
-      new URLSearchParams({
-        facilityId: params.facilityId.toString(),
-        year: params.year.toString(),
-        month: months.join("|"),
-      }),
-    );
-  };
+    case "weekly": {
+      const mmdd = (dayOfYear: number) =>
+        new Date(Date.UTC(year, 0, dayOfYear)).toISOString().slice(5, 10);
+      return {
+        request: dateWindow("/daily", `${year}-01-01`, `${year}-12-31`),
+        periods: () =>
+          range(52).map((w) => ({
+            label: `Week ${w + 1}`,
+            subLabel: `${mmdd(w * 7 + 1)} - ${mmdd(Math.min(w * 7 + 7, 365))}`,
+          })),
+        periodIndex: (row) => {
+          const day = Date.parse(rowDate(row).slice(0, 10));
+          if (Number.isNaN(day)) return -1;
+          const dayOfYear = Math.floor(
+            (day - Date.UTC(year, 0, 1)) / 86_400_000,
+          );
+          return Math.min(51, Math.max(0, Math.floor(dayOfYear / 7)));
+        },
+      };
+    }
 
-  const result = await requestMonths(params.publishedThrough);
-  const learned = learnFromCampdError(result.error);
-  if (!learned || learned === params.publishedThrough) return result;
-  return requestMonths(learned);
-}
-
-function parseNum(val: unknown, fallback = 0): number {
-  if (typeof val === "number") return Number.isNaN(val) ? fallback : val;
-  if (typeof val === "string") {
-    const n = Number.parseFloat(val.replace(/,/g, "").trim());
-    return Number.isNaN(n) ? fallback : n;
+    case "monthly":
+      return {
+        request: async (pt) => {
+          const months = getCampdValidMonthsForYear(year, pt);
+          if (months.length === 0) {
+            return {
+              items: [],
+              error: `No published CAMPD months for ${year}.`,
+            };
+          }
+          return fetchAllCampdPages(
+            "/monthly",
+            new URLSearchParams({
+              facilityId: String(facilityId),
+              year: String(year),
+              month: months.join("|"),
+            }),
+          );
+        },
+        periods: (pt) =>
+          getCampdValidMonthsForYear(year, pt).map((m) => ({
+            label: monthName(m),
+            subLabel: String(year),
+          })),
+        periodIndex: (row) => Number(row.month) - 1,
+      };
   }
-  return fallback;
 }
 
-function toCleanString(val: unknown): string {
-  if (typeof val === "string") return val.trim();
-  if (typeof val === "number" || typeof val === "boolean") return String(val);
-  return "";
-}
-
-function filterCampdRowsByUnit<T extends Record<string, unknown>>(
-  rows: T[],
-  unitId?: string,
-): T[] {
-  if (!unitId) return rows;
-  const target = unitId.toLowerCase();
-  return rows.filter((row) => {
-    const id = toCleanString(row.unitId ?? row.unit_id);
-    return id.toLowerCase() === target;
-  });
-}
-
-function summarizeGranularItems(
-  items: GranularEmissionsItem[],
-  options?: { operatingHoursDecimals?: number },
-): GranularEmissionsResult["summary"] {
-  const totGen = items.reduce((s, i) => s + i.grossGenerationMWh, 0);
-  const totHeat = items.reduce((s, i) => s + i.heatInputMMBtu, 0);
-  const totCo2 = items.reduce((s, i) => s + i.co2MassTons, 0);
-  const totSo2 = items.reduce((s, i) => s + i.so2MassTons, 0);
-  const totNox = items.reduce((s, i) => s + i.noxMassTons, 0);
-  const totHours = items.reduce((s, i) => s + i.operatingHours, 0);
-
-  return {
-    totalOperatingHours:
-      options?.operatingHoursDecimals === 1
-        ? Math.round(totHours * 10) / 10
-        : Math.round(totHours),
-    totalGenerationMWh: Math.round(totGen),
-    totalHeatInputMMBtu: Math.round(totHeat),
-    totalCo2Tons: Math.round(totCo2),
-    totalSo2Tons: Number(totSo2.toFixed(1)),
-    totalNoxTons: Number(totNox.toFixed(1)),
-    co2IntensityLbsMWh: computeCo2IntensityLbsMWh(totCo2, totGen),
-    heatRateMMBtuMWh: computeHeatRateMMBtuMWh(totHeat, totGen),
-    itemCount: items.length,
-  };
-}
-
-function emptyGranularResult(
-  facilityId: number,
-  granularity: "hourly" | "daily" | "weekly" | "monthly" | "yearly",
-  year: number,
-  unitId?: string,
-  date?: string,
+function buildResult(
+  granularity: Granularity,
+  source: GranularEmissionsResult["source"],
+  publishedThrough: string,
+  periods: Period[],
+  totals: EmissionTotals[],
   error?: string,
-  publishedThrough?: string,
 ): GranularEmissionsResult {
   return {
-    facilityId,
-    granularity,
-    year,
-    date,
-    unitId,
-    publishedThrough: currentPublishedThrough(
-      publishedThrough ?? toIsoDate(new Date()),
-    ),
-    source: error ? "UNAVAILABLE" : "EPA_CAMPD_API",
+    publishedThrough,
+    source,
     error,
-    summary: {
-      totalOperatingHours: 0,
-      totalGenerationMWh: 0,
-      totalHeatInputMMBtu: 0,
-      totalCo2Tons: 0,
-      totalSo2Tons: 0,
-      totalNoxTons: 0,
-      co2IntensityLbsMWh: null,
-      heatRateMMBtuMWh: null,
-      itemCount: 0,
-    },
-    items: [],
+    summary: roundTotals(sumTotals(totals), [
+      granularity === "hourly" ? 1 : 0,
+      0,
+      1,
+    ]),
+    items: periods.map((period, i) => ({
+      periodKey: `${granularity}_${i}`,
+      periodLabel: period.label,
+      subLabel: period.subLabel,
+      ...roundTotals(totals[i]!, DECIMALS[granularity]),
+    })),
   };
 }
 
 /**
- * High-Resolution Multi-Granularity Aggregator:
- * Slices temporal stack telemetry into Hourly, Weekly, Monthly, or Yearly buckets.
- * Fetches all telemetry directly from EPA CAMPD API (with zero estimations).
+ * Multi-resolution aggregator: yearly buckets come from local annual records;
+ * hourly/daily/weekly/monthly are fetched live from the EPA CAMPD API.
  */
-export async function fetchGranularEmissionsForFacility(
-  options: GranularOptions,
-): Promise<GranularEmissionsResult> {
-  const facilityId = options.facilityId;
-  const granularity = options.granularity;
+export async function fetchGranularEmissionsForFacility(options: {
+  facilityId: number;
+  granularity: Granularity;
+  year?: number;
+  date?: string;
+  unitId?: string;
+}): Promise<GranularEmissionsResult> {
+  const { facilityId, granularity } = options;
   const publishedThrough = await resolveCampdPublishedThrough(facilityId);
-  const year = clampYearToCampdPublished(
-    options.year ?? getCampdPublishedYear(publishedThrough),
-    publishedThrough,
-  );
-  const requestedUnitId =
+  const publishedYear = getCampdPublishedYear(publishedThrough);
+  const year = Math.min(options.year ?? publishedYear, publishedYear);
+  const unitId =
     options.unitId && options.unitId !== "ALL" ? options.unitId : undefined;
+  const current = () => publishedThroughCache?.iso ?? publishedThrough;
 
-  // 1. YEARLY GRANULARITY: Direct from relational store
   if (granularity === "yearly") {
-    const annualRows = await db
+    const sum = (col: SQLiteColumn) => sql<number>`sum(${col})`;
+    const rows = await db
       .select({
         year: annualRecords.year,
-        unitId: units.unitId,
-        grossGen: annualRecords.grossGenerationMWh,
-        heatInput: annualRecords.heatInputMMBtu,
-        co2: annualRecords.co2MassTons,
-        so2: annualRecords.so2MassTons,
-        nox: annualRecords.noxMassTons,
-        hours: annualRecords.operatingHours,
+        operatingHours: sum(annualRecords.operatingHours),
+        grossGenerationMWh: sum(annualRecords.grossGenerationMWh),
+        heatInputMMBtu: sum(annualRecords.heatInputMMBtu),
+        co2MassTons: sum(annualRecords.co2MassTons),
+        so2MassTons: sum(annualRecords.so2MassTons),
+        noxMassTons: sum(annualRecords.noxMassTons),
       })
       .from(annualRecords)
       .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
       .where(
-        requestedUnitId
-          ? and(
-              eq(annualRecords.facilityId, facilityId),
-              eq(units.unitId, requestedUnitId),
-            )
-          : eq(annualRecords.facilityId, facilityId),
-      );
+        and(
+          eq(annualRecords.facilityId, facilityId),
+          unitId ? eq(units.unitId, unitId) : undefined,
+        ),
+      )
+      .groupBy(annualRecords.year)
+      .orderBy(annualRecords.year);
 
-    const yearMap = new Map<
-      number,
-      {
-        gen: number;
-        heat: number;
-        co2: number;
-        so2: number;
-        nox: number;
-        hours: number;
-      }
-    >();
-
-    for (const row of annualRows) {
-      const cur = yearMap.get(row.year) ?? {
-        gen: 0,
-        heat: 0,
-        co2: 0,
-        so2: 0,
-        nox: 0,
-        hours: 0,
-      };
-      cur.gen += row.grossGen;
-      cur.heat += row.heatInput;
-      cur.co2 += row.co2;
-      cur.so2 += row.so2;
-      cur.nox += row.nox;
-      cur.hours += row.hours;
-      yearMap.set(row.year, cur);
-    }
-
-    const sortedYears = Array.from(yearMap.keys()).sort((a, b) => a - b);
-    const items: GranularEmissionsItem[] = sortedYears.map((y) => {
-      const data = yearMap.get(y)!;
-      return {
-        periodKey: `year_${y}`,
-        periodLabel: String(y),
+    return buildResult(
+      granularity,
+      "LOCAL_RECORDS",
+      current(),
+      rows.map((r) => ({
+        label: String(r.year),
         subLabel: "Annual Aggregate",
-        operatingHours: Math.round(data.hours),
-        grossGenerationMWh: Math.round(data.gen),
-        heatInputMMBtu: Math.round(data.heat),
-        co2MassTons: Math.round(data.co2),
-        so2MassTons: Number(data.so2.toFixed(1)),
-        noxMassTons: Number(data.nox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(data.co2, data.gen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(data.heat, data.gen),
-      };
-    });
-
-    return {
-      facilityId,
-      granularity: "yearly",
-      year,
-      unitId: requestedUnitId,
-      publishedThrough: currentPublishedThrough(publishedThrough),
-      source: "LOCAL_RECORDS",
-      summary: summarizeGranularItems(items),
-      items,
-    };
+      })),
+      rows,
+    );
   }
 
-  // 2. MONTHLY GRANULARITY
-  if (granularity === "monthly") {
-    const monthlyResult = await fetchCampdMonthlyEmissions({
-      facilityId,
-      year,
-      publishedThrough,
-    });
-    let rawMonthly = monthlyResult.items;
-
-    rawMonthly = filterCampdRowsByUnit(rawMonthly, requestedUnitId);
-
-    if (rawMonthly.length === 0) {
-      return emptyGranularResult(
-        facilityId,
-        "monthly",
-        year,
-        requestedUnitId,
-        undefined,
-        monthlyResult.error,
-        publishedThrough,
-      );
-    }
-
-    const validMonths = getCampdValidMonthsForYear(
-      year,
-      currentPublishedThrough(publishedThrough),
-    );
-    const monthBuckets = new Map<
-      number,
-      {
-        gen: number;
-        heat: number;
-        co2: number;
-        so2: number;
-        nox: number;
-        hours: number;
-      }
-    >();
-
-    for (const m of validMonths) {
-      monthBuckets.set(m, {
-        gen: 0,
-        heat: 0,
-        co2: 0,
-        so2: 0,
-        nox: 0,
-        hours: 0,
-      });
-    }
-
-    for (const row of rawMonthly) {
-      const m = Number(row.month);
-      const b = monthBuckets.get(m);
-      if (!b) continue;
-      b.gen += parseNum(row.grossLoad);
-      b.heat += parseNum(row.heatInput);
-      b.co2 += parseNum(row.co2Mass);
-      b.so2 += parseNum(row.so2Mass);
-      b.nox += parseNum(row.noxMass);
-      b.hours += parseNum(row.sumOpTime);
-    }
-
-    const items: GranularEmissionsItem[] = Array.from(
-      monthBuckets.entries(),
-    ).map(([m, d]) => ({
-      periodKey: `month_${m}`,
-      periodLabel: MONTH_NAMES[m - 1] ?? `Month ${m}`,
-      subLabel: `${year}`,
-      operatingHours: Math.round(d.hours),
-      grossGenerationMWh: Math.round(d.gen),
-      heatInputMMBtu: Math.round(d.heat),
-      co2MassTons: Math.round(d.co2),
-      so2MassTons: Number(d.so2.toFixed(1)),
-      noxMassTons: Number(d.nox.toFixed(1)),
-      co2IntensityLbsMWh: computeCo2IntensityLbsMWh(d.co2, d.gen),
-      heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
-    }));
-
-    return {
-      facilityId,
-      granularity: "monthly",
-      year,
-      unitId: requestedUnitId,
-      publishedThrough: currentPublishedThrough(publishedThrough),
-      source: "EPA_CAMPD_API",
-      summary: summarizeGranularItems(items),
-      items,
-    };
-  }
-
-  // 3. DAILY GRANULARITY
-  if (granularity === "daily") {
-    const targetDate = clampDateToYear(
-      options.date ?? getDefaultCampdDateForYear(year, publishedThrough),
-      year,
-      publishedThrough,
-    );
-    const monthStr = targetDate.slice(5, 7) || "01";
-    const mNum = parseInt(monthStr, 10) || 1;
-    const daysInMonth = new Date(Date.UTC(year, mNum, 0)).getUTCDate();
-    const beginDate = `${year}-${monthStr}-01`;
-    const endDate = `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
-
-    const dailyResult = await fetchCampdDailyEmissions({
-      facilityId,
-      beginDate,
-      endDate,
-      publishedThrough,
-    });
-    let rawDaily = dailyResult.items;
-
-    rawDaily = filterCampdRowsByUnit(rawDaily, requestedUnitId);
-
-    if (rawDaily.length === 0) {
-      return emptyGranularResult(
-        facilityId,
-        "daily",
-        year,
-        requestedUnitId,
-        targetDate,
-        dailyResult.error,
-        publishedThrough,
-      );
-    }
-
-    const monthEndIso = `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
-    const visibleEnd = clampIsoDateToCampdPublished(
-      monthEndIso,
-      currentPublishedThrough(publishedThrough),
-    );
-    const visibleDays = visibleEnd.startsWith(`${year}-${monthStr}-`)
-      ? parseInt(visibleEnd.slice(8, 10), 10)
-      : daysInMonth;
-
-    const dayBuckets = new Map<
-      number,
-      {
-        gen: number;
-        heat: number;
-        co2: number;
-        so2: number;
-        nox: number;
-        hours: number;
-        dateStr: string;
-      }
-    >();
-
-    for (let d = 1; d <= visibleDays; d++) {
-      dayBuckets.set(d, {
-        gen: 0,
-        heat: 0,
-        co2: 0,
-        so2: 0,
-        nox: 0,
-        hours: 0,
-        dateStr: `${year}-${monthStr}-${String(d).padStart(2, "0")}`,
-      });
-    }
-
-    for (const r of rawDaily) {
-      const dateVal = toCleanString(r.date ?? r.opDate);
-      const dayNum = parseInt(dateVal.slice(8, 10), 10);
-      const b = dayBuckets.get(dayNum);
-      if (!b) continue;
-      b.gen += parseNum(r.grossLoad ?? r.grossGenerationMWh);
-      b.heat += parseNum(r.heatInput ?? r.heatInputMMBtu);
-      b.co2 += parseNum(r.co2Mass ?? r.co2MassTons);
-      b.so2 += parseNum(r.so2Mass ?? r.so2MassTons);
-      b.nox += parseNum(r.noxMass ?? r.noxMassTons);
-      b.hours += parseNum(r.operatingTime ?? r.sumOpTime, 1.0);
-    }
-
-    const items: GranularEmissionsItem[] = [];
-    for (let d = 1; d <= visibleDays; d++) {
-      const b = dayBuckets.get(d)!;
-      items.push({
-        periodKey: `day_${d}`,
-        periodLabel: `Day ${d}`,
-        subLabel: b.dateStr.slice(5),
-        operatingHours: Math.round(b.hours * 10) / 10,
-        grossGenerationMWh: Math.round(b.gen),
-        heatInputMMBtu: Math.round(b.heat),
-        co2MassTons: Math.round(b.co2 * 10) / 10,
-        so2MassTons: Number(b.so2.toFixed(1)),
-        noxMassTons: Number(b.nox.toFixed(1)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(b.co2, b.gen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(b.heat, b.gen),
-      });
-    }
-
-    return {
-      facilityId,
-      granularity: "daily",
-      year,
-      date: targetDate,
-      unitId: requestedUnitId,
-      publishedThrough: currentPublishedThrough(publishedThrough),
-      source: "EPA_CAMPD_API",
-      summary: summarizeGranularItems(items),
-      items,
-    };
-  }
-
-  // 4. WEEKLY GRANULARITY
-  if (granularity === "weekly") {
-    const weeklyRange = clampCampdDateRange(
-      `${year}-01-01`,
-      `${year}-12-31`,
-      publishedThrough,
-    );
-    const dailyResult = await fetchCampdDailyEmissions({
-      facilityId,
-      beginDate: weeklyRange.beginDate,
-      endDate: weeklyRange.endDate,
-      publishedThrough,
-    });
-    let rawDaily = dailyResult.items;
-
-    rawDaily = filterCampdRowsByUnit(rawDaily, requestedUnitId);
-
-    if (rawDaily.length === 0) {
-      return emptyGranularResult(
-        facilityId,
-        "weekly",
-        year,
-        requestedUnitId,
-        undefined,
-        dailyResult.error,
-        publishedThrough,
-      );
-    }
-
-    const weekBuckets = new Map<
-      number,
-      {
-        gen: number;
-        heat: number;
-        co2: number;
-        so2: number;
-        nox: number;
-        hours: number;
-        startDate: string;
-        endDate: string;
-      }
-    >();
-
-    for (let w = 1; w <= 52; w++) {
-      const startDay = (w - 1) * 7 + 1;
-      const dStart = new Date(Date.UTC(year, 0, startDay));
-      const dEnd = new Date(Date.UTC(year, 0, Math.min(startDay + 6, 365)));
-      weekBuckets.set(w, {
-        gen: 0,
-        heat: 0,
-        co2: 0,
-        so2: 0,
-        nox: 0,
-        hours: 0,
-        startDate: dStart.toISOString().slice(5, 10),
-        endDate: dEnd.toISOString().slice(5, 10),
-      });
-    }
-
-    for (const row of rawDaily) {
-      const dateStr = toCleanString(row.date ?? row.opDate);
-      if (dateStr.length < 10) continue;
-      const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
-      if (!y || !m || !d) continue;
-      const dayOfYear = Math.floor(
-        (Date.UTC(y, m - 1, d) - Date.UTC(year, 0, 1)) / (1000 * 60 * 60 * 24),
-      );
-      const weekNum = Math.min(52, Math.max(1, Math.floor(dayOfYear / 7) + 1));
-      const b = weekBuckets.get(weekNum);
-      if (!b) continue;
-      b.gen += parseNum(row.grossLoad);
-      b.heat += parseNum(row.heatInput);
-      b.co2 += parseNum(row.co2Mass);
-      b.so2 += parseNum(row.so2Mass);
-      b.nox += parseNum(row.noxMass);
-      b.hours += parseNum(row.sumOpTime ?? row.countOpTime);
-    }
-
-    const items: GranularEmissionsItem[] = Array.from(
-      weekBuckets.entries(),
-    ).map(([w, d]) => ({
-      periodKey: `week_${w}`,
-      periodLabel: `Week ${w}`,
-      subLabel: `${d.startDate} - ${d.endDate}`,
-      operatingHours: Math.round(d.hours),
-      grossGenerationMWh: Math.round(d.gen),
-      heatInputMMBtu: Math.round(d.heat),
-      co2MassTons: Math.round(d.co2),
-      so2MassTons: Number(d.so2.toFixed(1)),
-      noxMassTons: Number(d.nox.toFixed(1)),
-      co2IntensityLbsMWh: computeCo2IntensityLbsMWh(d.co2, d.gen),
-      heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
-    }));
-
-    return {
-      facilityId,
-      granularity: "weekly",
-      year,
-      unitId: requestedUnitId,
-      publishedThrough: currentPublishedThrough(publishedThrough),
-      source: "EPA_CAMPD_API",
-      summary: summarizeGranularItems(items),
-      items,
-    };
-  }
-
-  // 5. HOURLY GRANULARITY
-  const targetDate = clampDateToYear(
+  const date = clampDateToYear(
     options.date ?? getDefaultCampdDateForYear(year, publishedThrough),
     year,
     publishedThrough,
   );
-  const hourlyResult = await fetchCampdHourlyEmissions({
-    facilityId,
-    beginDate: targetDate,
-    endDate: targetDate,
-    publishedThrough,
-  });
-  let rawHourly = hourlyResult.items;
+  const plan = planGranularFetch(granularity, facilityId, year, date);
+  const result = await fetchWithPublishedRetry(publishedThrough, plan.request);
+  const rows = unitId
+    ? result.items.filter(
+        (row) =>
+          toStr(row.unitId ?? row.unit_id)?.toLowerCase() ===
+          unitId.toLowerCase(),
+      )
+    : result.items;
 
-  rawHourly = filterCampdRowsByUnit(rawHourly, requestedUnitId);
-
-  if (rawHourly.length === 0) {
-    return emptyGranularResult(
-      facilityId,
-      "hourly",
-      year,
-      requestedUnitId,
-      targetDate,
-      hourlyResult.error,
-      publishedThrough,
+  if (rows.length === 0) {
+    return buildResult(
+      granularity,
+      result.error ? "UNAVAILABLE" : "EPA_CAMPD_API",
+      current(),
+      [],
+      [],
+      result.error,
     );
   }
 
-  const hourBuckets = new Map<
-    number,
-    {
-      gen: number;
-      heat: number;
-      co2: number;
-      so2: number;
-      nox: number;
-      hours: number;
-    }
-  >();
-
-  for (let h = 0; h < 24; h++) {
-    hourBuckets.set(h, { gen: 0, heat: 0, co2: 0, so2: 0, nox: 0, hours: 0 });
+  const periods = plan.periods(current());
+  const totals = periods.map(() => emptyTotals());
+  for (const row of rows) {
+    const bucket = totals[plan.periodIndex(row)];
+    if (bucket) addTotals(bucket, readMetrics(row, plan.missingHours));
   }
-
-  for (const row of rawHourly) {
-    const h = Number(row.hour);
-    if (h >= 0 && h < 24) {
-      const b = hourBuckets.get(h)!;
-      b.gen += parseNum(row.grossLoad);
-      b.heat += parseNum(row.heatInput);
-      b.co2 += parseNum(row.co2Mass);
-      b.so2 += parseNum(row.so2Mass);
-      b.nox += parseNum(row.noxMass);
-      b.hours += parseNum(row.opTime, 1);
-    }
-  }
-
-  const items: GranularEmissionsItem[] = Array.from(hourBuckets.entries()).map(
-    ([h, d]) => {
-      const pad = (n: number) => n.toString().padStart(2, "0");
-      return {
-        periodKey: `hour_${h}`,
-        periodLabel: `${pad(h)}:00 - ${pad(h)}:59`,
-        subLabel: targetDate,
-        operatingHours: Math.round(d.hours * 10) / 10,
-        grossGenerationMWh: Math.round(d.gen),
-        heatInputMMBtu: Math.round(d.heat),
-        co2MassTons: Math.round(d.co2 * 10) / 10,
-        so2MassTons: Number(d.so2.toFixed(2)),
-        noxMassTons: Number(d.nox.toFixed(2)),
-        co2IntensityLbsMWh: computeCo2IntensityLbsMWh(d.co2, d.gen),
-        heatRateMMBtuMWh: computeHeatRateMMBtuMWh(d.heat, d.gen),
-      };
-    },
-  );
-
-  return {
-    facilityId,
-    granularity: "hourly",
-    year,
-    date: targetDate,
-    unitId: requestedUnitId,
-    publishedThrough: currentPublishedThrough(publishedThrough),
-    source: "EPA_CAMPD_API",
-    summary: summarizeGranularItems(items, { operatingHoursDecimals: 1 }),
-    items,
-  };
+  return buildResult(granularity, "EPA_CAMPD_API", current(), periods, totals);
 }
