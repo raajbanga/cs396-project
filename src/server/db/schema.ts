@@ -247,8 +247,3 @@ export const granularRecordsRelations = relations(
     }),
   }),
 );
-
-export type NewAnnualRecord = typeof annualRecords.$inferInsert;
-export type NewDataAuditLog = typeof dataAuditLogs.$inferInsert;
-export type NewGranularRecord = typeof granularRecords.$inferInsert;
-export type GranularRecord = typeof granularRecords.$inferSelect;

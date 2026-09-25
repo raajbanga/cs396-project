@@ -1,81 +1,101 @@
-export const CAMPD_EARLIEST_ISO = "1995-01-01";
+export const GRANULARITIES = [
+  "hourly",
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+] as const;
+export type Granularity = (typeof GRANULARITIES)[number];
 
+const CAMPD_EARLIEST_ISO = "1995-01-01";
 const QUARTER_END_RE = /quarter ending on (\d{1,2})\/(\d{1,2})\/(\d{4})/i;
 
-export function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
+export const pad2 = (n: number | string) => String(n).padStart(2, "0");
+const minIso = (a: string, b: string) => (a < b ? a : b);
+
+export const toIsoDate = (date: Date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 
 /** Parse EPA's 400 copy, e.g. "the quarter ending on 06/30/2026". */
 export function parseCampdQuarterEndFromError(message: string): string | null {
   const match = QUARTER_END_RE.exec(message);
-  if (!match) return null;
-  const month = match[1]!.padStart(2, "0");
-  const day = match[2]!.padStart(2, "0");
-  const year = match[3]!;
-  return `${year}-${month}-${day}`;
+  return match ? `${match[3]}-${pad2(match[1]!)}-${pad2(match[2]!)}` : null;
 }
 
-export function getCampdPublishedYear(publishedThrough: string): number {
-  return Number.parseInt(publishedThrough.slice(0, 4), 10);
-}
+export const getCampdPublishedYear = (publishedThrough: string) =>
+  Number.parseInt(publishedThrough.slice(0, 4), 10);
 
 export function getCampdValidMonthsForYear(
   year: number,
   publishedThrough: string,
 ): number[] {
   const endYear = getCampdPublishedYear(publishedThrough);
-  const endMonth = Number.parseInt(publishedThrough.slice(5, 7), 10);
-  if (year < endYear) {
-    return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  }
-  if (year > endYear || !endMonth) return [];
-  return Array.from({ length: endMonth }, (_, i) => i + 1);
+  const count =
+    year < endYear
+      ? 12
+      : year > endYear
+        ? 0
+        : Number.parseInt(publishedThrough.slice(5, 7), 10) || 0;
+  return Array.from({ length: count }, (_, i) => i + 1);
 }
 
-export function clampYearToCampdPublished(
-  year: number,
-  publishedThrough: string,
-): number {
-  const publishedYear = getCampdPublishedYear(publishedThrough);
-  return year > publishedYear ? publishedYear : year;
-}
-
-export function clampIsoDateToCampdPublished(
+export const clampIsoDateToCampdPublished = (
   isoDate: string,
   publishedThrough: string,
-): string {
-  if (isoDate < CAMPD_EARLIEST_ISO) return CAMPD_EARLIEST_ISO;
-  if (isoDate > publishedThrough) return publishedThrough;
-  return isoDate;
-}
+) =>
+  isoDate < CAMPD_EARLIEST_ISO
+    ? CAMPD_EARLIEST_ISO
+    : minIso(isoDate, publishedThrough);
 
-export function getDefaultCampdDateForYear(
+export const getDefaultCampdDateForYear = (
   year: number,
   publishedThrough: string,
-): string {
-  const yearStart = `${year}-01-01`;
-  const yearEnd = `${year}-12-31`;
-  if (publishedThrough < yearStart) return publishedThrough;
-  return yearEnd < publishedThrough ? yearEnd : publishedThrough;
-}
-
-export function getDefaultCampdYearOptions(publishedThrough: string): number[] {
-  const last = getCampdPublishedYear(publishedThrough);
-  return [last, last - 1, last - 2];
-}
+) => minIso(`${year}-12-31`, publishedThrough);
 
 export function clampCampdDateRange(
   beginDate: string,
   endDate: string,
   publishedThrough: string,
-): { beginDate: string; endDate: string } {
+) {
   const begin = clampIsoDateToCampdPublished(beginDate, publishedThrough);
   const end = clampIsoDateToCampdPublished(endDate, publishedThrough);
-  return end < begin
-    ? { beginDate: begin, endDate: begin }
-    : { beginDate: begin, endDate: end };
+  return { beginDate: begin, endDate: end < begin ? begin : end };
+}
+
+const dateLabelFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+export function buildDateOptionsForYear(
+  year: number,
+  publishedThrough = toIsoDate(new Date()),
+) {
+  const options: { value: string; label: string }[] = [];
+  const day = new Date(Date.UTC(year, 0, 1));
+  for (; day.getUTCFullYear() === year; day.setUTCDate(day.getUTCDate() + 1)) {
+    const value = day.toISOString().slice(0, 10);
+    if (value > publishedThrough) break;
+    options.push({ value, label: dateLabelFormatter.format(day) });
+  }
+  return options;
+}
+
+/** Move a date's month/day into `year`, falling back to the year's last published day. */
+export function clampDateToYear(
+  isoDate: string,
+  year: number,
+  publishedThrough = toIsoDate(new Date()),
+): string {
+  const candidate = `${year}${isoDate.slice(4, 10)}`;
+  const parsed = Date.parse(candidate);
+  const isRealDate =
+    /^\d{4}-\d{2}-\d{2}$/.test(candidate) &&
+    !Number.isNaN(parsed) &&
+    new Date(parsed).toISOString().startsWith(candidate);
+  return isRealDate && candidate <= publishedThrough
+    ? candidate
+    : getDefaultCampdDateForYear(year, publishedThrough);
 }
