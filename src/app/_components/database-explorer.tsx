@@ -7,6 +7,7 @@ import {
   Building2,
   Globe,
   Scale,
+  Upload,
   Zap,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
@@ -23,6 +24,7 @@ import {
 import { formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
+import { DataUploadDialog } from "./data-upload-dialog";
 import { EpaPrimer } from "./epa-primer";
 import { FacilitiesMap } from "./facilities-map";
 import { FacilitiesTable } from "./facilities-table";
@@ -32,7 +34,11 @@ import { PlantComparisonDialog } from "./plant-comparison-dialog";
 
 const MAX_COMPARE = 4;
 
-export function DatabaseExplorer() {
+export function DatabaseExplorer({
+  defaultUploadOpen = false,
+}: {
+  defaultUploadOpen?: boolean;
+} = {}) {
   const [activeTab, setActiveTab] = useState<"explorer" | "map" | "audit">(
     "explorer",
   );
@@ -41,9 +47,12 @@ export function DatabaseExplorer() {
   const [table, setTable] = useState(DEFAULT_TABLE_STATE);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(defaultUploadOpen);
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
     null,
   );
+
+  const utils = api.useUtils();
 
   const setPage = (page: number) => setTable((t) => ({ ...t, page }));
   const setFilter: FilterChangeHandler = (key, value) => {
@@ -135,6 +144,17 @@ export function DatabaseExplorer() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsUploadOpen(true)}
+              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
+              aria-label="Upload data file"
+            >
+              <Upload className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Upload Data</span>
+              <span className="sm:hidden">Upload</span>
+            </Button>
             <SegmentedControl
               value={activeTab}
               onChange={setActiveTab}
@@ -298,6 +318,18 @@ export function DatabaseExplorer() {
         isInCompare={
           inspectFacilityId !== null && compareIds.includes(inspectFacilityId)
         }
+      />
+
+      <DataUploadDialog
+        open={isUploadOpen}
+        onOpenChange={setIsUploadOpen}
+        onImportComplete={() => {
+          void utils.facilities.invalidate();
+        }}
+        onNavigateTab={(tab) => {
+          setActiveTab(tab);
+          setIsUploadOpen(false);
+        }}
       />
 
       {compareIds.length > 0 && (

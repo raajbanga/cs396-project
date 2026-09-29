@@ -2,6 +2,7 @@
 
 # dataImports Test Cases
 /dataImports
+/uploads
 
 # dependencies
 /node_modules
