@@ -1,0 +1,29 @@
+Here is the next feature we need to add to this project:
+
+The application must provide a web form through which users can upload data.
+The initial version should support:
+● CSV
+● Excel
+The upload process should include the following steps:
+1. Select or drag a file into the upload page.
+2. Validate the file extension and size.
+3. read the file using Python.
+4. Identify the available columns.
+5. Compare the columns with the required project schema.
+6. Detect missing values and invalid values.
+7. Detect duplicate facility-unit-year records.
+8. Display a preview and validation report.
+9. Allow the user to approve or cancel the import.
+10. Store approved records in the database.
+11. Preserve upload metadata and, where appropriate, the original file.
+The system must not silently discard invalid records. Rejected or questionable records should be
+listed in a data-quality report.
+
+---
+
+Create a button on the top row that will open to the file upload section.
+Create a new UI Page, similar to the Inspect/Compare Pages.
+
+After the file is uploaded read the data and show a summary of it, along with the columns/rows. And where the information is being sent into the database, and save it.
+
+Make sure you aren't creating any new hooks. Maintain a DRY codebase
