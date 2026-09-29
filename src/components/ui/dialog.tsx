@@ -8,6 +8,7 @@ import { cn } from "~/lib/utils";
 const SIZES = {
   inspect: "max-w-4xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl",
   compare: "max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[min(96vw,90rem)]",
+  upload: "max-w-5xl lg:max-w-6xl xl:max-w-7xl 2xl:max-w-[min(96vw,90rem)]",
 };
 
 /** Modal shell: sticky header, scrolling body, footer with extra actions plus a close button. */

@@ -27,3 +27,5 @@ Create a new UI Page, similar to the Inspect/Compare Pages.
 After the file is uploaded read the data and show a summary of it, along with the columns/rows. And where the information is being sent into the database, and save it.
 
 Make sure you aren't creating any new hooks. Maintain a DRY codebase
+
+The test cases for the data imports are located in the /dataImports folder

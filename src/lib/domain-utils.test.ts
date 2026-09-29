@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   buildDateOptionsForYear,
@@ -10,6 +13,7 @@ import {
   parseCampdQuarterEndFromError,
   toIsoDate,
 } from "./campd-reporting-period";
+import { type PythonValidationReport } from "./data-import-types";
 import {
   buildYearlyRollups,
   computeCo2IntensityLbsMWh,
@@ -149,4 +153,112 @@ void test("yearly rollups aggregate records by reporting year", () => {
   assert.equal(rollups[0]?.co2IntensityLbsMWh, 1000);
   assert.equal(rollups[0]?.maxOperatingHours, 4000);
   assert.equal(rollups[0]?.heatRateMMBtuMWh, 8);
+});
+
+void test("python data import engine detects schema, duplicates, and anomalies", () => {
+  const testCsv = path.resolve(process.cwd(), "test_unit_import.csv");
+  const csvContent = [
+    '"Facility ID","Facility Name","State","Unit ID","Year","Heat Input (mmBtu)","CO2 Mass (short tons)","Gross Load (MWh)","Operating Time"',
+    '3,"Barry","AL","1",2025,1500,0,100,500', // Anomaly: heat input > 1000 and co2 = 0
+    '3,"Barry","AL","1",2025,1200,100,80,400', // Duplicate facility-unit-year!
+    'BAD_ID,"Ghost","CA","2",2025,100,50,50,200', // Invalid Facility ID format
+    '10,"Normal Plant","TX","U1",2025,500,200,100,500', // Valid record
+  ].join("\n");
+
+  fs.writeFileSync(testCsv, csvContent, "utf-8");
+
+  try {
+    const scriptPath = path.resolve(
+      process.cwd(),
+      "scripts",
+      "parse_import.py",
+    );
+    const output = execFileSync("python3", [scriptPath, testCsv], {
+      encoding: "utf-8",
+    });
+    const report = JSON.parse(output) as PythonValidationReport;
+
+    assert.equal(report.targetSchema, "ANNUAL_EMISSIONS");
+    assert.equal(report.totalRows, 4);
+    assert.equal(report.summary.validCount, 3);
+    assert.equal(report.summary.invalidCount, 1);
+    assert.equal(report.summary.duplicateCount, 1);
+    assert.ok(
+      report.anomalies.some(
+        (a) => a.flagType === "ZERO_EMISSIONS_HIGH_HEAT",
+      ),
+    );
+    assert.equal(report.schemaComparison.isSchemaCompatible, true);
+  } finally {
+    if (fs.existsSync(testCsv)) fs.unlinkSync(testCsv);
+  }
+});
+
+void test("dataImports facility-2025.csv matches FACILITIES_AND_UNITS schema", () => {
+  const facilityCsv = path.resolve(
+    process.cwd(),
+    "dataImports",
+    "facility-2025.csv",
+  );
+  if (!fs.existsSync(facilityCsv)) return;
+
+  const scriptPath = path.resolve(process.cwd(), "scripts", "parse_import.py");
+  const output = execFileSync(
+    "python3",
+    [scriptPath, facilityCsv, "--limit", "10"],
+    {
+      encoding: "utf-8",
+    },
+  );
+  const report = JSON.parse(output) as PythonValidationReport;
+
+  assert.equal(report.targetSchema, "FACILITIES_AND_UNITS");
+  assert.equal(report.totalRows, 4057);
+  assert.equal(report.summary.validCount, 4057);
+  assert.equal(report.schemaComparison.isSchemaCompatible, true);
+  assert.deepEqual(report.destinationTables, [
+    "facilities",
+    "units",
+    "datasets",
+  ]);
+});
+
+void test("python data import engine handles Excel xlsx files", () => {
+  const testXlsx = path.resolve(process.cwd(), "test_excel_import.xlsx");
+
+  // Create test Excel file using python openpyxl
+  execFileSync("python3", [
+    "-c",
+    `
+import openpyxl
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.title = "Facilities"
+ws.append(["Facility ID", "Facility Name", "State", "Unit ID", "Unit Type", "Primary Fuel Type"])
+ws.append([3, "Barry", "AL", "1", "Tangentially-fired", "Coal"])
+ws.append([3, "Barry", "AL", "2", "Tangentially-fired", "Coal"])
+ws.append(["BAD", "Bad Plant", "ZZ", "3", "Unknown", "Gas"])
+wb.save("${testXlsx}")
+`,
+  ]);
+
+  try {
+    const scriptPath = path.resolve(
+      process.cwd(),
+      "scripts",
+      "parse_import.py",
+    );
+    const output = execFileSync("python3", [scriptPath, testXlsx], {
+      encoding: "utf-8",
+    });
+    const report = JSON.parse(output) as PythonValidationReport;
+
+    assert.equal(report.targetSchema, "FACILITIES_AND_UNITS");
+    assert.equal(report.totalRows, 3);
+    assert.equal(report.summary.validCount, 2);
+    assert.equal(report.summary.invalidCount, 1);
+    assert.equal(report.fileExtension, "xlsx");
+  } finally {
+    if (fs.existsSync(testXlsx)) fs.unlinkSync(testXlsx);
+  }
 });
