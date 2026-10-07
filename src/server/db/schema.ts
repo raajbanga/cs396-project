@@ -58,6 +58,7 @@ export const units = sqliteTable(
     secondaryFuel: text("secondary_fuel"),
     operatingStatus: text("operating_status"), // e.g. Operating, Retired
     commercialOpDate: text("commercial_op_date"), // Commissioning date
+    retirementDate: text("retirement_date"), // Retirement date, if retired
     maxHourlyHIRate: real("max_hourly_hi_rate"), // Max heat input rate (mmBtu/hr)
     nameplateCapacityMW: real("nameplate_capacity_mw"), // Electric nameplate capacity in MW
     so2Controls: text("so2_controls"), // e.g. Wet Limestone Scrubber
@@ -98,10 +99,17 @@ export const datasets = sqliteTable("datasets", {
   rawRecordCount: integer("raw_record_count").default(0).notNull(),
   validRecords: integer("valid_records").default(0).notNull(),
   flaggedRecords: integer("flagged_records").default(0).notNull(),
+  originalFilename: text("original_filename"), // Uploaded file name (uploads only)
+  archivedPath: text("archived_path"), // Copy of the original file under uploads/
+  queryParams: text("query_params", { mode: "json" }).$type<
+    Record<string, unknown>
+  >(), // CAMPD retrieval parameters (API only)
+  notes: text("notes"),
 });
 
 export const datasetsRelations = relations(datasets, ({ many }) => ({
   annualRecords: many(annualRecords),
+  importIssues: many(importIssues),
 }));
 
 /**
@@ -126,6 +134,7 @@ export const annualRecords = sqliteTable(
     operatingHours: real("operating_hours").default(0.0).notNull(),
     grossGenerationMWh: real("gross_generation_mwh").default(0.0).notNull(),
     heatInputMMBtu: real("heat_input_mmbtu").default(0.0).notNull(),
+    steamLoadKlb: real("steam_load_klb").default(0.0).notNull(), // Steam load (1000 lb)
     co2MassTons: real("co2_mass_tons").default(0.0).notNull(),
     so2MassTons: real("so2_mass_tons").default(0.0).notNull(),
     noxMassTons: real("nox_mass_tons").default(0.0).notNull(),
@@ -186,5 +195,35 @@ export const dataAuditLogsRelations = relations(dataAuditLogs, ({ one }) => ({
   annualRecord: one(annualRecords, {
     fields: [dataAuditLogs.annualRecordId],
     references: [annualRecords.id],
+  }),
+}));
+
+/**
+ * Import Issues: Upload rows that were rejected or skipped as duplicates (the data-quality report),
+ * kept so invalid records are never silently discarded.
+ */
+export const importIssues = sqliteTable(
+  "import_issues",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    datasetId: text("dataset_id")
+      .notNull()
+      .references(() => datasets.id, { onDelete: "cascade" }),
+    rowNumber: integer("row_number").notNull(),
+    kind: text("kind").notNull(), // "REJECTED" | "DUPLICATE"
+    reason: text("reason").notNull(),
+    rawRow: text("raw_row", { mode: "json" })
+      .$type<Record<string, string>>()
+      .notNull(),
+  },
+  (t) => [index("import_issue_dataset_idx").on(t.datasetId)],
+);
+
+export const importIssuesRelations = relations(importIssues, ({ one }) => ({
+  dataset: one(datasets, {
+    fields: [importIssues.datasetId],
+    references: [datasets.id],
   }),
 }));

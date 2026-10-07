@@ -2,6 +2,7 @@ export interface EmissionTotals {
   operatingHours: number;
   grossGenerationMWh: number;
   heatInputMMBtu: number;
+  steamLoadKlb: number;
   co2MassTons: number;
   so2MassTons: number;
   noxMassTons: number;
@@ -11,6 +12,7 @@ export const TOTAL_KEYS = [
   "operatingHours",
   "grossGenerationMWh",
   "heatInputMMBtu",
+  "steamLoadKlb",
   "co2MassTons",
   "so2MassTons",
   "noxMassTons",
@@ -20,6 +22,7 @@ export const emptyTotals = (): EmissionTotals => ({
   operatingHours: 0,
   grossGenerationMWh: 0,
   heatInputMMBtu: 0,
+  steamLoadKlb: 0,
   co2MassTons: 0,
   so2MassTons: 0,
   noxMassTons: 0,
@@ -132,6 +135,7 @@ export interface AnnualRecordForRollup extends EmissionTotals {
   co2IntensityLbsMWh?: number | null;
   heatRateMMBtuMWh?: number | null;
   unit?: { unitId: string; primaryFuel?: string | null } | null;
+  dataset?: { name: string; source: string; importedAt: Date } | null;
 }
 
 export type YearlyRollup = ReturnType<typeof buildYearlyRollups>[number];

@@ -24,6 +24,7 @@ import {
 import { formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
+import { DataCoverage } from "./data-coverage";
 import { DataUploadDialog } from "./data-upload-dialog";
 import { EpaPrimer } from "./epa-primer";
 import { FacilitiesMap } from "./facilities-map";
@@ -197,6 +198,8 @@ export function DatabaseExplorer() {
         </div>
 
         <EpaPrimer />
+
+        <DataCoverage coverage={stats?.coverage} sources={stats?.sources} />
 
         <KpiStrip className="gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
           <StatTile

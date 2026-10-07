@@ -43,7 +43,7 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
 
 7. **CSV & Excel Data Import** (**Upload Data** in the header):
    - Drag or select a `.csv`/`.xlsx` file (100 MB max). `scripts/parse_import.py` reads it, maps its columns to the project schema, rejects rows with missing or invalid values, and skips duplicate facility-unit-year records.
-   - The dialog previews rows and lists every rejected, duplicate, and sanity-flagged record before anything is saved. Approving upserts `facilities`, `units`, and (for annual emissions files) `annual_records` + `data_audit_logs`, records a `datasets` row, and archives the original file in `uploads/`.
+   - The dialog previews rows and lists every rejected, duplicate, and sanity-flagged record before anything is saved. Approving upserts `facilities`, `units`, and (for annual emissions files) `annual_records` + `data_audit_logs`, records a `datasets` row (filename, archive path, counts), saves every rejected/duplicate row to `import_issues`, and archives the original file in `uploads/`.
 
 8. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
    - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
@@ -74,7 +74,7 @@ Bundled TopoJSON assets come from the BSD-licensed
 
 ## Database Architecture
 
-Five normalized SQLite tables (via LibSQL), managed with Drizzle ORM. Granular (hourly–monthly) UI data comes live from the EPA API, with `annual_records` backing yearly rollups—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+Six normalized SQLite tables (via LibSQL), managed with Drizzle ORM. Granular (hourly–monthly) UI data comes live from the EPA API, with `annual_records` backing yearly rollups—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
 
 ```mermaid
 erDiagram
@@ -83,6 +83,7 @@ erDiagram
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
+    DATASETS ||--o{ IMPORT_ISSUES : "rejects"
 
     FACILITIES {
         integer id PK "ORISPL Plant ID (e.g. 3, 56, 1378)"
@@ -106,6 +107,7 @@ erDiagram
         text secondary_fuel "Backup fuel"
         text operating_status "Operating, Retired, etc."
         text commercial_op_date "Original commissioning date"
+        text retirement_date "Retirement date, if retired"
         real max_hourly_hi_rate "Max heat input rating (MMBtu/hr)"
         real nameplate_capacity_mw "Electric generator size in Megawatts"
         text so2_controls "Flue gas desulfurization / scrubbers"
@@ -124,6 +126,10 @@ erDiagram
         integer raw_record_count "Total records received from EPA"
         integer valid_records "Successfully saved records"
         integer flagged_records "Records with sanity anomalies"
+        text original_filename "Uploaded file name (uploads only)"
+        text archived_path "Copy of the original file under uploads/"
+        text query_params "CAMPD retrieval parameters as JSON (API only)"
+        text notes "Free-text notes, e.g. rejected/duplicate counts"
     }
 
     ANNUAL_RECORDS {
@@ -135,11 +141,21 @@ erDiagram
         real operating_hours "Hours the unit ran during the year"
         real gross_generation_mwh "Total electrical generation"
         real heat_input_mmbtu "Total thermal fuel consumed"
+        real steam_load_klb "Steam load (1000 lb)"
         real co2_mass_tons "Mass of CO₂ emitted"
         real so2_mass_tons "Mass of SO₂ emitted"
         real nox_mass_tons "Mass of NOₓ emitted"
         real co2_intensity_lbs_mwh "Stored derived intensity"
         real heat_rate_mmbtu_mwh "Stored derived heat rate"
+    }
+
+    IMPORT_ISSUES {
+        text id PK "UUID"
+        text dataset_id FK "References datasets.id"
+        integer row_number "Row in the uploaded file"
+        text kind "REJECTED | DUPLICATE"
+        text reason "Why the row was not stored"
+        text raw_row "Original row as JSON"
     }
 
     DATA_AUDIT_LOGS {
@@ -160,7 +176,11 @@ erDiagram
 
 - Node.js 20.9+
 - npm
-- Python 3 (for file uploads) — `pip install -r requirements.txt` adds Excel support
+- Python 3 (for file uploads). Create the repo venv so uploads get Excel support (the server uses `.venv/bin/python3` when it exists):
+
+  ```bash
+  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+  ```
 
 ### 1. Environment Setup
 
@@ -190,19 +210,23 @@ npm install
 
 ### 3. Database Migrations
 
-Apply the committed Drizzle migrations:
+`db.sqlite` is committed as the sample dataset (CAMPD facilities/units plus synced annual emissions), so the app runs without seeding. Apply any newer migrations to it:
 
 ```bash
 npm run db:migrate
 ```
 
+After editing `src/server/db/schema.ts`, create the next migration with `npm run db:generate`. The CLI scripts read `.env` themselves (`tsx --env-file=.env`).
+
 ### 4. Seed / Ingest Data
 
-Seed facilities/units from CAMPD CSVs, then sync annual emissions:
+Optional, to rebuild or extend the data. Seed facilities/units from CAMPD CSVs, then sync annual emissions (defaults to last year):
 
 ```bash
 npm run db:seed -- --csv-dir "../CAMPD DATA"
-npm run sync:campd
+npm run sync:campd                          # last year
+npm run sync:campd -- --year 2024           # one year
+npm run sync:campd -- --from 2015 --to 2025 # a range
 ```
 
 ### 5. Run the Development Server

@@ -81,6 +81,13 @@ export interface ParsedUpload {
     status: RowStatus;
     data: Record<string, string>;
   }[];
+  /** Every rejected/duplicate row, uncapped; stored in `import_issues`, not sent to the browser. */
+  rejectedRows: {
+    rowNumber: number;
+    kind: "REJECTED" | "DUPLICATE";
+    reason: string;
+    data: Record<string, string>;
+  }[];
   records: {
     facilities: (Record<string, Cell> & {
       id: number;
@@ -93,7 +100,7 @@ export interface ParsedUpload {
 }
 
 /** What the dialog previews: the parse report plus the sanity flags the import will log. */
-export type ImportReport = Omit<ParsedUpload, "records"> & {
+export type ImportReport = Omit<ParsedUpload, "records" | "rejectedRows"> & {
   anomalies: (ReturnType<typeof evaluatePhysicalSanityRules>[number] & {
     id: string;
     rowNumber: number;
@@ -108,6 +115,7 @@ export interface ImportResult {
   units: number;
   annualRecords: number;
   anomalies: number;
+  issues: number;
   archivedFile: string | null;
 }
 
@@ -120,7 +128,7 @@ export const canImport = (
  * facility-unit-year records that already exist in the database (`existingKeys`).
  */
 export function buildImportReport(
-  { records, ...report }: ParsedUpload,
+  { records, rejectedRows: _rejected, ...report }: ParsedUpload,
   existingKeys: Set<string>,
 ): ImportReport {
   const anomalies = records.annual.flatMap((r) =>

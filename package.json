@@ -6,18 +6,19 @@
   "scripts": {
     "build": "next build --webpack",
     "check": "npm run lint && npm run typecheck",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed-facilities-from-csv.ts",
+    "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
+    "db:seed": "tsx --env-file=.env scripts/seed-facilities-from-csv.ts",
     "dev": "next dev --webpack",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\" --cache",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "start": "next start",
-    "sync:campd": "tsx scripts/sync_campd.ts",
+    "sync:campd": "tsx --env-file=.env scripts/sync_campd.ts",
     "test": "node --import tsx --test src/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "validate": "npm run format:check && npm run check && npm test && npm run build"
+    "validate": "npm run format:check && npm run check && npm test && npm run build",
+    "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -51,6 +52,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/topojson-client": "^3.1.5",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^10.10.0",
     "eslint-plugin-drizzle": "^0.2.3",
     "eslint-plugin-react-hooks": "^7.1.1",

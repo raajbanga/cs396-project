@@ -10,6 +10,7 @@ import {
   checkUploadFile,
   type ParsedUpload,
 } from "./data-import";
+import { PYTHON } from "./python";
 
 const SCRIPT = path.resolve("scripts", "parse_import.py");
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "data-import-test-"));
@@ -17,7 +18,7 @@ test.after(() => fs.rmSync(tmpDir, { recursive: true, force: true }));
 
 const parse = (file: string) =>
   JSON.parse(
-    execFileSync("python3", [SCRIPT, file], {
+    execFileSync(PYTHON, [SCRIPT, file], {
       encoding: "utf-8",
       maxBuffer: 1024 ** 3,
     }),
@@ -73,6 +74,16 @@ void test("parser rejects invalid rows, skips duplicates, and reports audit flag
       [12, "U1", 2025],
     ],
   );
+  assert.deepEqual(
+    parsed.rejectedRows.map((r) => [r.rowNumber, r.kind]),
+    [
+      [2, "DUPLICATE"],
+      [3, "REJECTED"],
+      [4, "REJECTED"],
+      [5, "REJECTED"],
+    ],
+  );
+  assert.equal(parsed.rejectedRows[1]?.data["Facility ID"], "BAD_ID");
   assert.ok(canImport(parsed));
 
   const report = buildImportReport(parsed, new Set(["12:U1:2025"]));
@@ -85,6 +96,21 @@ void test("parser rejects invalid rows, skips duplicates, and reports audit flag
     report.duplicates.some((d) => d.rowNumber === 6 && !d.firstSeenRow),
   );
   assert.ok(!("records" in report));
+  assert.ok(!("rejectedRows" in report));
+});
+
+void test("parser maps steam load and retirement date", () => {
+  const csvPath = path.join(tmpDir, "steam.csv");
+  fs.writeFileSync(
+    csvPath,
+    [
+      '"Facility ID","Unit ID","Year","Steam Load (1000 lb)","Heat Input (mmBtu)","Retirement Date"',
+      '3,"1",2025,"1,250.5",900,2030-12-31',
+    ].join("\n"),
+  );
+  const parsed = parse(csvPath);
+  assert.equal(parsed.records.annual[0]?.steamLoadKlb, 1250.5);
+  assert.equal(parsed.records.units[0]?.retirementDate, "2030-12-31");
 });
 
 void test("parser refuses files without facility and unit IDs", () => {
@@ -95,15 +121,14 @@ void test("parser refuses files without facility and unit IDs", () => {
   assert.equal(canImport(parsed), false);
 });
 
-const hasOpenpyxl =
-  spawnSync("python3", ["-c", "import openpyxl"]).status === 0;
+const hasOpenpyxl = spawnSync(PYTHON, ["-c", "import openpyxl"]).status === 0;
 
 void test(
   "parser reads Excel workbooks",
   { skip: !hasOpenpyxl && "openpyxl missing: pip install -r requirements.txt" },
   () => {
     const xlsxPath = path.join(tmpDir, "facilities.xlsx");
-    execFileSync("python3", [
+    execFileSync(PYTHON, [
       "-c",
       `import sys, openpyxl
 wb = openpyxl.Workbook()

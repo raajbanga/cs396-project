@@ -21,3 +21,10 @@ export function formatQuantity(
   });
   return unit ? `${num} ${unit}` : num;
 }
+
+/** Display names for `datasets.source`. */
+export const DATASET_SOURCE_LABELS: Record<string, string> = {
+  API: "EPA CAMPD API",
+  BULK_CSV: "CSV upload",
+  BULK_EXCEL: "Excel upload",
+};
