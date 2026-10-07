@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 import { env } from "~/env";
@@ -23,13 +23,12 @@ import {
   type EmissionTotals,
 } from "~/lib/emissions-metrics";
 import { db } from "~/server/db";
+import { annualRecords, datasets, facilities, units } from "~/server/db/schema";
 import {
-  annualRecords,
-  dataAuditLogs,
-  datasets,
-  facilities,
-  units,
-} from "~/server/db/schema";
+  insertMissingFacilities,
+  upsertAnnualRecords,
+  upsertUnits,
+} from "~/server/ingest";
 
 const CAMPD_BASE_URL =
   "https://api.epa.gov/easey/emissions-mgmt/emissions/apportioned";
@@ -237,74 +236,6 @@ async function fetchAllCampdPages(
 }
 
 /**
- * Physical Sanity Audit Thresholds (PRD Section 3.3):
- * Standard thermodynamic and operational bounds for CEMS data.
- */
-const AUDIT_THRESHOLDS = {
-  ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
-  PHANTOM_GENERATION_MIN_MWH: 0,
-  HEAT_RATE_MIN_MMBTU_MWH: 5.0,
-  HEAT_RATE_MAX_MMBTU_MWH: 25.0,
-} as const;
-
-function evaluatePhysicalSanityRules(
-  m: EmissionTotals & { heatRateMMBtuMWh: number | null },
-) {
-  const { HEAT_RATE_MIN_MMBTU_MWH: minRate, HEAT_RATE_MAX_MMBTU_MWH: maxRate } =
-    AUDIT_THRESHOLDS;
-  const flags: {
-    flagType: string;
-    severity: "WARN" | "ERROR";
-    details: string;
-  }[] = [];
-
-  if (
-    m.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
-    m.co2MassTons === 0
-  ) {
-    flags.push({
-      flagType: "ZERO_EMISSIONS_HIGH_HEAT",
-      severity: "ERROR",
-      details: `Heat input was ${m.heatInputMMBtu.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
-    });
-  }
-  if (
-    m.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
-    m.operatingHours === 0
-  ) {
-    flags.push({
-      flagType: "PHANTOM_GENERATION",
-      severity: "ERROR",
-      details: `Gross generation was ${m.grossGenerationMWh.toLocaleString()} MWh while operating time was 0 hours.`,
-    });
-  }
-  const rate = m.heatRateMMBtuMWh;
-  if (rate !== null && (rate > maxRate || rate < minRate)) {
-    flags.push({
-      flagType: "EXTREME_HEAT_RATE",
-      severity: "WARN",
-      details: `Heat rate of ${rate.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${minRate.toFixed(1)} - ${maxRate.toFixed(1)}).`,
-    });
-  }
-  return flags;
-}
-
-async function insertInChunks<T>(
-  rows: T[],
-  insert: (chunk: T[]) => Promise<unknown>,
-) {
-  // Chunks of 50 respect SQLite's bound-parameter limit.
-  for (let i = 0; i < rows.length; i += 50) await insert(rows.slice(i, i + 50));
-}
-
-const ANNUAL_UPSERT_COLUMNS = [
-  "datasetId",
-  ...TOTAL_KEYS,
-  "co2IntensityLbsMWh",
-  "heatRateMMBtuMWh",
-] as const;
-
-/**
  * Ingestion engine: normalizes CAMPD annual records page by page, runs physical
  * sanity checks, derives efficiency metrics, and upserts in chunked batches.
  */
@@ -317,21 +248,6 @@ export async function syncCampdAnnualEmissions({
   perPage?: number;
   maxPages?: number;
 }) {
-  const facilitySet = new Set(
-    (await db.select({ id: facilities.id }).from(facilities)).map((f) => f.id),
-  );
-  const unitMap = new Map(
-    (
-      await db
-        .select({
-          id: units.id,
-          facilityId: units.facilityId,
-          unitId: units.unitId,
-        })
-        .from(units)
-    ).map((u) => [`${u.facilityId}:${u.unitId}`, u.id]),
-  );
-
   const datasetId = crypto.randomUUID();
   await db.insert(datasets).values({
     id: datasetId,
@@ -370,79 +286,33 @@ export async function syncCampdAnnualEmissions({
       }
     }
 
-    const newFacilities: (typeof facilities.$inferInsert)[] = [];
-    const newUnits: (typeof units.$inferInsert)[] = [];
-    const records: (typeof annualRecords.$inferInsert)[] = [];
-    const auditLogs: (typeof dataAuditLogs.$inferInsert)[] = [];
-
-    for (const rec of batch.values()) {
-      const { facilityId, unitId } = rec;
-      if (!facilitySet.has(facilityId)) {
-        facilitySet.add(facilityId);
-        newFacilities.push({
-          id: facilityId,
-          name: rec.facilityName,
-          stateCode: rec.stateCode,
-        });
-      }
-
-      const unitKey = `${facilityId}:${unitId}`;
-      let unitInternalId = unitMap.get(unitKey);
-      if (!unitInternalId) {
-        unitInternalId = crypto.randomUUID();
-        unitMap.set(unitKey, unitInternalId);
-        newUnits.push({ id: unitInternalId, unitId, facilityId, ...rec.unit });
-      }
-
-      const metrics = { ...rec.metrics, ...deriveRates(rec.metrics) };
-      const annualRecordId = `${unitInternalId}_${year}`;
-      records.push({
-        id: annualRecordId,
-        datasetId,
-        facilityId,
-        unitInternalId,
-        year,
-        ...metrics,
-      });
-
-      const flags = evaluatePhysicalSanityRules(metrics);
-      if (flags.length > 0) flaggedRecords++;
-      anomalyCount += flags.length;
-      auditLogs.push(
-        ...flags.map((flag) => ({
-          id: crypto.randomUUID(),
-          annualRecordId,
-          ...flag,
-        })),
-      );
-    }
-    validRecords += batch.size;
-
-    await insertInChunks(newFacilities, (c) => db.insert(facilities).values(c));
-    await insertInChunks(newUnits, (c) => db.insert(units).values(c));
-    await insertInChunks(records, (c) =>
-      db
-        .insert(annualRecords)
-        .values(c)
-        .onConflictDoUpdate({
-          target: [annualRecords.unitInternalId, annualRecords.year],
-          set: Object.fromEntries(
-            ANNUAL_UPSERT_COLUMNS.map((col) => [
-              col,
-              sql.raw(`excluded.${annualRecords[col].name}`),
-            ]),
-          ),
-        }),
+    const records = [...batch.values()];
+    await insertMissingFacilities(
+      records.map((r) => ({
+        id: r.facilityId,
+        name: r.facilityName,
+        stateCode: r.stateCode,
+      })),
     );
-    if (records.length > 0) {
-      await db.delete(dataAuditLogs).where(
-        inArray(
-          dataAuditLogs.annualRecordId,
-          records.map((r) => r.id!),
-        ),
-      );
-    }
-    await insertInChunks(auditLogs, (c) => db.insert(dataAuditLogs).values(c));
+    const unitIds = await upsertUnits(
+      records.map(({ facilityId, unitId, unit }) => ({
+        facilityId,
+        unitId,
+        ...unit,
+      })),
+    );
+    const flagged = await upsertAnnualRecords(
+      datasetId,
+      records.map((r) => ({
+        ...r.metrics,
+        facilityId: r.facilityId,
+        unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
+        year,
+      })),
+    );
+    validRecords += records.length;
+    flaggedRecords += flagged.flaggedRecords;
+    anomalyCount += flagged.anomalyCount;
   }
 
   await db

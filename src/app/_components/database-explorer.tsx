@@ -34,11 +34,7 @@ import { PlantComparisonDialog } from "./plant-comparison-dialog";
 
 const MAX_COMPARE = 4;
 
-export function DatabaseExplorer({
-  defaultUploadOpen = false,
-}: {
-  defaultUploadOpen?: boolean;
-} = {}) {
+export function DatabaseExplorer() {
   const [activeTab, setActiveTab] = useState<"explorer" | "map" | "audit">(
     "explorer",
   );
@@ -47,7 +43,7 @@ export function DatabaseExplorer({
   const [table, setTable] = useState(DEFAULT_TABLE_STATE);
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
-  const [isUploadOpen, setIsUploadOpen] = useState(defaultUploadOpen);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
     null,
   );
@@ -323,13 +319,7 @@ export function DatabaseExplorer({
       <DataUploadDialog
         open={isUploadOpen}
         onOpenChange={setIsUploadOpen}
-        onImportComplete={() => {
-          void utils.facilities.invalidate();
-        }}
-        onNavigateTab={(tab) => {
-          setActiveTab(tab);
-          setIsUploadOpen(false);
-        }}
+        onImported={() => void utils.facilities.invalidate()}
       />
 
       {compareIds.length > 0 && (
