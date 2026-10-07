@@ -1,23 +1,31 @@
 import { DatabaseExplorer } from "~/app/_components/database-explorer";
-import { DEFAULT_FILTERS, DEFAULT_TABLE_STATE } from "~/lib/facility-filters";
+import { parseExplorerParams } from "~/lib/facility-filters";
 import { api, HydrateClient } from "~/trpc/server";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // §8.4: the explorer's tab, filters, sort, and page come from the URL (see explorerSearchParams).
+  const initialState = parseExplorerParams(await searchParams);
+  const { tab, filters, table, unitTable } = initialState;
+
   await Promise.all([
     api.facilities.getStats.prefetch(),
     api.facilities.getFilterOptions.prefetch(),
-    api.facilities.getFacilities.prefetch({
-      ...DEFAULT_TABLE_STATE,
-      ...DEFAULT_FILTERS,
-    }),
-    api.facilities.getMapFacilities.prefetch(DEFAULT_FILTERS),
+    tab === "explorer" &&
+      api.facilities.getFacilities.prefetch({ ...table, ...filters }),
+    tab === "units" &&
+      api.facilities.getUnitYears.prefetch({ ...unitTable, ...filters }),
+    tab === "map" && api.facilities.getMapFacilities.prefetch(filters),
   ]);
 
   return (
     <HydrateClient>
-      <DatabaseExplorer />
+      <DatabaseExplorer initialState={initialState} />
     </HydrateClient>
   );
 }

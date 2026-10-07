@@ -1,6 +1,12 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   Activity,
   AlertTriangle,
@@ -18,9 +24,12 @@ import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
 import {
   DEFAULT_FILTERS,
-  DEFAULT_TABLE_STATE,
+  explorerSearchParams,
+  nextSort,
+  type ExplorerState,
   type FilterChangeHandler,
   type SortField,
+  type UnitSortField,
 } from "~/lib/facility-filters";
 import { formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -34,62 +43,102 @@ import { FacilitiesTable } from "./facilities-table";
 import { FacilityDetailDialog } from "./facility-detail-dialog";
 import { FacilityFilterBar } from "./facility-filters";
 import { PlantComparisonDialog } from "./plant-comparison-dialog";
+import { UnitDetailDialog } from "./unit-detail-dialog";
+import { UnitsTable } from "./units-table";
 
 const MAX_COMPARE = 4;
 
-export function DatabaseExplorer() {
-  const [activeTab, setActiveTab] = useState<"explorer" | "map" | "audit">(
-    "explorer",
-  );
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+/** Text-identity sort keys start ascending; numeric metrics start descending (highest first). */
+const ASC_FIRST: readonly string[] = [
+  "name",
+  "id",
+  "facility",
+  "unitId",
+  "state",
+];
+const descByDefault = (field: string) => !ASC_FIRST.includes(field);
+
+export function DatabaseExplorer({
+  initialState,
+}: {
+  initialState: ExplorerState;
+}) {
+  const [activeTab, setActiveTab] = useState(initialState.tab);
+  const [filters, setFilters] = useState(initialState.filters);
   const deferredFilters = useDeferredValue(filters);
-  const [table, setTable] = useState(DEFAULT_TABLE_STATE);
+  const [table, setTable] = useState(initialState.table);
+  const [unitTable, setUnitTable] = useState(initialState.unitTable);
   const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareUnitIds, setCompareUnitIds] = useState<string[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isRetrieveOpen, setIsRetrieveOpen] = useState(false);
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
     null,
   );
+  const [inspectUnitId, setInspectUnitId] = useState<string | null>(null);
 
   const utils = api.useUtils();
 
-  const setPage = (page: number) => setTable((t) => ({ ...t, page }));
+  // §8.4: mirror tab, filters, sort, and page into the URL so views are shareable and reload-safe.
+  useEffect(() => {
+    const qs = explorerSearchParams({
+      tab: activeTab,
+      filters,
+      table,
+      unitTable,
+    });
+    window.history.replaceState(
+      null,
+      "",
+      qs ? `?${qs}` : window.location.pathname,
+    );
+  }, [activeTab, filters, table, unitTable]);
+
+  const setPage = (page: number) =>
+    activeTab === "units"
+      ? setUnitTable((t) => ({ ...t, page }))
+      : setTable((t) => ({ ...t, page }));
+  const resetPages = () => {
+    setTable((t) => ({ ...t, page: 1 }));
+    setUnitTable((t) => ({ ...t, page: 1 }));
+  };
   const setFilter: FilterChangeHandler = (key, value) => {
     setFilters((f) => ({ ...f, [key]: value }));
-    setPage(1);
+    resetPages();
   };
   const resetFilters = () => {
     setFilters(DEFAULT_FILTERS);
-    setPage(1);
+    resetPages();
   };
   const handleSortChange = (field: SortField) =>
-    setTable((t) => ({
-      ...t,
-      page: 1,
-      sortBy: field,
-      sortDir:
-        t.sortBy === field
-          ? t.sortDir === "asc"
-            ? "desc"
-            : "asc"
-          : field === "capacity" || field === "co2"
-            ? "desc"
-            : "asc",
-    }));
+    setTable((t) => nextSort(t, field, descByDefault));
+  const handleUnitSortChange = (field: UnitSortField) =>
+    setUnitTable((t) => nextSort(t, field, descByDefault));
 
-  const toggleCompare = (id: number) =>
-    setCompareIds((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= MAX_COMPARE) {
-        alert(
-          `Maximum of ${MAX_COMPARE} facilities can be compared simultaneously.`,
-        );
-        return prev;
-      }
-      return [...prev, id];
-    });
-  const canCompare = compareIds.length >= 2;
+  const compareCount = compareIds.length + compareUnitIds.length;
+  function toggleIn<T>(
+    list: T[],
+    setList: Dispatch<SetStateAction<T[]>>,
+    id: T,
+  ) {
+    if (list.includes(id)) return setList(list.filter((x) => x !== id));
+    if (compareCount >= MAX_COMPARE) {
+      return alert(
+        `Maximum of ${MAX_COMPARE} facilities or units can be compared simultaneously.`,
+      );
+    }
+    setList([...list, id]);
+  }
+  const toggleCompare = (id: number) => toggleIn(compareIds, setCompareIds, id);
+  const toggleUnitCompare = (id: string) =>
+    toggleIn(compareUnitIds, setCompareUnitIds, id);
+  const clearCompare = () => {
+    setCompareIds([]);
+    setCompareUnitIds([]);
+  };
+  const canCompare = compareCount >= 2;
+  const showRank = filters.topN !== "ALL";
 
   const { data: stats } = api.facilities.getStats.useQuery(undefined, {
     staleTime: 0,
@@ -98,7 +147,11 @@ export function DatabaseExplorer() {
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
   const facilitiesQuery = api.facilities.getFacilities.useQuery(
     { ...table, ...deferredFilters },
-    { placeholderData: (prev) => prev },
+    { enabled: activeTab === "explorer", placeholderData: (prev) => prev },
+  );
+  const unitsQuery = api.facilities.getUnitYears.useQuery(
+    { ...unitTable, ...deferredFilters },
+    { enabled: activeTab === "units", placeholderData: (prev) => prev },
   );
   const mapQuery = api.facilities.getMapFacilities.useQuery(deferredFilters, {
     enabled: activeTab === "map",
@@ -108,8 +161,12 @@ export function DatabaseExplorer() {
     { id: inspectFacilityId! },
     { enabled: inspectFacilityId !== null },
   );
+  const unitDetailQuery = api.facilities.getUnit.useQuery(
+    { id: inspectUnitId! },
+    { enabled: inspectUnitId !== null },
+  );
   const compareQuery = api.facilities.compareFacilities.useQuery(
-    { ids: compareIds },
+    { ids: compareIds, unitIds: compareUnitIds },
     { enabled: isCompareOpen && canCompare },
   );
   const auditQuery = api.facilities.getAuditLogs.useQuery(
@@ -171,6 +228,7 @@ export function DatabaseExplorer() {
               className="rounded-lg"
               options={[
                 { value: "explorer", label: "Facilities" },
+                { value: "units", label: "Units" },
                 {
                   value: "map",
                   label: "Map",
@@ -265,31 +323,60 @@ export function DatabaseExplorer() {
           />
         </KpiStrip>
 
-        {activeTab === "explorer" && (
+        {(activeTab === "explorer" || activeTab === "units") && (
           <div className="space-y-4">
             <FacilityFilterBar
               filters={filters}
               onFilterChange={setFilter}
               onResetFilters={resetFilters}
               filterOptions={filterOptions}
-              totalMatching={facilitiesQuery.data?.totalCount}
-              isLoading={facilitiesQuery.isLoading}
+              {...(activeTab === "units"
+                ? {
+                    itemLabel: "unit-years",
+                    totalMatching: unitsQuery.data?.totalCount,
+                    isLoading: unitsQuery.isLoading,
+                  }
+                : {
+                    itemLabel: "facilities",
+                    totalMatching: facilitiesQuery.data?.totalCount,
+                    isLoading: facilitiesQuery.isLoading,
+                  })}
             />
-            <FacilitiesTable
-              data={facilitiesQuery.data}
-              {...table}
-              isLoading={facilitiesQuery.isLoading}
-              isPlaceholderData={facilitiesQuery.isPlaceholderData}
-              onSortChange={handleSortChange}
-              compareIds={compareIds}
-              onToggleCompare={toggleCompare}
-              onInspect={setInspectFacilityId}
-              onPageChange={setPage}
-              onPageSizeChange={(pageSize) =>
-                setTable((t) => ({ ...t, pageSize, page: 1 }))
-              }
-              onResetFilters={resetFilters}
-            />
+            {activeTab === "units" ? (
+              <UnitsTable
+                data={unitsQuery.data}
+                {...unitTable}
+                showRank={showRank}
+                isLoading={unitsQuery.isLoading}
+                isPlaceholderData={unitsQuery.isPlaceholderData}
+                onSortChange={handleUnitSortChange}
+                compareUnitIds={compareUnitIds}
+                onToggleCompare={toggleUnitCompare}
+                onInspect={setInspectUnitId}
+                onPageChange={setPage}
+                onPageSizeChange={(pageSize) =>
+                  setUnitTable((t) => ({ ...t, pageSize, page: 1 }))
+                }
+                onResetFilters={resetFilters}
+              />
+            ) : (
+              <FacilitiesTable
+                data={facilitiesQuery.data}
+                {...table}
+                showRank={showRank}
+                isLoading={facilitiesQuery.isLoading}
+                isPlaceholderData={facilitiesQuery.isPlaceholderData}
+                onSortChange={handleSortChange}
+                compareIds={compareIds}
+                onToggleCompare={toggleCompare}
+                onInspect={setInspectFacilityId}
+                onPageChange={setPage}
+                onPageSizeChange={(pageSize) =>
+                  setTable((t) => ({ ...t, pageSize, page: 1 }))
+                }
+                onResetFilters={resetFilters}
+              />
+            )}
           </div>
         )}
 
@@ -316,8 +403,12 @@ export function DatabaseExplorer() {
         onOpenChange={setIsCompareOpen}
         plants={compareQuery.data}
         isLoading={compareQuery.isLoading}
-        onClearSelection={() => setCompareIds([])}
-        onRemovePlant={toggleCompare}
+        onClearSelection={clearCompare}
+        onRemovePlant={(p) =>
+          p.unitInternalId
+            ? toggleUnitCompare(p.unitInternalId)
+            : toggleCompare(p.id)
+        }
         onInspectPlant={setInspectFacilityId}
       />
 
@@ -329,6 +420,21 @@ export function DatabaseExplorer() {
         onToggleCompare={toggleCompare}
         isInCompare={
           inspectFacilityId !== null && compareIds.includes(inspectFacilityId)
+        }
+      />
+
+      <UnitDetailDialog
+        onClose={() => setInspectUnitId(null)}
+        unitInternalId={inspectUnitId}
+        unit={unitDetailQuery.data}
+        isLoading={unitDetailQuery.isLoading}
+        onInspectFacility={(id) => {
+          setInspectUnitId(null);
+          setInspectFacilityId(id);
+        }}
+        onToggleCompare={toggleUnitCompare}
+        isInCompare={
+          inspectUnitId !== null && compareUnitIds.includes(inspectUnitId)
         }
       />
 
@@ -344,18 +450,23 @@ export function DatabaseExplorer() {
         onImported={() => void utils.facilities.invalidate()}
       />
 
-      {compareIds.length > 0 && (
+      {compareCount > 0 && (
         <aside
           aria-label="Plant benchmark comparison dock"
           className="animate-in fade-in slide-in-from-bottom-4 border-edge bg-surface/95 fixed bottom-4 left-1/2 z-40 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-2.5 rounded-full border px-3 py-1.5 shadow-2xl backdrop-blur-md duration-200 select-none sm:bottom-6 sm:gap-3 sm:px-4 sm:py-2"
         >
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-            {compareIds.length}
+            {compareCount}
           </span>
           <span className="text-fg-2 text-xs font-medium whitespace-nowrap sm:text-sm">
-            {compareIds.length === 1
-              ? "1 plant"
-              : `${compareIds.length} plants`}
+            {[
+              compareIds.length &&
+                `${compareIds.length} ${compareIds.length === 1 ? "plant" : "plants"}`,
+              compareUnitIds.length &&
+                `${compareUnitIds.length} ${compareUnitIds.length === 1 ? "unit" : "units"}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
           <div className="bg-edge h-4 w-px shrink-0" />
           {canCompare ? (
@@ -375,7 +486,7 @@ export function DatabaseExplorer() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setCompareIds([])}
+            onClick={clearCompare}
             className="h-7 px-1.5"
           >
             Clear

@@ -330,15 +330,15 @@ function matrixSections(
 function CompareMatrix({
   plants,
   tab,
-  cleanestId,
+  cleanestKey,
   onInspectPlant,
   onRemovePlant,
 }: {
   plants: ComparedPlant[];
   tab: Exclude<CompareTab, "granular">;
-  cleanestId?: number;
+  cleanestKey?: string;
   onInspectPlant: (id: number) => void;
-  onRemovePlant: (id: number) => void;
+  onRemovePlant: (plant: ComparedPlant) => void;
 }) {
   return (
     <DataPanel className="overflow-x-auto">
@@ -350,7 +350,7 @@ function CompareMatrix({
             </TableHead>
             {plants.map((plant) => (
               <TableHead
-                key={plant.id}
+                key={plant.key}
                 className="border-edge min-w-[220px] space-y-2 border-l p-3.5 align-top xl:min-w-[260px]"
               >
                 <div className="flex items-center justify-between gap-1">
@@ -358,7 +358,7 @@ function CompareMatrix({
                     #{plant.id}
                   </span>
                   <div className="flex items-center gap-1">
-                    {cleanestId === plant.id && (
+                    {cleanestKey === plant.key && (
                       <Badge variant="success" className="py-0">
                         <Award className="h-3 w-3" />
                         Cleanest
@@ -377,7 +377,7 @@ function CompareMatrix({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => onRemovePlant(plant.id)}
+                      onClick={() => onRemovePlant(plant)}
                       className="h-6 w-6"
                       title={`Remove ${plant.name} from comparison`}
                     >
@@ -422,7 +422,7 @@ function CompareMatrix({
                 </TableCell>
                 {plants.map((p) => (
                   <TableCell
-                    key={p.id}
+                    key={p.key}
                     className="border-edge/60 border-l p-3.5"
                   >
                     {row.render(p)}
@@ -451,7 +451,7 @@ export function PlantComparisonDialog({
   plants?: ComparedPlant[];
   isLoading: boolean;
   onClearSelection: () => void;
-  onRemovePlant: (id: number) => void;
+  onRemovePlant: (plant: ComparedPlant) => void;
   onInspectPlant: (id: number) => void;
 }) {
   const [activeTab, setActiveTab] = useState<CompareTab>("overview");
@@ -472,8 +472,7 @@ export function PlantComparisonDialog({
               BENCHMARK MATRIX
             </span>
             <Badge variant="outline" className="font-mono">
-              {plants.length} {plants.length === 1 ? "Facility" : "Facilities"}{" "}
-              Selected
+              {plants.length} Selected
             </Badge>
             {cleanest && (
               <Badge variant="success">
@@ -498,7 +497,7 @@ export function PlantComparisonDialog({
           onClick={onClearSelection}
           className="underline sm:mr-auto"
         >
-          Clear comparison selection ({plants.length} plants)
+          Clear comparison selection ({plants.length})
         </Button>
       }
     >
@@ -510,8 +509,8 @@ export function PlantComparisonDialog({
         />
       ) : plants.length < 2 ? (
         <EmptyState
-          title="Select at least 2 facilities to benchmark side-by-side."
-          description="Use the comparison checkboxes in the facilities table to add up to 4 plants."
+          title="Select at least 2 facilities or units to benchmark side-by-side."
+          description="Use the comparison checkboxes in the Facilities or Units table to add up to 4."
           className="py-12"
         />
       ) : (
@@ -578,7 +577,7 @@ export function PlantComparisonDialog({
             <CompareMatrix
               plants={plants}
               tab={activeTab}
-              cleanestId={cleanest?.id}
+              cleanestKey={cleanest?.key}
               onInspectPlant={onInspectPlant}
               onRemovePlant={onRemovePlant}
             />

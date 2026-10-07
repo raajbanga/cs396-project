@@ -31,6 +31,7 @@ export const facilities = sqliteTable(
     index("facility_name_idx").on(t.name),
     index("facility_nerc_idx").on(t.nercRegion),
     index("facility_source_cat_idx").on(t.sourceCategory),
+    index("facility_county_idx").on(t.county), // §8.1 county search (equality)
   ],
 );
 
