@@ -16,10 +16,27 @@ const SIZES = {
   icon: "h-8 w-8 p-0 shrink-0",
 };
 
-export function Button({
-  className,
+/** Button classes, also for links styled as buttons (e.g. CSV downloads). */
+export const buttonClass = ({
   variant = "default",
   size = "default",
+  className,
+}: {
+  variant?: keyof typeof VARIANTS;
+  size?: keyof typeof SIZES;
+  className?: string;
+} = {}) =>
+  cn(
+    "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg font-medium transition-all select-none focus-visible:ring-1 focus-visible:ring-emerald-500/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+    VARIANTS[variant],
+    SIZES[size],
+    className,
+  );
+
+export function Button({
+  className,
+  variant,
+  size,
   ...props
 }: ComponentProps<"button"> & {
   variant?: keyof typeof VARIANTS;
@@ -28,12 +45,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={cn(
-        "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg font-medium transition-all select-none focus-visible:ring-1 focus-visible:ring-emerald-500/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
-        VARIANTS[variant],
-        SIZES[size],
-        className,
-      )}
+      className={buttonClass({ variant, size, className })}
       {...props}
     />
   );

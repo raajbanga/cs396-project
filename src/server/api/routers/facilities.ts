@@ -259,6 +259,139 @@ function filterConditions(f: FilterInput = {}): SQL[] {
   return conditions;
 }
 
+/**
+ * Facilities matching the filters, ranked by the sort (§8.3). Shared by the Facilities view (paged)
+ * and the CSV export (every row).
+ */
+export function rankedFacilities(
+  database: typeof Database,
+  input: FilterInput & { sortBy: SortField; sortDir: SortDirection },
+) {
+  const { sortBy, sortDir } = input;
+  const year = filterYear(input);
+  const yearRecords = yearClause(year);
+  const ranked = database
+    .select({
+      id: facilities.id,
+      name: facilities.name,
+      stateCode: facilities.stateCode,
+      county: facilities.county,
+      nercRegion: facilities.nercRegion,
+      sourceCategory: facilities.sourceCategory,
+      ownerOperator: facilities.ownerOperator,
+      ...perFacility(year),
+      primaryFuelsRaw: sql<string | null>`(
+        SELECT GROUP_CONCAT(DISTINCT "units"."primary_fuel") FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
+      )`.as("primary_fuels_raw"),
+      carbonIntensityLbsMWh: sql<number | null>`(
+        SELECT ROUND(SUM("annual_records"."co2_mass_tons") * 2000.0 / NULLIF(SUM("annual_records"."gross_generation_mwh"), 0))
+        FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
+      )`.as("carbon_intensity_lbs_mwh"),
+      controlledUnitsCount: sql<number>`(
+        SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
+      )`.as("controlled_units_count"),
+      totalOperatingHours: sql<number>`(
+        SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
+      )`.as("total_operating_hours"),
+      rank: rankOver(
+        facilitySortColumns(year)[sortBy],
+        sortDir,
+        facilities.id,
+        input.rankGroup,
+      ),
+    })
+    .from(facilities)
+    .where(and(...filterConditions(input)))
+    .as("ranked");
+  return { ranked, ...rankWindow(ranked, input) };
+}
+
+/**
+ * Unit-years (annual_records ⨝ units ⨝ facilities) matching the filters and `scope`, ranked by the
+ * sort (§8.3). Shared by the Units view (paged) and the CSV exports (every row).
+ */
+export function rankedUnitYears(
+  database: typeof Database,
+  input: FilterInput & { sortBy: UnitSortField; sortDir: SortDirection },
+  scope: SQL[] = [],
+) {
+  const { sortBy, sortDir } = input;
+  const ranked = database
+    .select({
+      id: annualRecords.id,
+      unitInternalId: annualRecords.unitInternalId,
+      facilityId: annualRecords.facilityId,
+      facilityName: facilities.name,
+      stateCode: facilities.stateCode,
+      county: facilities.county,
+      unitId: units.unitId,
+      unitType: units.unitType,
+      primaryFuel: units.primaryFuel,
+      secondaryFuel: units.secondaryFuel,
+      so2Controls: units.so2Controls,
+      noxControls: units.noxControls,
+      pmControls: units.pmControls,
+      hgControls: units.hgControls,
+      programCode: units.programCode,
+      operatingStatus: units.operatingStatus,
+      commercialOpDate: units.commercialOpDate,
+      retirementDate: units.retirementDate,
+      nameplateCapacityMW: units.nameplateCapacityMW,
+      year: annualRecords.year,
+      datasetId: annualRecords.datasetId,
+      operatingHours: annualRecords.operatingHours,
+      grossGenerationMWh: annualRecords.grossGenerationMWh,
+      heatInputMMBtu: annualRecords.heatInputMMBtu,
+      steamLoadKlb: annualRecords.steamLoadKlb,
+      co2MassTons: annualRecords.co2MassTons,
+      so2MassTons: annualRecords.so2MassTons,
+      noxMassTons: annualRecords.noxMassTons,
+      co2IntensityLbsMWh: annualRecords.co2IntensityLbsMWh,
+      heatRateMMBtuMWh: annualRecords.heatRateMMBtuMWh,
+      rank: rankOver(
+        UNIT_SORT_COLUMNS[sortBy],
+        sortDir,
+        annualRecords.id,
+        input.rankGroup,
+      ),
+    })
+    .from(annualRecords)
+    .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
+    .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
+    .where(
+      and(
+        ...facilityConditions(input),
+        ...unitConditions(input),
+        ...recordConditions(input),
+        ...scope,
+      ),
+    )
+    .as("ranked");
+  return { ranked, ...rankWindow(ranked, input) };
+}
+
+/** Datasets newest first with their parameters, counts, and superseded status (§5 history, §10 provenance). */
+export const datasetHistory = (database: typeof Database) =>
+  database
+    .select({
+      id: datasets.id,
+      name: datasets.name,
+      source: datasets.source,
+      reportingYear: datasets.reportingYear,
+      importedAt: datasets.importedAt,
+      rawRecordCount: datasets.rawRecordCount,
+      validRecords: datasets.validRecords,
+      flaggedRecords: datasets.flaggedRecords,
+      originalFilename: datasets.originalFilename,
+      archivedPath: datasets.archivedPath,
+      queryParams: datasets.queryParams,
+      notes: datasets.notes,
+      superseded: isSuperseded.mapWith(Boolean),
+    })
+    .from(datasets)
+    .orderBy(desc(datasets.importedAt), desc(datasets.reportingYear))
+    .$dynamic();
+
 async function distinctValues(database: typeof Database, column: SQLiteColumn) {
   const rows = await database
     .selectDistinct({ value: column })
@@ -338,44 +471,8 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, pageSize, sortBy, sortDir } = input;
-      const year = filterYear(input);
-      const yearRecords = yearClause(year);
-
-      const ranked = ctx.db
-        .select({
-          id: facilities.id,
-          name: facilities.name,
-          stateCode: facilities.stateCode,
-          county: facilities.county,
-          nercRegion: facilities.nercRegion,
-          sourceCategory: facilities.sourceCategory,
-          ownerOperator: facilities.ownerOperator,
-          ...perFacility(year),
-          primaryFuelsRaw: sql<string | null>`(
-            SELECT GROUP_CONCAT(DISTINCT "units"."primary_fuel") FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
-          )`.as("primary_fuels_raw"),
-          carbonIntensityLbsMWh: sql<number | null>`(
-            SELECT ROUND(SUM("annual_records"."co2_mass_tons") * 2000.0 / NULLIF(SUM("annual_records"."gross_generation_mwh"), 0))
-            FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
-          )`.as("carbon_intensity_lbs_mwh"),
-          controlledUnitsCount: sql<number>`(
-            SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
-          )`.as("controlled_units_count"),
-          totalOperatingHours: sql<number>`(
-            SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
-          )`.as("total_operating_hours"),
-          rank: rankOver(
-            facilitySortColumns(year)[sortBy],
-            sortDir,
-            facilities.id,
-            input.rankGroup,
-          ),
-        })
-        .from(facilities)
-        .where(and(...filterConditions(input)))
-        .as("ranked");
-      const { where, orderBy } = rankWindow(ranked, input);
+      const { page, pageSize } = input;
+      const { ranked, where, orderBy } = rankedFacilities(ctx.db, input);
 
       const [countResult] = await ctx.db
         .select({ total: count() })
@@ -410,51 +507,8 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, pageSize, sortBy, sortDir } = input;
-      const ranked = ctx.db
-        .select({
-          id: annualRecords.id,
-          unitInternalId: annualRecords.unitInternalId,
-          facilityId: annualRecords.facilityId,
-          facilityName: facilities.name,
-          stateCode: facilities.stateCode,
-          county: facilities.county,
-          unitId: units.unitId,
-          unitType: units.unitType,
-          primaryFuel: units.primaryFuel,
-          secondaryFuel: units.secondaryFuel,
-          so2Controls: units.so2Controls,
-          noxControls: units.noxControls,
-          pmControls: units.pmControls,
-          nameplateCapacityMW: units.nameplateCapacityMW,
-          year: annualRecords.year,
-          operatingHours: annualRecords.operatingHours,
-          grossGenerationMWh: annualRecords.grossGenerationMWh,
-          heatInputMMBtu: annualRecords.heatInputMMBtu,
-          co2MassTons: annualRecords.co2MassTons,
-          so2MassTons: annualRecords.so2MassTons,
-          noxMassTons: annualRecords.noxMassTons,
-          co2IntensityLbsMWh: annualRecords.co2IntensityLbsMWh,
-          heatRateMMBtuMWh: annualRecords.heatRateMMBtuMWh,
-          rank: rankOver(
-            UNIT_SORT_COLUMNS[sortBy],
-            sortDir,
-            annualRecords.id,
-            input.rankGroup,
-          ),
-        })
-        .from(annualRecords)
-        .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
-        .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
-        .where(
-          and(
-            ...facilityConditions(input),
-            ...unitConditions(input),
-            ...recordConditions(input),
-          ),
-        )
-        .as("ranked");
-      const { where, orderBy } = rankWindow(ranked, input);
+      const { page, pageSize } = input;
+      const { ranked, where, orderBy } = rankedUnitYears(ctx.db, input);
 
       const [countResult] = await ctx.db
         .select({ total: count() })
@@ -681,24 +735,7 @@ export const facilitiesRouter = createTRPCRouter({
   /** Retrieval history (§5): every dataset, newest first, with its parameters and counts. */
   getDatasets: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(200).default(50) }))
-    .query(({ ctx, input }) =>
-      ctx.db
-        .select({
-          name: datasets.name,
-          source: datasets.source,
-          reportingYear: datasets.reportingYear,
-          importedAt: datasets.importedAt,
-          rawRecordCount: datasets.rawRecordCount,
-          validRecords: datasets.validRecords,
-          originalFilename: datasets.originalFilename,
-          queryParams: datasets.queryParams,
-          notes: datasets.notes,
-          superseded: isSuperseded.mapWith(Boolean),
-        })
-        .from(datasets)
-        .orderBy(desc(datasets.importedAt), desc(datasets.reportingYear))
-        .limit(input.limit),
-    ),
+    .query(({ ctx, input }) => datasetHistory(ctx.db).limit(input.limit)),
 
   getRetrievalOptions: publicProcedure.query(() => getCampdRetrievalOptions()),
 

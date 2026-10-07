@@ -14,7 +14,11 @@ import {
   describeCampdFilters,
   parseFacilityIds,
 } from "~/lib/facility-filters";
-import { DATASET_SOURCE_LABELS, formatQuantity } from "~/lib/utils";
+import {
+  DATASET_SOURCE_LABELS,
+  datasetStatus,
+  formatQuantity,
+} from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { ReportTable, Section } from "./data-upload-dialog";
 
@@ -26,7 +30,7 @@ const LAST_YEAR = new Date().getFullYear() - 1;
 
 const count = (n: number) => formatQuantity(n, "", { fallback: "0" });
 
-function datasetParams(row: DatasetRow) {
+export function datasetParams(row: DatasetRow) {
   if (row.source !== "API") return row.originalFilename ?? "—";
   if (!row.queryParams) return "—";
   return describeCampdFilters(row.queryParams) || "All units";
@@ -264,16 +268,22 @@ export function DataRetrievalDialog({
   );
 }
 
+const STATUS_BADGES = {
+  Error: "destructive",
+  Superseded: "secondary",
+  Active: "success",
+} as const;
+
 function DatasetStatus({ row }: { row: DatasetRow }) {
-  if (row.notes?.startsWith("Error")) {
-    return (
-      <Badge variant="destructive" title={row.notes}>
-        Error
-      </Badge>
-    );
-  }
-  if (row.superseded) return <Badge variant="secondary">Superseded</Badge>;
-  return <Badge variant="success">Active</Badge>;
+  const status = datasetStatus(row);
+  return (
+    <Badge
+      variant={STATUS_BADGES[status]}
+      title={status === "Error" ? (row.notes ?? undefined) : undefined}
+    >
+      {status}
+    </Badge>
+  );
 }
 
 function Field({

@@ -52,12 +52,18 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
    - Ranking: sort by any column, then keep the first N overall or per state (`ROW_NUMBER() OVER (PARTITION BY state_code …)`). Units can be compared across facilities, and clicking a row opens the unit's history across all years.
    - Filters, sort, and page are kept in the URL, so a search can be shared or reloaded.
 
-9. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
-   - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
-   - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare/upload/retrieval dialogs, audit table, EPA reference primer).
-   - Dark/light themes via `next-themes`; icons from `lucide-react`.
+9. **CSV Download (§10)** (**Download** in the header, **CSV** beside the explorer results):
+   - `GET /api/export?type=…` returns `text/csv` as an attachment, written by one shared CSV writer (`src/lib/csv.ts`, RFC 4180 quoting).
+   - Types: `dataset&id=` (every unit-year a dataset holds with unit fuels, controls, program code, dates, and audit flags; `valid` + flagged rows of `invalid` = `dataset`), `valid&id=` (the dataset's records with no audit flags), `invalid&id=` (data-quality report: an upload's rejected/duplicate rows from `import_issues` with the original columns, plus every audit-flagged record of the dataset), `search&<explorer URL params>` (all matching facilities or unit-years in table order, ignoring paging), `selection&ids=&unitIds=` (every year of the compare selection), `provenance[&id=]` (datasets with source, parameters, file, dates, counts, status).
+   - Search exports reuse the explorer's ranked queries (`rankedFacilities` / `rankedUnitYears`), so a download always matches the table. The upload report offers **Download rejected rows** after an import.
 
-10. **Type-safe API (tRPC)**:
+10. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
+
+- Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
+- App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare/upload/retrieval/download dialogs, audit table, EPA reference primer).
+- Dark/light themes via `next-themes`; icons from `lucide-react`.
+
+11. **Type-safe API (tRPC)**:
 
 - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getUnitYears`, `getMapFacilities`, `getFacility`, `getUnit`, `compareFacilities`, `getAuditLogs`, `getDatasets`, `getRetrievalOptions`, `getCampdPublishedThrough`, `getGranularEmissions`; mutation `retrieveCampd`.
 
@@ -249,11 +255,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Verification & Testing
 
-| Script             | Purpose                                                                |
-| :----------------- | :--------------------------------------------------------------------- |
-| `npm run validate` | Format check, lint, typecheck, unit tests, production build            |
-| `npm test`         | Node test runner over `src/lib/*.test.ts` (lib helpers, upload parser) |
-| `npm run check`    | ESLint + `tsc --noEmit`                                                |
+| Script             | Purpose                                                                            |
+| :----------------- | :--------------------------------------------------------------------------------- |
+| `npm run validate` | Format check, lint, typecheck, unit tests, production build                        |
+| `npm test`         | Node test runner over `src/lib/*.test.ts` (lib helpers, upload parser, CSV writer) |
+| `npm run check`    | ESLint + `tsc --noEmit`                                                            |
 
 ```bash
 npm run validate
@@ -269,6 +275,7 @@ npm run validate
 | `src/server/campd/client.ts` | EPA sync and granular fetch                                                            |
 | `src/server/ingest.ts`       | Shared upserts + audit logging for the sync, seed script, and uploads                  |
 | `src/server/data-import.ts`  | File upload preview/commit behind `POST /api/upload`                                   |
+| `src/server/export.ts`       | CSV downloads behind `GET /api/export`                                                 |
 | `src/lib/`                   | Domain helpers (emissions math, CAMPD dates, plant narrative, map theming)             |
 | `src/trpc/`                  | React + RSC tRPC clients (`query-client.ts` holds shared React Query setup)            |
 | `scripts/`                   | `db:migrate`, `db:seed`, `sync:campd` CLI entrypoints; `parse_import.py` upload parser |

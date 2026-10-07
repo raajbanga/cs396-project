@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ListFilter,
   RotateCcw,
@@ -268,6 +268,7 @@ export function FacilityFilterBar({
   totalMatching,
   itemLabel,
   isLoading,
+  actions,
 }: {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
@@ -276,6 +277,8 @@ export function FacilityFilterBar({
   totalMatching?: number;
   itemLabel: "facilities" | "unit-years";
   isLoading: boolean;
+  /** Extra controls beside the result count, e.g. a CSV download. */
+  actions?: ReactNode;
 }) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter((key) =>
@@ -346,17 +349,18 @@ export function FacilityFilterBar({
           </Button>
         </div>
 
-        <div className="text-fg-muted ml-auto text-xs whitespace-nowrap sm:text-sm">
+        <div className="text-fg-muted ml-auto flex items-center gap-2 text-xs whitespace-nowrap sm:text-sm">
           {isLoading ? (
             "Updating..."
           ) : (
-            <>
+            <span>
               <strong className="text-fg font-semibold">
                 {totalMatching?.toLocaleString() ?? 0}
               </strong>{" "}
               {itemLabel}
-            </>
+            </span>
           )}
+          {actions}
         </div>
       </div>
 
