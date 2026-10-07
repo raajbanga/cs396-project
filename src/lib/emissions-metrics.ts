@@ -64,6 +64,59 @@ export function deriveRates(totals: EmissionTotals, heatRateDecimals = 2) {
   };
 }
 
+/**
+ * Physical Sanity Audit Thresholds (PRD Section 3.3):
+ * Standard thermodynamic and operational bounds for CEMS data.
+ */
+const AUDIT_THRESHOLDS = {
+  ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
+  PHANTOM_GENERATION_MIN_MWH: 0,
+  HEAT_RATE_MIN_MMBTU_MWH: 5.0,
+  HEAT_RATE_MAX_MMBTU_MWH: 25.0,
+} as const;
+
+export function evaluatePhysicalSanityRules(
+  m: EmissionTotals & { heatRateMMBtuMWh: number | null },
+) {
+  const { HEAT_RATE_MIN_MMBTU_MWH: minRate, HEAT_RATE_MAX_MMBTU_MWH: maxRate } =
+    AUDIT_THRESHOLDS;
+  const flags: {
+    flagType: string;
+    severity: "WARN" | "ERROR";
+    details: string;
+  }[] = [];
+
+  if (
+    m.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
+    m.co2MassTons === 0
+  ) {
+    flags.push({
+      flagType: "ZERO_EMISSIONS_HIGH_HEAT",
+      severity: "ERROR",
+      details: `Heat input was ${m.heatInputMMBtu.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
+    });
+  }
+  if (
+    m.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
+    m.operatingHours === 0
+  ) {
+    flags.push({
+      flagType: "PHANTOM_GENERATION",
+      severity: "ERROR",
+      details: `Gross generation was ${m.grossGenerationMWh.toLocaleString()} MWh while operating time was 0 hours.`,
+    });
+  }
+  const rate = m.heatRateMMBtuMWh;
+  if (rate !== null && (rate > maxRate || rate < minRate)) {
+    flags.push({
+      flagType: "EXTREME_HEAT_RATE",
+      severity: "WARN",
+      details: `Heat rate of ${rate.toFixed(2)} MMBtu/MWh is outside normal thermal envelope (${minRate.toFixed(1)} - ${maxRate.toFixed(1)}).`,
+    });
+  }
+  return flags;
+}
+
 /** Lowest lbs/MWh wins; zero-emission plants (0 intensity) rank above all fossil plants. */
 export function pickCleanestByCarbonIntensity<
   T extends { carbonIntensityLbsMWh: number | null },

@@ -46,7 +46,7 @@ import {
   hasAirQualityControls,
   isOperatingStatus,
 } from "~/lib/plant-narrative";
-import { cn, formatQuantity } from "~/lib/utils";
+import { cn, formatQuantity, uniqueStrings } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 import { AuditPanel } from "./audit-logs-table";
 import { GranularEmissionsWindow } from "./granular-emissions-window";
@@ -391,11 +391,7 @@ export function FacilityDetailDialog({
     generatePlantStory({
       ...facility,
       totalCapacityMW,
-      primaryFuels: [
-        ...new Set(
-          units.map((u) => u.primaryFuel).filter((f): f is string => !!f),
-        ),
-      ],
+      primaryFuels: uniqueStrings(units.map((u) => u.primaryFuel)),
       co2Tons: latest?.co2MassTons ?? 0,
       operatingHours: latest?.maxOperatingHours ?? 0,
       grossGenerationMWh: latest?.grossGenerationMWh ?? 0,

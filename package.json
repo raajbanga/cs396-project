@@ -15,7 +15,7 @@
     "lint:fix": "eslint . --fix",
     "start": "next start",
     "sync:campd": "tsx scripts/sync_campd.ts",
-    "test": "node --import tsx --test src/lib/domain-utils.test.ts",
+    "test": "node --import tsx --test src/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
     "validate": "npm run format:check && npm run check && npm test && npm run build"
   },

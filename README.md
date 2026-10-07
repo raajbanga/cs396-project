@@ -21,7 +21,7 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
      - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
 
 3. **Automated Physical Sanity & Data Quality Auditing**:
-   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `src/server/campd/client.ts`):
+   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts`, shared by the CAMPD sync and file uploads):
      - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO₂ emissions.
      - `PHANTOM_GENERATION` (`ERROR`): Generating power (> 0 MWh) with 0 operating hours recorded.
      - `EXTREME_HEAT_RATE` (`WARN`): Units operating outside thermodynamic boundaries (< 5.0 or > 25.0 MMBtu/MWh).
@@ -41,12 +41,16 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
    - Hourly, daily, weekly, and monthly slices are fetched on demand from EPA CAMPD apportioned endpoints (no synthetic estimation).
    - **Yearly** granularity is aggregated from local `annual_records` (synced via `npm run sync:campd`).
 
-7. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
+7. **CSV & Excel Data Import** (**Upload Data** in the header):
+   - Drag or select a `.csv`/`.xlsx` file (100 MB max). `scripts/parse_import.py` reads it, maps its columns to the project schema, rejects rows with missing or invalid values, and skips duplicate facility-unit-year records.
+   - The dialog previews rows and lists every rejected, duplicate, and sanity-flagged record before anything is saved. Approving upserts `facilities`, `units`, and (for annual emissions files) `annual_records` + `data_audit_logs`, records a `datasets` row, and archives the original file in `uploads/`.
+
+8. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
    - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
    - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare dialogs, audit table, EPA reference primer).
    - Dark/light themes via `next-themes`; icons from `lucide-react`.
 
-8. **Type-safe API (tRPC)**:
+9. **Type-safe API (tRPC)**:
    - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getMapFacilities`, `getFacility`, `compareFacilities`, `getAuditLogs`, `getCampdPublishedThrough`, `getGranularEmissions`.
 
 ---
@@ -70,7 +74,7 @@ Bundled TopoJSON assets come from the BSD-licensed
 
 ## Database Architecture
 
-Six normalized SQLite tables (via LibSQL), managed with Drizzle ORM. The `granular_records` table exists for future caching, but **granular UI data today comes from the EPA API** (plus `annual_records` for yearly rollups)—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+Five normalized SQLite tables (via LibSQL), managed with Drizzle ORM. Granular (hourly–monthly) UI data comes live from the EPA API, with `annual_records` backing yearly rollups—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
 
 ```mermaid
 erDiagram
@@ -78,9 +82,6 @@ erDiagram
     FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
-    FACILITIES ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
-    UNITS ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
-    DATASETS ||--o{ GRANULAR_RECORDS : "optional cache (unused)"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
 
     FACILITIES {
@@ -117,7 +118,7 @@ erDiagram
     DATASETS {
         text id PK "UUID batch identifier"
         text name "Human label (e.g. 'CAMPD API 2022 [TX]')"
-        text source "API or BULK_CSV"
+        text source "API, BULK_CSV, or BULK_EXCEL"
         integer reporting_year "Calendar reporting year"
         integer imported_at "Unix epoch timestamp"
         integer raw_record_count "Total records received from EPA"
@@ -141,24 +142,6 @@ erDiagram
         real heat_rate_mmbtu_mwh "Stored derived heat rate"
     }
 
-    GRANULAR_RECORDS {
-        text id PK "Composite: unitId_granularity_period"
-        text dataset_id FK "References datasets.id"
-        integer facility_id FK "References facilities.id"
-        text unit_internal_id FK "References units.id"
-        text granularity "HOURLY | DAILY | WEEKLY | MONTHLY | YEARLY"
-        text period_start "ISO Timestamp or Date start"
-        text period_end "ISO Timestamp or Date end"
-        real operating_hours "Hours unit operated in period"
-        real gross_generation_mwh "Electrical generation in period"
-        real heat_input_mmbtu "Fuel consumed in period"
-        real co2_mass_tons "CO₂ mass in period"
-        real so2_mass_tons "SO₂ mass in period"
-        real nox_mass_tons "NOₓ mass in period"
-        real co2_intensity_lbs_mwh "Period carbon intensity"
-        real heat_rate_mmbtu_mwh "Period heat rate efficiency"
-    }
-
     DATA_AUDIT_LOGS {
         text id PK "UUID flag ID"
         text annual_record_id FK "References annual_records.id"
@@ -177,6 +160,7 @@ erDiagram
 
 - Node.js 20.9+
 - npm
+- Python 3 (for file uploads) — `pip install -r requirements.txt` adds Excel support
 
 ### 1. Environment Setup
 
@@ -233,11 +217,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Verification & Testing
 
-| Script             | Purpose                                                            |
-| :----------------- | :----------------------------------------------------------------- |
-| `npm run validate` | Format check, lint, typecheck, unit tests, production build        |
-| `npm test`         | Node test runner over `src/lib/domain-utils.test.ts` (lib helpers) |
-| `npm run check`    | ESLint + `tsc --noEmit`                                            |
+| Script             | Purpose                                                                |
+| :----------------- | :--------------------------------------------------------------------- |
+| `npm run validate` | Format check, lint, typecheck, unit tests, production build            |
+| `npm test`         | Node test runner over `src/lib/*.test.ts` (lib helpers, upload parser) |
+| `npm run check`    | ESLint + `tsc --noEmit`                                                |
 
 ```bash
 npm run validate
@@ -245,12 +229,14 @@ npm run validate
 
 ## Repository Layout (high level)
 
-| Path                         | Role                                                                              |
-| :--------------------------- | :-------------------------------------------------------------------------------- |
-| `src/app/`                   | Next.js App Router pages and `_components` UI                                     |
-| `src/server/api/`            | tRPC router (`facilities`) and context                                            |
-| `src/server/db/`             | Drizzle schema, queries, LibSQL client (`resolveDatabaseUrl` lives in `index.ts`) |
-| `src/server/campd/client.ts` | EPA sync, granular fetch, ingestion audits                                        |
-| `src/lib/`                   | Domain helpers (emissions math, CAMPD dates, plant narrative, map theming)        |
-| `src/trpc/`                  | React + RSC tRPC clients (`query-client.ts` holds shared React Query setup)       |
-| `scripts/`                   | `db:migrate`, `db:seed`, `sync:campd` CLI entrypoints                             |
+| Path                         | Role                                                                                   |
+| :--------------------------- | :------------------------------------------------------------------------------------- |
+| `src/app/`                   | Next.js App Router pages and `_components` UI                                          |
+| `src/server/api/`            | tRPC router (`facilities`) and context                                                 |
+| `src/server/db/`             | Drizzle schema, queries, LibSQL client (`resolveDatabaseUrl` lives in `index.ts`)      |
+| `src/server/campd/client.ts` | EPA sync and granular fetch                                                            |
+| `src/server/ingest.ts`       | Shared upserts + audit logging for the sync, seed script, and uploads                  |
+| `src/server/data-import.ts`  | File upload preview/commit behind `POST /api/upload`                                   |
+| `src/lib/`                   | Domain helpers (emissions math, CAMPD dates, plant narrative, map theming)             |
+| `src/trpc/`                  | React + RSC tRPC clients (`query-client.ts` holds shared React Query setup)            |
+| `scripts/`                   | `db:migrate`, `db:seed`, `sync:campd` CLI entrypoints; `parse_import.py` upload parser |
