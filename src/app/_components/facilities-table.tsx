@@ -1,18 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Scale,
-  ShieldCheck,
-  Zap,
-} from "lucide-react";
+import { Scale, ShieldCheck, Zap } from "lucide-react";
 import {
   Badge,
   CarbonIntensityBadge,
@@ -22,15 +10,16 @@ import {
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState } from "~/components/ui/empty-state";
-import { Input } from "~/components/ui/input";
-import { Select, toOptions } from "~/components/ui/select";
 import {
+  SortableTableHead,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
+  TablePagination,
   TableRow,
+  TableSkeleton,
 } from "~/components/ui/table";
 import type { SortDirection, SortField } from "~/lib/facility-filters";
 import {
@@ -47,30 +36,35 @@ type FacilityRow = FacilitiesPage["items"][number];
 
 interface RowProps {
   fac: FacilityRow;
+  showRank?: boolean;
   isSelected: boolean;
   onToggleCompare: (id: number) => void;
   onInspect: (id: number) => void;
 }
 
-const SELECTED_ROW =
+export const SELECTED_ROW =
   "bg-emerald-500/10 hover:bg-emerald-500/15 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/30";
 
 const unitLabel = (count: number) =>
   `${count} ${count === 1 ? "unit" : "units"}`;
 
-function CompareCheckbox({
-  fac,
+export function CompareCheckbox({
+  label,
   isSelected,
-  onToggleCompare,
-}: Omit<RowProps, "onInspect">) {
+  onToggle,
+}: {
+  label: string;
+  isSelected: boolean;
+  onToggle: () => void;
+}) {
   return (
     <input
       type="checkbox"
       checked={isSelected}
-      onChange={() => onToggleCompare(fac.id)}
+      onChange={onToggle}
       onClick={(e) => e.stopPropagation()}
       className="border-edge bg-canvas h-4 w-4 cursor-pointer rounded accent-emerald-500 md:h-3.5 md:w-3.5"
-      aria-label={`Select ${fac.name} for comparison`}
+      aria-label={`Select ${label} for comparison`}
     />
   );
 }
@@ -100,6 +94,7 @@ function FacilityBadges({
 
 function FacilityTableRow({
   fac,
+  showRank,
   isSelected,
   onToggleCompare,
   onInspect,
@@ -118,13 +113,13 @@ function FacilityTableRow({
     >
       <TableCell className="text-center">
         <CompareCheckbox
-          fac={fac}
+          label={fac.name}
           isSelected={isSelected}
-          onToggleCompare={onToggleCompare}
+          onToggle={() => onToggleCompare(fac.id)}
         />
       </TableCell>
       <TableCell className="text-fg-muted font-mono text-xs">
-        #{fac.id}
+        {showRank && <RankBadge rank={fac.rank} />}#{fac.id}
       </TableCell>
       <TableCell className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
@@ -194,6 +189,7 @@ function FacilityTableRow({
 
 function FacilityCard({
   fac,
+  showRank,
   isSelected,
   onToggleCompare,
   onInspect,
@@ -210,13 +206,14 @@ function FacilityCard({
         <div className="flex min-w-0 items-start gap-2.5">
           <div className="shrink-0 pt-0.5">
             <CompareCheckbox
-              fac={fac}
+              label={fac.name}
               isSelected={isSelected}
-              onToggleCompare={onToggleCompare}
+              onToggle={() => onToggleCompare(fac.id)}
             />
           </div>
           <div className="min-w-0">
             <h4 className="text-fg truncate text-base font-semibold tracking-tight">
+              {showRank && <RankBadge rank={fac.rank} />}
               {fac.name}
             </h4>
             <div className="text-fg-muted truncate text-xs">
@@ -268,18 +265,13 @@ function FacilityCard({
   );
 }
 
-function pageWindow(page: number, totalPages: number): (number | "…")[] {
-  if (totalPages <= 7)
-    return Array.from({ length: totalPages }, (_, i) => i + 1);
-  const left = Math.max(2, page - 1);
-  const right = Math.min(totalPages - 1, page + 1);
-  return [
-    1,
-    ...(left > 2 ? (["…"] as const) : []),
-    ...Array.from({ length: right - left + 1 }, (_, i) => left + i),
-    ...(right < totalPages - 1 ? (["…"] as const) : []),
-    totalPages,
-  ];
+/** Position under a Top-N ranking (overall or within the state). */
+export function RankBadge({ rank }: { rank: number }) {
+  return (
+    <Badge variant="success" className="mr-1.5 px-1.5 py-0 font-mono">
+      {rank}
+    </Badge>
+  );
 }
 
 const COLUMNS: { label: string; sort?: SortField; className: string }[] = [
@@ -297,6 +289,7 @@ export function FacilitiesTable({
   pageSize,
   sortBy,
   sortDir,
+  showRank,
   isLoading,
   isPlaceholderData,
   onSortChange,
@@ -312,6 +305,7 @@ export function FacilitiesTable({
   pageSize: number;
   sortBy: SortField;
   sortDir: SortDirection;
+  showRank: boolean;
   isLoading: boolean;
   isPlaceholderData: boolean;
   onSortChange: (field: SortField) => void;
@@ -322,61 +316,21 @@ export function FacilitiesTable({
   onPageSizeChange: (pageSize: number) => void;
   onResetFilters: () => void;
 }) {
-  const [jumpPageInput, setJumpPageInput] = useState("");
   const facilities = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
   const totalPages = Math.max(data?.totalPages ?? 1, 1);
   const rowProps = (fac: FacilityRow) => ({
     fac,
+    showRank,
     isSelected: compareIds.includes(fac.id),
     onToggleCompare,
     onInspect,
   });
 
-  const sortIcon = (field: SortField) =>
-    sortBy !== field ? (
-      <ArrowUpDown className="text-fg-muted h-3 w-3 opacity-60" />
-    ) : sortDir === "asc" ? (
-      <ArrowUp className="h-3 w-3 text-emerald-400" />
-    ) : (
-      <ArrowDown className="h-3 w-3 text-emerald-400" />
-    );
-
-  const navButton = (
-    target: number,
-    icon: ReactNode,
-    title: string,
-    className?: string,
-  ) => (
-    <Button
-      key={title}
-      variant="outline"
-      size="icon"
-      disabled={
-        isPlaceholderData ||
-        target < 1 ||
-        target > totalPages ||
-        target === page
-      }
-      onClick={() => onPageChange(target)}
-      className={cn("h-7 w-7", className)}
-      title={title}
-    >
-      {icon}
-    </Button>
-  );
-
   return (
     <DataPanel className="border-edge/80 bg-surface/20 shadow-xs">
       {isLoading ? (
-        <div className="divide-edge/60 divide-y">
-          {Array.from({ length: Math.min(pageSize, 10) }, (_, i) => (
-            <div key={i} className="animate-pulse space-y-2 p-3.5">
-              <div className="bg-surface-2 h-4 w-2/3 rounded" />
-              <div className="bg-surface-2/60 h-3 w-1/3 rounded" />
-            </div>
-          ))}
-        </div>
+        <TableSkeleton rows={pageSize} />
       ) : facilities.length === 0 ? (
         <EmptyState
           title="No facilities match the active filter criteria."
@@ -397,27 +351,13 @@ export function FacilitiesTable({
                     <Scale className="text-fg-muted mx-auto h-3.5 w-3.5" />
                   </TableHead>
                   {COLUMNS.map((col) => (
-                    <TableHead
+                    <SortableTableHead
                       key={col.label}
-                      className={cn(
-                        col.className,
-                        col.sort &&
-                          "hover:text-fg cursor-pointer transition-colors select-none",
-                      )}
-                      onClick={
-                        col.sort ? () => onSortChange(col.sort!) : undefined
-                      }
-                    >
-                      <div
-                        className={cn(
-                          "flex items-center gap-1",
-                          col.className.includes("text-right") && "justify-end",
-                        )}
-                      >
-                        {col.label}
-                        {col.sort && sortIcon(col.sort)}
-                      </div>
-                    </TableHead>
+                      {...col}
+                      sortBy={sortBy}
+                      sortDir={sortDir}
+                      onSortChange={onSortChange}
+                    />
                   ))}
                 </TableRow>
               </TableHeader>
@@ -436,106 +376,16 @@ export function FacilitiesTable({
         </>
       )}
 
-      <div className="border-edge/80 bg-surface/30 flex flex-col items-center justify-between gap-3 border-t px-3 py-2.5 sm:flex-row sm:px-4 sm:py-3">
-        <div className="text-fg-muted flex w-full items-center justify-between gap-3 text-xs sm:w-auto sm:justify-start">
-          <span>
-            Showing{" "}
-            <strong className="text-fg">
-              {totalCount === 0
-                ? 0
-                : ((page - 1) * pageSize + 1).toLocaleString()}
-              –{Math.min(page * pageSize, totalCount).toLocaleString()}
-            </strong>{" "}
-            of{" "}
-            <strong className="text-fg">{totalCount.toLocaleString()}</strong>{" "}
-            <span className="hidden sm:inline">facilities</span>
-          </span>
-          <div className="sm:border-edge flex items-center gap-1.5 sm:border-l sm:pl-3">
-            Per page:
-            <Select
-              value={String(pageSize)}
-              onValueChange={(val) => onPageSizeChange(Number(val))}
-              options={toOptions([10, 25, 50, 100])}
-              size="sm"
-              className="w-16 sm:w-18"
-            />
-          </div>
-        </div>
-
-        <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-end">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const target = Number.parseInt(jumpPageInput, 10);
-              if (target >= 1 && target <= totalPages) {
-                onPageChange(target);
-                setJumpPageInput("");
-              }
-            }}
-            className="border-edge text-fg-muted hidden items-center gap-1 border-r pr-2 text-xs sm:flex"
-          >
-            Go to:
-            <Input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={jumpPageInput}
-              onChange={(e) => setJumpPageInput(e.target.value)}
-              placeholder={String(page)}
-              className="h-7 w-12 px-1 text-center text-xs"
-            />
-          </form>
-
-          {navButton(
-            1,
-            <ChevronsLeft className="h-3.5 w-3.5" />,
-            "First page",
-            "hidden sm:inline-flex",
-          )}
-          {navButton(
-            page - 1,
-            <ChevronLeft className="h-3.5 w-3.5" />,
-            "Previous page",
-          )}
-          <div className="hidden items-center gap-1 sm:flex">
-            {pageWindow(page, totalPages).map((p, idx) =>
-              p === "…" ? (
-                <span
-                  key={`gap-${idx}`}
-                  className="text-fg-muted px-1 text-xs select-none"
-                >
-                  …
-                </span>
-              ) : (
-                <Button
-                  key={p}
-                  variant={p === page ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => onPageChange(p)}
-                  disabled={isPlaceholderData}
-                  className="h-7 min-w-7 px-1.5"
-                >
-                  {p}
-                </Button>
-              ),
-            )}
-          </div>
-          <span className="text-fg-2 font-mono text-xs sm:hidden">
-            Page {page} of {totalPages}
-          </span>
-          {navButton(
-            page + 1,
-            <ChevronRight className="h-3.5 w-3.5" />,
-            "Next page",
-          )}
-          {navButton(
-            totalPages,
-            <ChevronsRight className="h-3.5 w-3.5" />,
-            "Last page",
-            "hidden sm:inline-flex",
-          )}
-        </div>
-      </div>
+      <TablePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        itemLabel="facilities"
+        isPlaceholderData={isPlaceholderData}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />
     </DataPanel>
   );
 }

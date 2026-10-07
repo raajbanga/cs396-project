@@ -1,9 +1,15 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { CheckCircle2, Database, FileUp, Loader2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Database,
+  FileDown,
+  FileUp,
+  Loader2,
+} from "lucide-react";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { Button, buttonClass } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -17,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { exportUrl } from "~/lib/csv";
 import {
   canImport,
   checkUploadFile,
@@ -473,9 +480,21 @@ function ImportSuccess({ result }: { result: ImportResult }) {
           subtext="See the Audits tab"
         />
       </KpiStrip>
-      <p className="text-fg-muted font-mono text-xs">
-        Dataset ID {result.datasetId}
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {result.issues > 0 && (
+          <a
+            href={exportUrl("invalid", { id: result.datasetId })}
+            download
+            className={buttonClass({ variant: "outline", size: "sm" })}
+          >
+            <FileDown className="h-3.5 w-3.5 text-red-400" />
+            Download rejected rows ({count(result.issues)})
+          </a>
+        )}
+        <p className="text-fg-muted font-mono text-xs sm:ml-auto">
+          Dataset ID {result.datasetId}
+        </p>
+      </div>
     </div>
   );
 }

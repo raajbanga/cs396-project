@@ -28,3 +28,14 @@ export const DATASET_SOURCE_LABELS: Record<string, string> = {
   BULK_CSV: "CSV upload",
   BULK_EXCEL: "Excel upload",
 };
+
+/** A dataset's history status: a failed retrieval, superseded by a later one, or active. */
+export const datasetStatus = (d: {
+  notes: string | null;
+  superseded: boolean;
+}) =>
+  d.notes?.startsWith("Error")
+    ? ("Error" as const)
+    : d.superseded
+      ? ("Superseded" as const)
+      : ("Active" as const);

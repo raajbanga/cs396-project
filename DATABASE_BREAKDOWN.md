@@ -177,18 +177,18 @@ Drizzle property names below; SQLite column names are snake_case equivalents. Se
 
 Represents the physical power plant installation.
 
-| Column           | Type                  | What It Means                                                                   | Where and How It Is Used                                                                                                                        |
-| :--------------- | :-------------------- | :------------------------------------------------------------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`             | `INTEGER PRIMARY KEY` | EPA ORISPL Plant code.                                                          | **Core ID**: Table searches (exact numeric lookup), URL routes, inspect modals, benchmark comparison selections, foreign key joins.             |
-| `name`           | `TEXT`                | Legal plant name (e.g. "Cumberland", "W.A. Parish").                            | **Display & Search**: Table title, fuzzy text search, map marker tooltips, head-to-head comparison cards.                                       |
-| `stateCode`      | `TEXT(2)`             | Two-letter state postal abbreviation.                                           | **Filtering & Grouping**: State filter dropdown, table badges, map coloring, and regional queries.                                              |
-| `county`         | `TEXT`                | County where the plant is located.                                              | **Context & Search**: Fuzzy search matches counties; displayed in facility inspector modal and comparison sheets.                               |
-| `latitude`       | `REAL`                | GPS North coordinate.                                                           | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                     |
-| `longitude`      | `REAL`                | GPS West coordinate.                                                            | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                     |
-| `epaRegion`      | `INTEGER`             | Federal EPA administrative zone (1 through 10).                                 | **Inspection**: Displayed in the plant detail dialog for regulatory context.                                                                    |
-| `nercRegion`     | `TEXT`                | Electric reliability grid council (ERCOT, PJM/RFC, WECC, SERC, MRO, SPP, etc.). | **Grid Analysis & Filtering**: NERC dropdown filter, KPI count of distinct regions (`getStats.totalNercRegions`), comparison dialog grid specs. |
-| `sourceCategory` | `TEXT`                | Classification (Electric Utility, Cogeneration, Small Power Producer, etc.).    | **Display & Classification**: Table tags and facility detail inspector (not a filter dropdown).                                                 |
-| `ownerOperator`  | `TEXT`                | Parent utility or corporate owner (e.g. Duke Energy, Southern Company).         | **Search & Accountability**: Included in full-text search matching and displayed on plant cards.                                                |
+| Column           | Type                  | What It Means                                                                   | Where and How It Is Used                                                                                                                                     |
+| :--------------- | :-------------------- | :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`             | `INTEGER PRIMARY KEY` | EPA ORISPL Plant code.                                                          | **Core ID**: Table searches (exact numeric lookup), URL routes, inspect modals, benchmark comparison selections, foreign key joins.                          |
+| `name`           | `TEXT`                | Legal plant name (e.g. "Cumberland", "W.A. Parish").                            | **Display & Search**: Table title, fuzzy text search, map marker tooltips, head-to-head comparison cards.                                                    |
+| `stateCode`      | `TEXT(2)`             | Two-letter state postal abbreviation.                                           | **Filtering & Grouping**: State filter dropdown, table badges, map coloring, and regional queries.                                                           |
+| `county`         | `TEXT`                | County where the plant is located.                                              | **Context & Search**: Fuzzy search matches counties; exact County filter (§8.1, indexed by `facility_county_idx`); facility inspector and comparison sheets. |
+| `latitude`       | `REAL`                | GPS North coordinate.                                                           | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                                  |
+| `longitude`      | `REAL`                | GPS West coordinate.                                                            | **Mapping**: Used by Leaflet 2D maps and D3 3D orthographic globe to pin plant coordinates.                                                                  |
+| `epaRegion`      | `INTEGER`             | Federal EPA administrative zone (1 through 10).                                 | **Inspection**: Displayed in the plant detail dialog for regulatory context.                                                                                 |
+| `nercRegion`     | `TEXT`                | Electric reliability grid council (ERCOT, PJM/RFC, WECC, SERC, MRO, SPP, etc.). | **Grid Analysis & Filtering**: NERC dropdown filter, KPI count of distinct regions (`getStats.totalNercRegions`), comparison dialog grid specs.              |
+| `sourceCategory` | `TEXT`                | Classification (Electric Utility, Cogeneration, Small Power Producer, etc.).    | **Display & Classification**: Table tags and facility detail inspector (not a filter dropdown).                                                              |
+| `ownerOperator`  | `TEXT`                | Parent utility or corporate owner (e.g. Duke Energy, Southern Company).         | **Search & Accountability**: Included in full-text search matching and displayed on plant cards.                                                             |
 
 ### Table 2: `units`
 
@@ -361,13 +361,25 @@ flowchart LR
 ### View 2: Facilities Explorer Table (`FacilitiesTable` & `FacilityFilters`)
 
 - **Purpose**: The primary interactive workspace for browsing, searching, and filtering all ~1,600 facilities.
-- **Queries Used**: `api.facilities.getFilterOptions` (dropdown values) and `api.facilities.getFacilities` (pagination, text search, state / NERC / primary-fuel filters)
+- **Queries Used**: `api.facilities.getFilterOptions` (dropdown values) and `api.facilities.getFacilities` (pagination, text search, state / NERC / primary-fuel filters, plus the §8 "More filters" panel shared with View 2b)
 - **What Part of the Table It Uses**:
   - **From `facilities`**: `id`, `name`, `stateCode`, `county`, `nercRegion`, `sourceCategory`, `ownerOperator`.
   - **Aggregated from `units`**: unit count, total capacity, fuel badges, controlled-units count.
-  - **Aggregated from `annual_records`**: total CO₂, total operating hours, carbon intensity — **summed across all years** in the database (not filtered to a single reporting year).
+  - **Aggregated from `annual_records`**: total CO₂, total operating hours, carbon intensity — summed across all years, or **only the chosen reporting year** when the Year filter is set.
+  - **Unit / unit-year filters** (fuel, unit type, controls, unit ID, year, min/max ranges) keep facilities with at least one matching unit(-year) (`IN` subqueries).
+  - **Ranking (§8.3)**: `ROW_NUMBER() OVER ([PARTITION BY state_code] ORDER BY <sort column>)`; "First N" keeps ranks ≤ N, overall or per state (e.g. top CO₂ facility in each state).
   - **Carbon intensity badge tiers** (`CarbonIntensityBadge`): clean if `< 950`, intermediate if `950–1600`, high if `> 1600` lbs/MWh.
 - **Why It’s Built This Way**: The backend rolls up each facility into one row. Pagination (10/25/50 per page) keeps responses small.
+
+---
+
+### View 2b: Units Explorer (`UnitsTable`, `UnitDetailDialog`) — §8 search
+
+- **Purpose**: The data explorer at unit-year grain: one row per facility-unit-year.
+- **Queries Used**: `api.facilities.getUnitYears` (filters, sort on every metric, ranking, paging) and `api.facilities.getUnit` (detail dialog).
+- **What Part of the Table It Uses**: `annual_records ⨝ units ⨝ facilities`. Basic filters (§8.1): facility ID, name search, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control (fuels, type, and controls match by "contains" because units store combined values such as `Wet Lime FGD|Wet Limestone`; the dropdowns list the split values). Range filters (§8.2): min/max operating hours, gross load, heat input, CO₂, SO₂, NOₓ, inclusive. Everything ANDs together.
+- **Ranking (§8.3)**: Top-N / Bottom-N = sort column + direction with "First N"; per-state groups via `ROW_NUMBER() OVER (PARTITION BY state_code …)`. Units can be added to the compare dock (mixed with facilities, 2–4 total; `compareFacilities({ ids, unitIds })`). The unit dialog shows identification, fuel + controls, every reporting year with its source dataset, and audit flags.
+- **URL state (§8.4)**: tab, filters, sort, and page are mirrored into the query string (`explorerSearchParams` / `parseExplorerParams`) and read by `page.tsx`, so a search is shareable and reload-safe. Example: `/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500001` (25 units).
 
 ---
 
