@@ -12,6 +12,7 @@ import {
   hasAirQualityControls,
   isOperatingStatus,
 } from "~/lib/plant-narrative";
+import { uniqueStrings } from "~/lib/utils";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   fetchGranularEmissionsForFacility,
@@ -89,9 +90,6 @@ async function distinctValues(database: typeof Database, column: SQLiteColumn) {
     .orderBy(asc(column));
   return rows.map((r) => String(r.value));
 }
-
-const uniqueStrings = (values: (string | null)[]) =>
-  [...new Set(values)].filter((v): v is string => Boolean(v));
 
 export const facilitiesRouter = createTRPCRouter({
   getStats: publicProcedure.query(async ({ ctx }) => {

@@ -37,6 +37,8 @@ interface GeoLayers {
 
 const MIN_SCALE = 160;
 const MAX_SCALE = 10000;
+const clampScale = (scale: number) =>
+  Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
 const HOME_VIEW = { yaw: 98, pitch: -38, scale: 380 };
 const PRESETS = [
   { label: "US", ...HOME_VIEW },
@@ -373,6 +375,18 @@ export function D3Globe({
     return () => cancelAnimationFrame(frame);
   }, [autoRotate]);
 
+  // React attaches wheel listeners as passive, so zoom needs a native listener to block page scroll.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setScale((s) => clampScale(s * Math.exp(-e.deltaY * 0.0015)));
+    };
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, []);
+
   const plantAt = (
     e: React.PointerEvent<HTMLCanvasElement>,
     tolerance: number,
@@ -445,13 +459,7 @@ export function D3Globe({
     if (target) onInspectFacility(target.id);
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    zoomBy(Math.exp(-e.deltaY * 0.0015));
-  };
-
-  const zoomBy = (factor: number) =>
-    setScale((s) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, s * factor)));
+  const zoomBy = (factor: number) => setScale((s) => clampScale(s * factor));
 
   const goTo = ({ yaw, pitch, scale }: typeof HOME_VIEW) => {
     setRotation([yaw, pitch, 0]);
@@ -479,7 +487,6 @@ export function D3Globe({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onWheel={handleWheel}
         className="h-full w-full touch-none"
       />
 

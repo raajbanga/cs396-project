@@ -5,6 +5,10 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Distinct non-empty strings, in first-seen order. */
+export const uniqueStrings = (values: (string | null | undefined)[]) =>
+  [...new Set(values)].filter((v): v is string => Boolean(v));
+
 /** Locale-formatted quantity with an optional unit; zero/missing renders `fallback`. */
 export function formatQuantity(
   value: number | null | undefined,
