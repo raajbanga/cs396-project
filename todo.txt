@@ -1,31 +1,117 @@
-Here is the next feature we need to add to this project:
+epaData Phase 1 — Remaining Work (mini PRD)
+Audited against epaData_requirements.txt on 2026-10-06. Work top to bottom.
 
-The application must provide a web form through which users can upload data.
-The initial version should support:
-● CSV
-● Excel
-The upload process should include the following steps:
-1. Select or drag a file into the upload page.
-2. Validate the file extension and size.
-3. read the file using Python.
-4. Identify the available columns.
-5. Compare the columns with the required project schema.
-6. Detect missing values and invalid values.
-7. Detect duplicate facility-unit-year records.
-8. Display a preview and validation report.
-9. Allow the user to approve or cancel the import.
-10. Store approved records in the database.
-11. Preserve upload metadata and, where appropriate, the original file.
-The system must not silently discard invalid records. Rejected or questionable records should be
-listed in a data-quality report.
+ALREADY DONE: §6 Upload (CSV/Excel, Python validation, preview, approve/cancel,
+dupes, rejected-row report, archive), facility compare, facility detail dialog,
+facility-level pagination/sort, CAMPD key kept server-side (CAMPD_API env var).
 
----
+GROUND RULES (apply to every step)
+- DRY + uniform UI: new views reuse the hooks/patterns already in
+  DatabaseExplorer (api.*.useQuery, useState table/filter state from
+  ~/lib/facility-filters, useDeferredValue) and src/components/ui/* primitives.
+  No new custom hooks, no parallel components.
+- New views are DIALOGS opened from DatabaseExplorer, like Inspect/Compare/Upload
+  (no new Next.js routes).
+- Extend facilityFilterSchema + the facilities router; don't fork query paths.
+- One drizzle migration per step that touches schema; update README ER diagram
+  + DATABASE_BREAKDOWN.md in the same step.
+- `npm run validate` passes at the end of each step.
 
-Create a button on the top row that will open to the file upload section.
-Create a new UI Page, similar to the Inspect/Compare Pages.
+================================================================================
+STAGE 1 — QUICK WINS  ✅ DONE 2026-10-06 (npm run validate passes)
+================================================================================
 
-After the file is uploaded read the data and show a summary of it, along with the columns/rows. And where the information is being sent into the database, and save it.
+1. Housekeeping ✅
+   [x] Stray venv path/to/ removed; repo venv at .venv (gitignored).
+       Server + tests use .venv/bin/python3 when present (src/lib/python.ts).
+   [x] Stale uploads/staged_*.csv deleted.
+   [x] db.sqlite kept as committed sample dataset; ignore line removed.
+   [x] FIX: CLI scripts never loaded .env → now `tsx --env-file=.env`.
+   [x] FIX: db.sqlite had no __drizzle_migrations (built via push); baselined
+       0000/0001 so `npm run db:migrate` works. drizzle-kit added as devDep,
+       new `npm run db:generate`.
 
-Make sure you aren't creating any new hooks. Maintain a DRY codebase
+2. Schema migration ✅ (drizzle/0002_wakeful_obadiah_stane.sql)
+   [x] annual_records.steam_load_klb (CAMPD steamLoad / "Steam Load (1000 lb)").
+   [x] units.retirement_date (mapped from "Retirement Date" uploads).
+   [x] datasets.original_filename, archived_path, query_params (JSON), notes.
+   [x] import_issues table; every upload stores ALL rejected/duplicate rows
+       (parser emits uncapped `rejectedRows`; not sent to the browser).
+       Audit flags stay in data_audit_logs (not duplicated here).
+   [x] Tests: steam load, retirement date, rejectedRows (12/12 pass).
+   [x] README ER diagram + DATABASE_BREAKDOWN.md updated.
 
-The test cases for the data imports are located in the /dataImports folder
+3. CAMPD sync year arguments ✅
+   [x] npm run sync:campd -- --year N | --from N --to M (default last year).
+   [x] Params stored in datasets.query_params.
+   [x] Backfilled 2015–2025 (~4.0–4.7k unit-years each, ~47k total).
+   [x] Tiny 2–9 record datasets were leftovers from an older dev run
+       (2026-09-10), not a sync bug: a full 2024 sync returns 4,024 rows.
+
+4. Provenance + coverage ✅
+   [x] Home: DataCoverage strip (sources, records per year, datasets + last
+       import) fed by the existing getStats query.
+   [x] Facility detail: each unit-year row shows dataset source + import date.
+
+Stage 1 follow-ups ✅
+   [x] Superseded datasets kept as retrieval history (§5). An API dataset that
+       owns no annual_records = superseded (computed, no schema change);
+       home coverage shows "N active (+M superseded)". Uploads never marked.
+   [x] Sync pages until a short page (cap MAX_SYNC_PAGES=100 → 50k rows,
+       throws if hit) instead of a fixed 10-page / 5,000-row limit.
+   [x] 2026 re-synced: 3,959 records (EPA has published part of the year).
+       DB now covers 2015–2026, 12 active datasets.
+   [ ] Re-sync 2026 periodically as EPA publishes more quarters.
+
+================================================================================
+STAGE 2 — §5 RETRIEVAL DIALOG
+================================================================================
+5. [ ] Header button "Retrieve" → dialog (same shell as DataUploadDialog).
+   [ ] Filters: year(s), state, facility ID, fuel, unit type, control tech →
+       tRPC mutation wrapping syncCampdAnnualEmissions (params passed to CAMPD;
+       extend its queryParams, already stored per dataset).
+   [ ] Status (running / done / error) + record counts.
+   [ ] Past retrievals list from datasets (source, date, params, counts, year);
+       label superseded rows via isSuperseded in the facilities router.
+
+================================================================================
+STAGE 3 — §8 SEARCH (data explorer)
+================================================================================
+6. [ ] Unit-year query: annual_records ⨝ units ⨝ facilities, one row per
+       facility-unit-year. Facilities / Units toggle via existing SegmentedControl.
+7. [ ] Basic filters (8.1): facility ID, unit ID, county, year, secondary fuel,
+       unit type, SO2/NOx/PM control (contains). Options from getFilterOptions;
+       render in FacilityFilterBar's existing select list.
+8. [ ] Range filters (8.2): min/max operating hours, gross load, heat input,
+       CO2, SO2, NOx. All filters AND together.
+       Acceptance: KY + coal + 2025 + CO2 > 500,000 returns the right units.
+9. [ ] Ranking (8.3): Top-N / Bottom-N by any metric; top N per state
+       (ROW_NUMBER() OVER PARTITION BY state); unit compare across facilities
+       (extend compare dock); unit history across years.
+10.[ ] Results (8.4): sortable on every metric, paginated (reuse
+       FacilitiesTable pagination), row → unit detail dialog (identification,
+       operating data, emissions by year, fuel + controls, source + year).
+   [ ] Sync filters/sort/page to URL query params (shareable, reload-safe).
+   [ ] Indexes: annual_records(year), units(unit_type), units(secondary_fuel),
+       facilities(county).
+
+================================================================================
+STAGE 4 — §10 DOWNLOAD (CSV)
+================================================================================
+11.[ ] GET /api/export?type=…&<filters> → text/csv with Content-Disposition;
+       one shared CSV writer (quote/comma/newline escaping) + test.
+12.[ ] Types: dataset (by id), search (same filter schema as §8, no paging),
+       selection (compare selection), valid (accepted rows of an upload),
+       invalid (import_issues), provenance (datasets + query_params).
+13.[ ] Download dialog: dataset picker, filters, format (CSV), Download button.
+   [ ] "Download CSV" on explorer results; "Download rejected rows" in the
+       upload report (reads import_issues, already populated since Stage 1).
+
+================================================================================
+STAGE 5 — DELIVERABLES (§11)
+================================================================================
+14.[ ] README updated for all of the above.
+   [ ] Project report: sources, assumptions (controls/program code stored per
+       unit not per unit-year), equations, units, limitations, and why
+       Next.js was used instead of the spec's Flask.
+   [ ] Presentation slides.

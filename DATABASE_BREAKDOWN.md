@@ -82,6 +82,7 @@ erDiagram
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
     DATASETS ||--o{ ANNUAL_RECORDS : "originates"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
+    DATASETS ||--o{ IMPORT_ISSUES : "rejects"
 
     FACILITIES {
         integer id PK "ORISPL Plant ID (e.g. 3, 56, 1378)"
@@ -105,6 +106,7 @@ erDiagram
         text secondary_fuel "Backup fuel"
         text operating_status "Operating, Retired, etc."
         text commercial_op_date "Original commissioning date"
+        text retirement_date "Retirement date, if retired"
         real max_hourly_hi_rate "Max heat input rating (MMBtu/hr)"
         real nameplate_capacity_mw "Electric generator size in Megawatts"
         text so2_controls "Flue gas desulfurization / scrubbers"
@@ -123,6 +125,10 @@ erDiagram
         integer raw_record_count "Total records received from EPA"
         integer valid_records "Successfully saved records"
         integer flagged_records "Records with sanity anomalies"
+        text original_filename "Uploaded file name (uploads only)"
+        text archived_path "Copy of the original file under uploads/"
+        text query_params "CAMPD retrieval parameters as JSON (API only)"
+        text notes "Free-text notes, e.g. rejected/duplicate counts"
     }
 
     ANNUAL_RECORDS {
@@ -134,11 +140,21 @@ erDiagram
         real operating_hours "Hours the unit ran during the year"
         real gross_generation_mwh "Total electrical generation"
         real heat_input_mmbtu "Total thermal fuel consumed"
+        real steam_load_klb "Steam load (1000 lb)"
         real co2_mass_tons "Mass of CO₂ emitted"
         real so2_mass_tons "Mass of SO₂ emitted"
         real nox_mass_tons "Mass of NOₓ emitted"
         real co2_intensity_lbs_mwh "Stored derived intensity"
         real heat_rate_mmbtu_mwh "Stored derived heat rate"
+    }
+
+    IMPORT_ISSUES {
+        text id PK "UUID"
+        text dataset_id FK "References datasets.id"
+        integer row_number "Row in the uploaded file"
+        text kind "REJECTED | DUPLICATE"
+        text reason "Why the row was not stored"
+        text raw_row "Original row as JSON"
     }
 
     DATA_AUDIT_LOGS {
@@ -188,6 +204,7 @@ Represents individual generating machines (boilers, combustion turbines, generat
 | `secondaryFuel`       | `TEXT`             | Backup or startup fuel.                                                 | **Comparison**: Displayed in the comparison dialog to show multi-fuel flexibility.                                          |
 | `operatingStatus`     | `TEXT`             | Status (Operating, Retired, Cold Standby).                              | **Fleet Health**: Displayed in the unit breakdown table; used in comparison to count active vs retired units.               |
 | `commercialOpDate`    | `TEXT`             | Year/date the unit entered commercial service.                          | **Age Analysis**: Displayed in the unit table to indicate equipment age and generation era.                                 |
+| `retirementDate`      | `TEXT`             | Date the unit retired, if any.                                          | **Stored only**: Mapped from uploads with a "Retirement Date" column; not shown in the UI today.                            |
 | `maxHourlyHIRate`     | `REAL`             | Maximum design heat input rate (MMBtu/hour).                            | **Stored only**: Populated from CSV seed data; not shown in the UI today.                                                   |
 | `nameplateCapacityMW` | `REAL`             | Electrical generator nameplate capacity in Megawatts (MW).              | **Capacity Aggregations**: Summed at the plant level for table sorting, map pin scaling, and KPI cards (`totalCapacityMW`). |
 | `so2Controls`         | `TEXT`             | Sulfur scrubbers (e.g., Wet Limestone Scrubber).                        | **Environmental Abatement**: Checked to compute "controlled units count" badge in table; detailed in comparison modal.      |
@@ -210,6 +227,7 @@ Stores the annual operational metrics and pollution mass for one unit for one ca
 | `operatingHours`     | `REAL`             | Number of hours the machine ran during the year.                                                                  | **Utilization & Sanity**: Aggregated to total plant run time; audited against generation (`PHANTOM_GENERATION` check).                 |
 | `grossGenerationMWh` | `REAL`             | Total electricity produced (Megawatt-hours).                                                                      | **Productivity & Intensity**: Summed for total generation KPI; serves as the denominator for carbon intensity and heat rate.           |
 | `heatInputMMBtu`     | `REAL`             | Total fuel thermal energy consumed.                                                                               | **Efficiency**: Summed to determine fuel volume; numerator for heat rate calculation.                                                  |
+| `steamLoadKlb`       | `REAL`             | Steam delivered for non-electric use (1000 lb); 0 for units without steam output.                                 | **Stored only**: Synced from CAMPD `steamLoad` and uploads; summed in yearly rollups.                                                  |
 | `co2MassTons`        | `REAL`             | Weight of carbon dioxide released (short tons).                                                                   | **Emissions Impact**: Summed for plant-level CO₂ rank, map bubble scaling, KPI totals, and carbon intensity numerator.                 |
 | `so2MassTons`        | `REAL`             | Weight of sulfur dioxide released (short tons).                                                                   | **Acid Rain Tracking**: Displayed in annual unit history and plant comparison benchmark.                                               |
 | `noxMassTons`        | `REAL`             | Weight of nitrogen oxides released (short tons).                                                                  | **Smog Tracking**: Displayed in annual unit history and plant comparison benchmark.                                                    |
@@ -233,16 +251,35 @@ Records anomalies discovered during data ingestion by the automated physical san
 
 Tracks batch ingestion history from the EPA REST API or uploaded CSV/Excel files.
 
-| Column           | Type               | What It Means                                                         | Where and How It Is Used                                                          |
-| :--------------- | :----------------- | :-------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
-| `id`             | `TEXT PRIMARY KEY` | UUID batch ID.                                                        | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
-| `name`           | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                   | **Provenance**: Identifies which import run last touched linked `annual_records`. |
-| `source`         | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads). | **Data Lineage**: Distinguishes ingestion channels.                               |
-| `reportingYear`  | `INTEGER`          | The calendar year ingested.                                           | **Lineage**: Calendar year the batch applied to.                                  |
-| `importedAt`     | `INTEGER`          | Unix timestamp when the job ran.                                      | **Audit Trail**: When the sync completed.                                         |
-| `rawRecordCount` | `INTEGER`          | Total records parsed from EPA.                                        | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
-| `validRecords`   | `INTEGER`          | Clean records saved to database.                                      | **Health Check**: Returned by CLI output.                                         |
-| `flaggedRecords` | `INTEGER`          | Records that raised physics audit flags.                              | **Health Check**: Returned by CLI output.                                         |
+Rows are never deleted: a re-sync of a year moves its `annual_records` to the new batch, and the earlier API batch is kept as retrieval history. The app treats an API batch that owns no records as **superseded** (`isSuperseded` in the facilities router) and counts only active batches on the home page. Uploads are never marked superseded, because facility files own no annual records by design.
+
+| Column             | Type               | What It Means                                                         | Where and How It Is Used                                                          |
+| :----------------- | :----------------- | :-------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `id`               | `TEXT PRIMARY KEY` | UUID batch ID.                                                        | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
+| `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                   | **Provenance**: Identifies which import run last touched linked `annual_records`. |
+| `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads). | **Data Lineage**: Distinguishes ingestion channels.                               |
+| `reportingYear`    | `INTEGER`          | The calendar year ingested.                                           | **Lineage**: Calendar year the batch applied to.                                  |
+| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                      | **Audit Trail**: When the sync completed.                                         |
+| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                        | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
+| `validRecords`     | `INTEGER`          | Clean records saved to database.                                      | **Health Check**: Returned by CLI output.                                         |
+| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                              | **Health Check**: Returned by CLI output.                                         |
+| `originalFilename` | `TEXT`             | Uploaded file name (uploads only).                                    | **Provenance**: Which file a batch came from.                                     |
+| `archivedPath`     | `TEXT`             | Copy of the original file under `uploads/`.                           | **Provenance**: Lets the original upload be recovered.                            |
+| `queryParams`      | `TEXT` (JSON)      | CAMPD request parameters (endpoint, year, paging) for API syncs.      | **Reproducibility**: Records exactly what was retrieved.                          |
+| `notes`            | `TEXT`             | Free text (uploads record rejected/duplicate counts).                 | **Provenance**: Shown alongside the batch.                                        |
+
+### Table 6: `import_issues`
+
+The data-quality report for each upload: every row that was rejected or skipped as a duplicate, so invalid records are never silently discarded.
+
+| Column      | Type               | What It Means                                        | Where and How It Is Used                               |
+| :---------- | :----------------- | :--------------------------------------------------- | :----------------------------------------------------- |
+| `id`        | `TEXT PRIMARY KEY` | UUID.                                                | **Key**.                                               |
+| `datasetId` | `TEXT`             | Foreign key referencing `datasets.id` (cascade).     | **Provenance**: Ties the issue to its upload batch.    |
+| `rowNumber` | `INTEGER`          | Data row number in the uploaded file (1 = first).    | **Traceability**: Find the row in the original file.   |
+| `kind`      | `TEXT`             | `REJECTED` (invalid values) or `DUPLICATE`.          | **Categorization**.                                    |
+| `reason`    | `TEXT`             | Every failing field and why, or the duplicate's row. | **Data-quality report**.                               |
+| `rawRow`    | `TEXT` (JSON)      | The original row, header → cell text.                | **Export**: Basis for the planned invalid-records CSV. |
 
 ---
 
@@ -478,4 +515,4 @@ sequenceDiagram
 
 ## 8. Conclusion
 
-Five normalized relational tables, on-demand multi-resolution temporal slicing (Hourly, Daily, Weekly, Monthly, Yearly), ingestion-time physics audits, and per-view server aggregations keep the UI fast on a lightweight SQLite/LibSQL database — even with ~1,600 facilities and ~5,000 units.
+Six normalized relational tables, on-demand multi-resolution temporal slicing (Hourly, Daily, Weekly, Monthly, Yearly), ingestion-time physics audits, and per-view server aggregations keep the UI fast on a lightweight SQLite/LibSQL database — even with ~1,600 facilities and ~5,000 units.

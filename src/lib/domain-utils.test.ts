@@ -127,6 +127,7 @@ void test("yearly rollups aggregate records by reporting year", () => {
       so2MassTons: 0,
       noxMassTons: 0,
       heatInputMMBtu: 800,
+      steamLoadKlb: 0,
       operatingHours: 4000,
     },
     {
@@ -137,6 +138,7 @@ void test("yearly rollups aggregate records by reporting year", () => {
       so2MassTons: 0,
       noxMassTons: 0,
       heatInputMMBtu: 400,
+      steamLoadKlb: 0,
       operatingHours: 2000,
     },
   ]);

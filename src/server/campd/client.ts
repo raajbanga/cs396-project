@@ -32,6 +32,8 @@ import {
 
 const CAMPD_BASE_URL =
   "https://api.epa.gov/easey/emissions-mgmt/emissions/apportioned";
+/** Safety cap for one annual sync: 100 pages × 500 = 50,000 unit-years (~4,700 today). */
+const MAX_SYNC_PAGES = 100;
 
 type CampdRow = Record<string, unknown>;
 
@@ -77,6 +79,7 @@ const METRIC_ALIASES: Record<keyof EmissionTotals, string[]> = {
   ],
   grossGenerationMWh: ["grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"],
   heatInputMMBtu: ["heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"],
+  steamLoadKlb: ["steamLoad", "steamLoadKlb", "Steam Load (1000 lb)"],
   co2MassTons: ["co2Mass", "co2MassTons", "CO2 (short tons)"],
   so2MassTons: ["so2Mass", "so2MassTons", "SO2 (short tons)"],
   noxMassTons: ["noxMass", "noxMassTons", "NOx (short tons)"],
@@ -242,18 +245,18 @@ async function fetchAllCampdPages(
 export async function syncCampdAnnualEmissions({
   year,
   perPage = 500,
-  maxPages = 10,
 }: {
   year: number;
   perPage?: number;
-  maxPages?: number;
 }) {
+  perPage = Math.min(perPage, 500);
   const datasetId = crypto.randomUUID();
   await db.insert(datasets).values({
     id: datasetId,
     name: `CAMPD API ${year} Ingestion Batch`,
     source: "API",
     reportingYear: year,
+    queryParams: { endpoint: "/annual", year, perPage },
   });
 
   let rawRecordCount = 0;
@@ -261,16 +264,22 @@ export async function syncCampdAnnualEmissions({
   let flaggedRecords = 0;
   let anomalyCount = 0;
 
-  for (let page = 1; page <= maxPages; page++) {
+  // Pages until a short one; the cap only guards against a runaway API.
+  for (let page = 1; page <= MAX_SYNC_PAGES; page++) {
     const { items, error } = await fetchCampd(
       "/annual",
       new URLSearchParams({
         year: String(year),
         page: String(page),
-        perPage: String(Math.min(perPage, 500)),
+        perPage: String(perPage),
       }),
     );
     if (error) throw new Error(`CAMPD API error: ${error}`);
+    if (page === MAX_SYNC_PAGES && items.length === perPage) {
+      throw new Error(
+        `CAMPD returned more than ${MAX_SYNC_PAGES * perPage} records for ${year}; raise MAX_SYNC_PAGES.`,
+      );
+    }
     if (items.length === 0) break;
     rawRecordCount += items.length;
 
@@ -313,6 +322,7 @@ export async function syncCampdAnnualEmissions({
     validRecords += records.length;
     flaggedRecords += flagged.flaggedRecords;
     anomalyCount += flagged.anomalyCount;
+    if (items.length < perPage) break;
   }
 
   await db
@@ -426,6 +436,7 @@ function roundTotals(
     operatingHours: round(t.operatingHours, hours),
     grossGenerationMWh: round(t.grossGenerationMWh),
     heatInputMMBtu: round(t.heatInputMMBtu),
+    steamLoadKlb: round(t.steamLoadKlb),
     co2MassTons: round(t.co2MassTons, co2),
     so2MassTons: round(t.so2MassTons, pollutants),
     noxMassTons: round(t.noxMassTons, pollutants),
@@ -609,6 +620,7 @@ export async function fetchGranularEmissionsForFacility(options: {
         operatingHours: sum(annualRecords.operatingHours),
         grossGenerationMWh: sum(annualRecords.grossGenerationMWh),
         heatInputMMBtu: sum(annualRecords.heatInputMMBtu),
+        steamLoadKlb: sum(annualRecords.steamLoadKlb),
         co2MassTons: sum(annualRecords.co2MassTons),
         so2MassTons: sum(annualRecords.so2MassTons),
         noxMassTons: sum(annualRecords.noxMassTons),

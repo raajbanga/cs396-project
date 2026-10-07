@@ -22,6 +22,7 @@ import { type db as Database } from "~/server/db";
 import {
   annualRecords,
   dataAuditLogs,
+  datasets,
   facilities,
   units,
 } from "~/server/db/schema";
@@ -47,6 +48,14 @@ const SORT_COLUMNS = {
   capacity: sql`total_capacity_mw`,
   co2: sql`total_co2_tons`,
 };
+
+/**
+ * An API sync whose records were all taken over by a later sync of the same year. Kept as
+ * retrieval history. Uploads are never marked: facility files own no annual records by design.
+ */
+const isSuperseded = sql`(${datasets.source} = 'API' AND NOT EXISTS (
+  SELECT 1 FROM ${annualRecords} WHERE ${annualRecords.datasetId} = ${datasets.id}
+))`;
 
 const notBlank = (col: SQLiteColumn) =>
   sql`${col} IS NOT NULL AND ${col} != ''`;
@@ -104,7 +113,24 @@ export const facilitiesRouter = createTRPCRouter({
         totalAnomalies: sql<number>`(SELECT COUNT(*) FROM ${dataAuditLogs})`,
       })
       .from(facilities);
-    return stats!;
+    const coverage = await ctx.db
+      .select({ year: annualRecords.year, records: count() })
+      .from(annualRecords)
+      .groupBy(annualRecords.year)
+      .orderBy(annualRecords.year);
+    const sources = await ctx.db
+      .select({
+        source: datasets.source,
+        datasets: sql<number>`SUM(NOT ${isSuperseded})`,
+        superseded: sql<number>`SUM(${isSuperseded})`,
+        lastImportedAt: sql<number>`MAX(${datasets.importedAt})`.mapWith(
+          datasets.importedAt,
+        ),
+      })
+      .from(datasets)
+      .groupBy(datasets.source)
+      .orderBy(datasets.source);
+    return { ...stats!, coverage, sources };
   }),
 
   getFilterOptions: publicProcedure.query(async ({ ctx }) => ({
@@ -218,7 +244,13 @@ export const facilitiesRouter = createTRPCRouter({
           units: true,
           annualRecords: {
             orderBy: (rec, { desc }) => [desc(rec.year)],
-            with: { unit: true, auditLogs: true },
+            with: {
+              unit: true,
+              auditLogs: true,
+              dataset: {
+                columns: { name: true, source: true, importedAt: true },
+              },
+            },
           },
         },
       }),
