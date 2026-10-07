@@ -7,7 +7,11 @@ import {
   GRANULARITIES,
 } from "~/lib/campd-reporting-period";
 import { deriveRates, sumTotals } from "~/lib/emissions-metrics";
-import { facilityFilterSchema, SORT_FIELDS } from "~/lib/facility-filters";
+import {
+  campdRetrievalSchema,
+  facilityFilterSchema,
+  SORT_FIELDS,
+} from "~/lib/facility-filters";
 import {
   hasAirQualityControls,
   isOperatingStatus,
@@ -16,7 +20,9 @@ import { uniqueStrings } from "~/lib/utils";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   fetchGranularEmissionsForFacility,
+  getCampdRetrievalOptions,
   resolveCampdPublishedThrough,
+  syncCampdAnnualEmissions,
 } from "~/server/campd/client";
 import { type db as Database } from "~/server/db";
 import {
@@ -51,10 +57,12 @@ const SORT_COLUMNS = {
 
 /**
  * An API sync whose records were all taken over by a later sync of the same year. Kept as
- * retrieval history. Uploads are never marked: facility files own no annual records by design.
+ * retrieval history. Uploads are never marked: facility files own no annual records by design,
+ * and neither are retrievals that matched nothing. Qualified by hand: single-table selects
+ * drop table prefixes, which would bind "id" to annual_records inside the subquery.
  */
-const isSuperseded = sql`(${datasets.source} = 'API' AND NOT EXISTS (
-  SELECT 1 FROM ${annualRecords} WHERE ${annualRecords.datasetId} = ${datasets.id}
+const isSuperseded = sql<boolean>`("datasets"."source" = 'API' AND "datasets"."valid_records" > 0 AND NOT EXISTS (
+  SELECT 1 FROM "annual_records" WHERE "annual_records"."dataset_id" = "datasets"."id"
 ))`;
 
 const notBlank = (col: SQLiteColumn) =>
@@ -342,6 +350,47 @@ export const facilitiesRouter = createTRPCRouter({
         .orderBy(desc(dataAuditLogs.createdAt))
         .limit(input.limit),
     ),
+
+  /** Retrieval history (§5): every dataset, newest first, with its parameters and counts. */
+  getDatasets: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(200).default(50) }))
+    .query(({ ctx, input }) =>
+      ctx.db
+        .select({
+          name: datasets.name,
+          source: datasets.source,
+          reportingYear: datasets.reportingYear,
+          importedAt: datasets.importedAt,
+          rawRecordCount: datasets.rawRecordCount,
+          validRecords: datasets.validRecords,
+          originalFilename: datasets.originalFilename,
+          queryParams: datasets.queryParams,
+          notes: datasets.notes,
+          superseded: isSuperseded.mapWith(Boolean),
+        })
+        .from(datasets)
+        .orderBy(desc(datasets.importedAt), desc(datasets.reportingYear))
+        .limit(input.limit),
+    ),
+
+  getRetrievalOptions: publicProcedure.query(() => getCampdRetrievalOptions()),
+
+  /** Pulls CAMPD annual emissions for each year in the range, one dataset per year; stops at the first error. */
+  retrieveCampd: publicProcedure
+    .input(campdRetrievalSchema)
+    .mutation(async ({ input: { fromYear, toYear, ...filters } }) => {
+      const results: Awaited<ReturnType<typeof syncCampdAnnualEmissions>>[] =
+        [];
+      for (let year = fromYear; year <= toYear; year++) {
+        try {
+          results.push(await syncCampdAnnualEmissions({ year, filters }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { results, error: `${year}: ${message}` };
+        }
+      }
+      return { results, error: null };
+    }),
 
   getCampdPublishedThrough: publicProcedure
     .input(z.object({ facilityId: z.number().optional() }).optional())

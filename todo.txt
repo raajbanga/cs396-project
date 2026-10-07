@@ -64,15 +64,28 @@ Stage 1 follow-ups ✅
    [ ] Re-sync 2026 periodically as EPA publishes more quarters.
 
 ================================================================================
-STAGE 2 — §5 RETRIEVAL DIALOG
+STAGE 2 — §5 RETRIEVAL DIALOG  ✅ DONE 2026-10-06 (npm run validate passes)
 ================================================================================
-5. [ ] Header button "Retrieve" → dialog (same shell as DataUploadDialog).
-   [ ] Filters: year(s), state, facility ID, fuel, unit type, control tech →
-       tRPC mutation wrapping syncCampdAnnualEmissions (params passed to CAMPD;
-       extend its queryParams, already stored per dataset).
-   [ ] Status (running / done / error) + record counts.
-   [ ] Past retrievals list from datasets (source, date, params, counts, year);
-       label superseded rows via isSuperseded in the facilities router.
+5. [x] Header button "Retrieve" → DataRetrievalDialog (same Dialog shell;
+       shares Section/ReportTable with DataUploadDialog).
+   [x] Filters: year range, state, facility IDs, fuel, unit type, control tech
+       → facilities.retrieveCampd mutation → syncCampdAnnualEmissions({filters}).
+       Schema campdRetrievalSchema in ~/lib/facility-filters (picks stateCode
+       from facilityFilterSchema). Fuel/unit-type/control options come from
+       CAMPD master data (getRetrievalOptions, cached 24h) because local unit
+       values are combos ("Coal, Natural Gas") CAMPD rejects. All 74 values
+       checked against /annual. Filters stored in queryParams + dataset name.
+   [x] Status (running / done / error) + received/stored counts from the
+       mutation; a failed year writes "Error: …" to datasets.notes and stops
+       the run.
+   [x] Past retrievals list (facilities.getDatasets): year, source, params,
+       date, received/stored, Active / Superseded / Error.
+   [x] FIX: isSuperseded's correlated subquery was unqualified in single-table
+       selects ("dataset_id" = "id" bound to annual_records.id), so getStats
+       over-counted superseded datasets. Now hand-qualified; retrievals that
+       matched 0 rows are no longer counted as superseded.
+   [x] Verified live (on a DB copy): KY+Coal 2023–24 = 28/yr (matches CAMPD
+       directly), facility IDs + SCR, zero-match, invalid fuel → error.
 
 ================================================================================
 STAGE 3 — §8 SEARCH (data explorer)

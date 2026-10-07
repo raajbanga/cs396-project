@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   Building2,
+  CloudDownload,
   Globe,
   Scale,
   Upload,
@@ -25,6 +26,7 @@ import { formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { DataCoverage } from "./data-coverage";
+import { DataRetrievalDialog } from "./data-retrieval-dialog";
 import { DataUploadDialog } from "./data-upload-dialog";
 import { EpaPrimer } from "./epa-primer";
 import { FacilitiesMap } from "./facilities-map";
@@ -45,6 +47,7 @@ export function DatabaseExplorer() {
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isRetrieveOpen, setIsRetrieveOpen] = useState(false);
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
     null,
   );
@@ -141,6 +144,16 @@ export function DatabaseExplorer() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRetrieveOpen(true)}
+              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
+              aria-label="Retrieve data from EPA CAMPD"
+            >
+              <CloudDownload className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Retrieve</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -322,6 +335,12 @@ export function DatabaseExplorer() {
       <DataUploadDialog
         open={isUploadOpen}
         onOpenChange={setIsUploadOpen}
+        onImported={() => void utils.facilities.invalidate()}
+      />
+
+      <DataRetrievalDialog
+        open={isRetrieveOpen}
+        onOpenChange={setIsRetrieveOpen}
         onImported={() => void utils.facilities.invalidate()}
       />
 

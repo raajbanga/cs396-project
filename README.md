@@ -16,6 +16,7 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
 2. **EPA CAMPD API Live Ingestion Pipeline**:
    - Direct integration with EPA Clean Air Markets Program API (`/emissions-mgmt/emissions/apportioned/annual`) using API keys.
    - Batching and high-throughput bulk upsert pipeline syncing operating hours, gross generation (MWh), heat input (MMBtu), and mass emissions (tons of CO₂, SO₂, NOₓ).
+   - **Retrieve** in the header opens the retrieval dialog: pick a year range and optionally a state, facility IDs, fuel, unit type, and control technology (the fuel/unit-type/control lists come from CAMPD's master-data endpoints, so every choice is a value the API accepts). Each year is stored as its own `datasets` row with its parameters in `query_params`; the dialog shows the run status (running / done / error) and record counts, and lists past datasets with their parameters, counts, and an active / superseded / error label.
    - Dynamic server-side computation of derived metrics:
      - **Carbon Intensity**: $\text{lbs CO}_2 / \text{MWh} = \frac{\text{CO}_2\ (\text{tons}) \times 2000}{\text{Gross Generation}\ (\text{MWh})}$
      - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
@@ -47,11 +48,11 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
 
 8. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
    - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
-   - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare dialogs, audit table, EPA reference primer).
+   - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare/upload/retrieval dialogs, audit table, EPA reference primer).
    - Dark/light themes via `next-themes`; icons from `lucide-react`.
 
 9. **Type-safe API (tRPC)**:
-   - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getMapFacilities`, `getFacility`, `compareFacilities`, `getAuditLogs`, `getCampdPublishedThrough`, `getGranularEmissions`.
+   - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getMapFacilities`, `getFacility`, `compareFacilities`, `getAuditLogs`, `getDatasets`, `getRetrievalOptions`, `getCampdPublishedThrough`, `getGranularEmissions`; mutation `retrieveCampd`.
 
 ---
 
@@ -129,7 +130,7 @@ erDiagram
         text original_filename "Uploaded file name (uploads only)"
         text archived_path "Copy of the original file under uploads/"
         text query_params "CAMPD retrieval parameters as JSON (API only)"
-        text notes "Free-text notes, e.g. rejected/duplicate counts"
+        text notes "Upload rejected/duplicate counts, or 'Error: …' for a failed sync"
     }
 
     ANNUAL_RECORDS {

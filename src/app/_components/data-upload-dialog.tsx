@@ -480,7 +480,7 @@ function ImportSuccess({ result }: { result: ImportResult }) {
   );
 }
 
-function Section({
+export function Section({
   title,
   note,
   children,
@@ -500,7 +500,13 @@ function Section({
   );
 }
 
-function ReportTable({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
+export function ReportTable({
+  head,
+  rows,
+}: {
+  head: string[];
+  rows: ReactNode[][];
+}) {
   return (
     <DataPanel>
       <Table className="text-xs">
