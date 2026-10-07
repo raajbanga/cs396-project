@@ -47,6 +47,8 @@ STAGE 1 — QUICK WINS  ✅ DONE 2026-10-06 (npm run validate passes)
    [x] Backfilled 2015–2025 (~4.0–4.7k unit-years each, ~47k total).
    [x] Tiny 2–9 record datasets were leftovers from an older dev run
        (2026-09-10), not a sync bug: a full 2024 sync returns 4,024 rows.
+       Deleted 2026-10-06 (15 datasets, owned no records/issues); real
+       superseded syncs and the AK · Coal retrieval kept as §5 history.
 
 4. Provenance + coverage ✅
    [x] Home: DataCoverage strip (sources, records per year, datasets + last
@@ -121,16 +123,44 @@ STAGE 3 — §8 SEARCH (data explorer)  ✅ DONE 2026-10-06 (npm run validate pa
        '%…%' matches, so an index there would never be used.
 
 ================================================================================
-STAGE 4 — §10 DOWNLOAD (CSV)
+STAGE 4 — §10 DOWNLOAD (CSV)  ✅ DONE 2026-10-06 (npm run validate passes)
 ================================================================================
-11.[ ] GET /api/export?type=…&<filters> → text/csv with Content-Disposition;
-       one shared CSV writer (quote/comma/newline escaping) + test.
-12.[ ] Types: dataset (by id), search (same filter schema as §8, no paging),
-       selection (compare selection), valid (accepted rows of an upload),
-       invalid (import_issues), provenance (datasets + query_params).
-13.[ ] Download dialog: dataset picker, filters, format (CSV), Download button.
-   [ ] "Download CSV" on explorer results; "Download rejected rows" in the
-       upload report (reads import_issues, already populated since Stage 1).
+11.[x] GET /api/export?type=…&<params> → text/csv, Content-Disposition
+       attachment, JSON 400/404 on a bad request (src/server/export.ts).
+       One shared CSV writer src/lib/csv.ts (RFC 4180 quoting of comma, quote,
+       CR/LF; CRLF lines) + csv.test.ts.
+12.[x] Types: dataset (id → every unit-year it holds + audit_flags column),
+       valid (id → that dataset's records with no audit flags), invalid
+       (id → data-quality report: import_issues rows + original columns, plus
+       one FLAGGED row per audit flag of the dataset's records), search (the explorer's
+       own URL params via parseExplorerParams; Facilities or Units, table
+       order, no paging, rank column with First N), selection (ids/unitIds →
+       every year of the compare selection), provenance (all datasets or one:
+       source, params, file, dates, counts, current records, status).
+       No forked query paths: getFacilities/getUnitYears/getDatasets now call
+       exported rankedFacilities / rankedUnitYears(scope) / datasetHistory.
+       NOTE: "valid" = unflagged records. Uploads and syncs share one write path
+       (rejected rows never become records), so "accepted rows" alone would just
+       repeat "dataset". Facility-only uploads own no annual records, so their
+       dataset/valid exports are empty (header only).
+   [x] §10 re-check: invalid now also lists questionable (audit-flagged)
+       records, so it works for CAMPD datasets too (valid + flagged = dataset);
+       unit-year CSVs gained §7 fields program_code, hg_controls,
+       operating_status, commercial_op_date, retirement_date.
+   [ ] Known limits: superseded datasets export 0 rows (later syncs upsert
+       over their unit-years; history isn't versioned). "Selected" = compare
+       selection, capped at 4.
+13.[x] DataDownloadDialog (header "Download"): type, dataset picker (uploads
+       only for "invalid"; "All datasets" for provenance), the explorer's
+       FacilityFilterBar for search (same state; Facilities/Unit-years), the
+       compare selection, format select (CSV).
+   [x] "CSV" link beside the explorer result count (FacilityFilterBar
+       `actions` slot); "Download rejected rows (N)" after an upload import.
+   [x] Verified live: KY+Coal+2025+CO2≥500k = 25 unit-years / 8 facilities
+       (same as SQL); 2025 dataset 3,989 rows, valid 3,569 (420 flagged =
+       datasets.flagged_records); top-1 per state 2024 = 51 rows; selection
+       counts match SQL; a test upload (on a DB copy) exported its 1 duplicate +
+       3 rejected rows with quotes and an embedded newline intact.
 
 ================================================================================
 STAGE 5 — DELIVERABLES (§11)

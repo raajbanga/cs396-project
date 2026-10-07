@@ -12,16 +12,18 @@ import {
   AlertTriangle,
   Building2,
   CloudDownload,
+  FileDown,
   Globe,
   Scale,
   Upload,
   Zap,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { Button, buttonClass } from "~/components/ui/button";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
+import { exportUrl } from "~/lib/csv";
 import {
   DEFAULT_FILTERS,
   explorerSearchParams,
@@ -35,6 +37,7 @@ import { formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { DataCoverage } from "./data-coverage";
+import { DataDownloadDialog } from "./data-download-dialog";
 import { DataRetrievalDialog } from "./data-retrieval-dialog";
 import { DataUploadDialog } from "./data-upload-dialog";
 import { EpaPrimer } from "./epa-primer";
@@ -73,6 +76,7 @@ export function DatabaseExplorer({
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isRetrieveOpen, setIsRetrieveOpen] = useState(false);
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [inspectFacilityId, setInspectFacilityId] = useState<number | null>(
     null,
   );
@@ -80,20 +84,17 @@ export function DatabaseExplorer({
 
   const utils = api.useUtils();
 
+  const explorerState = { tab: activeTab, filters, table, unitTable };
+  const explorerQuery = explorerSearchParams(explorerState);
+
   // §8.4: mirror tab, filters, sort, and page into the URL so views are shareable and reload-safe.
   useEffect(() => {
-    const qs = explorerSearchParams({
-      tab: activeTab,
-      filters,
-      table,
-      unitTable,
-    });
     window.history.replaceState(
       null,
       "",
-      qs ? `?${qs}` : window.location.pathname,
+      explorerQuery ? `?${explorerQuery}` : window.location.pathname,
     );
-  }, [activeTab, filters, table, unitTable]);
+  }, [explorerQuery]);
 
   const setPage = (page: number) =>
     activeTab === "units"
@@ -214,6 +215,16 @@ export function DatabaseExplorer({
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setIsDownloadOpen(true)}
+              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
+              aria-label="Download data as CSV"
+            >
+              <FileDown className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Download</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setIsUploadOpen(true)}
               className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
               aria-label="Upload data file"
@@ -330,6 +341,21 @@ export function DatabaseExplorer({
               onFilterChange={setFilter}
               onResetFilters={resetFilters}
               filterOptions={filterOptions}
+              actions={
+                <a
+                  href={exportUrl("search", {}, explorerQuery)}
+                  download
+                  className={buttonClass({
+                    variant: "outline",
+                    size: "sm",
+                    className: "bg-surface/60 h-8",
+                  })}
+                  title="Download every matching row as CSV"
+                >
+                  <FileDown className="text-fg-muted h-3.5 w-3.5" />
+                  CSV
+                </a>
+              }
               {...(activeTab === "units"
                 ? {
                     itemLabel: "unit-years",
@@ -448,6 +474,17 @@ export function DatabaseExplorer({
         open={isRetrieveOpen}
         onOpenChange={setIsRetrieveOpen}
         onImported={() => void utils.facilities.invalidate()}
+      />
+
+      <DataDownloadDialog
+        open={isDownloadOpen}
+        onOpenChange={setIsDownloadOpen}
+        explorer={explorerState}
+        filterOptions={filterOptions}
+        onFilterChange={setFilter}
+        onResetFilters={resetFilters}
+        compareIds={compareIds}
+        compareUnitIds={compareUnitIds}
       />
 
       {compareCount > 0 && (
