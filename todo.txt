@@ -88,25 +88,37 @@ STAGE 2 — §5 RETRIEVAL DIALOG  ✅ DONE 2026-10-06 (npm run validate passes)
        directly), facility IDs + SCR, zero-match, invalid fuel → error.
 
 ================================================================================
-STAGE 3 — §8 SEARCH (data explorer)
+STAGE 3 — §8 SEARCH (data explorer)  ✅ DONE 2026-10-06 (npm run validate passes)
 ================================================================================
-6. [ ] Unit-year query: annual_records ⨝ units ⨝ facilities, one row per
-       facility-unit-year. Facilities / Units toggle via existing SegmentedControl.
-7. [ ] Basic filters (8.1): facility ID, unit ID, county, year, secondary fuel,
-       unit type, SO2/NOx/PM control (contains). Options from getFilterOptions;
-       render in FacilityFilterBar's existing select list.
-8. [ ] Range filters (8.2): min/max operating hours, gross load, heat input,
-       CO2, SO2, NOx. All filters AND together.
-       Acceptance: KY + coal + 2025 + CO2 > 500,000 returns the right units.
-9. [ ] Ranking (8.3): Top-N / Bottom-N by any metric; top N per state
-       (ROW_NUMBER() OVER PARTITION BY state); unit compare across facilities
-       (extend compare dock); unit history across years.
-10.[ ] Results (8.4): sortable on every metric, paginated (reuse
-       FacilitiesTable pagination), row → unit detail dialog (identification,
-       operating data, emissions by year, fuel + controls, source + year).
-   [ ] Sync filters/sort/page to URL query params (shareable, reload-safe).
-   [ ] Indexes: annual_records(year), units(unit_type), units(secondary_fuel),
-       facilities(county).
+6. [x] Unit-year query facilities.getUnitYears: annual_records ⨝ units ⨝
+       facilities, one row per facility-unit-year. "Units" option added to
+       the header SegmentedControl; filter bar shared with Facilities.
+7. [x] Basic filters (8.1) in FacilityFilterBar's "More filters" panel:
+       facility ID, unit ID, county (options narrowed by state), year,
+       secondary fuel, unit type, SO2/NOx/PM control. Fuels/type/controls
+       match by "contains"; options are split values (multiValueOptions).
+       NOTE: primary fuel is now "contains" too, so "Coal" also matches
+       "Coal Refuse" and "Coal, Pipeline Natural Gas" (373 → 391 facilities).
+8. [x] Range filters (8.2): min/max (inclusive) operating hours, gross load,
+       heat input, CO2, SO2, NOx. All filters AND together.
+       Acceptance verified: KY + Coal + 2025 + CO2 > 500,000 = 25 units, same
+       count as hand-written SQL. Facilities view: unit/range filters keep
+       facilities with ≥1 matching unit-year; a Year filter scopes totals.
+9. [x] Ranking (8.3): "First N" + sort column/direction = Top-N / Bottom-N;
+       Group "Per state" uses ROW_NUMBER() OVER (PARTITION BY state_code),
+       in both views (e.g. top CO2 facility per state). Compare dock takes
+       facilities and units (compareFacilities({ ids, unitIds })). Unit
+       history = UnitDetailDialog (every year for the unit).
+10.[x] Results (8.4): every metric column sortable; pagination, sortable
+       header, skeleton moved to ui/table.tsx and shared with FacilitiesTable;
+       row → UnitDetailDialog (identification, fuel + controls, operating
+       data + emissions by year with source dataset, audit flags).
+   [x] Filters/tab/sort/page synced to URL (explorerSearchParams /
+       parseExplorerParams; page.tsx reads searchParams + prefetches).
+   [x] Index: facilities(county) (drizzle/0003). Skipped on purpose:
+       annual_records(year) is already the prefix of annual_record_year_co2_idx;
+       units(unit_type)/units(secondary_fuel) can't serve "contains" LIKE
+       '%…%' matches, so an index there would never be used.
 
 ================================================================================
 STAGE 4 — §10 DOWNLOAD (CSV)
@@ -128,3 +140,20 @@ STAGE 5 — DELIVERABLES (§11)
        unit not per unit-year), equations, units, limitations, and why
        Next.js was used instead of the spec's Flask.
    [ ] Presentation slides.
+
+================================================================================
+STAGE 6 (OPTIONAL) — VERCEL DEPLOYMENT
+================================================================================
+Today the app only runs locally: Vercel functions have no python3/openpyxl and
+a read-only filesystem (only /tmp, wiped between calls), so the bundled
+db.sqlite and uploads/ archive can't be written. requirements.txt alone won't fix it.
+15.[ ] Hosted DB: keep Drizzle + @libsql/client, point DATABASE_URL at Turso
+       (libsql://…) + auth token in Vercel env; run db:migrate + db:seed (and
+       sync:campd) against it once. Drop db.sqlite from outputFileTracingIncludes.
+16.[ ] Upload parser: port scripts/parse_import.py to TypeScript (e.g. `xlsx`
+       npm package for Excel) so it runs in the Node function; keep the
+       ParsedUpload contract + existing tests. (Alt: separate Vercel Python
+       function under api/ with requirements.txt.)
+17.[ ] Upload archive: write originals to blob storage (e.g. Vercel Blob)
+       instead of uploads/; store the blob URL in datasets.archived_path.
+   [ ] Verify upload → preview → approve end-to-end on a Vercel preview deploy.

@@ -1,0 +1,1 @@
+CREATE INDEX `facility_county_idx` ON `facilities` (`county`);

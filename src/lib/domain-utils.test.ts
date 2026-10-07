@@ -19,7 +19,14 @@ import {
 import {
   activeCampdFilters,
   campdRetrievalSchema,
+  DEFAULT_FILTERS,
+  DEFAULT_TABLE_STATE,
+  DEFAULT_UNIT_TABLE_STATE,
   describeCampdFilters,
+  explorerSearchParams,
+  multiValueOptions,
+  nextSort,
+  parseExplorerParams,
   parseFacilityIds,
 } from "./facility-filters";
 import { FUEL_CATEGORIES, getFuelTheme, getMarkerRadius } from "./map-utils";
@@ -189,4 +196,85 @@ void test("CAMPD retrieval filters parse, drop 'ALL', and describe themselves", 
   assert.ok(
     !campdRetrievalSchema.safeParse({ fromYear: 1990, toYear: 1991 }).success,
   );
+});
+
+void test("explorer state round-trips through URL query params", () => {
+  const state = {
+    tab: "units" as const,
+    filters: {
+      ...DEFAULT_FILTERS,
+      stateCode: "KY",
+      primaryFuel: "Coal",
+      year: "2025",
+      co2MassTonsMin: "500000",
+      topN: "10",
+      rankGroup: "state",
+    },
+    table: DEFAULT_TABLE_STATE,
+    unitTable: {
+      ...DEFAULT_UNIT_TABLE_STATE,
+      sortBy: "noxMassTons" as const,
+      sortDir: "asc" as const,
+      page: 3,
+      pageSize: 25,
+    },
+  };
+  const qs = explorerSearchParams(state);
+  assert.equal(
+    qs,
+    "tab=units&stateCode=KY&primaryFuel=Coal&year=2025&topN=10&rankGroup=state&co2MassTonsMin=500000&sort=noxMassTons&dir=asc&page=3&size=25",
+  );
+  assert.deepEqual(
+    parseExplorerParams(Object.fromEntries(new URLSearchParams(qs))),
+    state,
+  );
+  assert.equal(explorerSearchParams(parseExplorerParams({})), "");
+});
+
+void test("explorer params ignore unknown keys and invalid values", () => {
+  const parsed = parseExplorerParams({
+    tab: "nope",
+    sort: "co2MassTons", // a unit sort key is not valid on the Facilities tab
+    dir: "sideways",
+    page: "-2",
+    size: "7",
+    bogus: "1",
+    stateCode: ["TX", "KY"],
+  });
+  assert.equal(parsed.tab, "explorer");
+  assert.deepEqual(parsed.table, DEFAULT_TABLE_STATE);
+  assert.equal(parsed.filters.stateCode, "TX");
+  assert.equal("bogus" in parsed.filters, false);
+});
+
+void test("multiValueOptions splits combined unit values into distinct options", () => {
+  assert.deepEqual(
+    multiValueOptions([
+      "Wet Lime FGD|Wet Limestone",
+      "Diesel Oil, Pipeline Natural Gas",
+      "Selective Non-catalytic Reduction (Began Oct 28, 2025)|Overfire Air",
+      "Wet Limestone",
+    ]),
+    [
+      "Diesel Oil",
+      "Overfire Air",
+      "Pipeline Natural Gas",
+      "Selective Non-catalytic Reduction",
+      "Wet Lime FGD",
+      "Wet Limestone",
+    ],
+  );
+});
+
+void test("nextSort flips on the same field and resets the page", () => {
+  const desc = (f: string) => f === "co2";
+  const t = { ...DEFAULT_TABLE_STATE, page: 4 };
+  assert.deepEqual(nextSort(t, "co2", desc), {
+    ...t,
+    page: 1,
+    sortBy: "co2",
+    sortDir: "desc",
+  });
+  assert.equal(nextSort(t, "name", desc).sortDir, "desc"); // already name/asc
+  assert.equal(nextSort(t, "id", desc).sortDir, "asc");
 });

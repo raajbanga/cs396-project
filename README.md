@@ -46,13 +46,20 @@ Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingesti
    - Drag or select a `.csv`/`.xlsx` file (100 MB max). `scripts/parse_import.py` reads it, maps its columns to the project schema, rejects rows with missing or invalid values, and skips duplicate facility-unit-year records.
    - The dialog previews rows and lists every rejected, duplicate, and sanity-flagged record before anything is saved. Approving upserts `facilities`, `units`, and (for annual emissions files) `annual_records` + `data_audit_logs`, records a `datasets` row (filename, archive path, counts), saves every rejected/duplicate row to `import_issues`, and archives the original file in `uploads/`.
 
-8. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
+8. **Data Explorer Search (§8)** (**Units** tab, **More filters**):
+   - Units view lists one row per facility-unit-year (`annual_records ⨝ units ⨝ facilities`); the Facilities view shares the same filters.
+   - Basic filters: facility ID, name, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control. Range filters: min/max operating hours, gross load, heat input, CO₂, SO₂, NOₓ. All filters AND together.
+   - Ranking: sort by any column, then keep the first N overall or per state (`ROW_NUMBER() OVER (PARTITION BY state_code …)`). Units can be compared across facilities, and clicking a row opens the unit's history across all years.
+   - Filters, sort, and page are kept in the URL, so a search can be shared or reloaded.
+
+9. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
    - Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
    - App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare/upload/retrieval dialogs, audit table, EPA reference primer).
    - Dark/light themes via `next-themes`; icons from `lucide-react`.
 
-9. **Type-safe API (tRPC)**:
-   - `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getMapFacilities`, `getFacility`, `compareFacilities`, `getAuditLogs`, `getDatasets`, `getRetrievalOptions`, `getCampdPublishedThrough`, `getGranularEmissions`; mutation `retrieveCampd`.
+10. **Type-safe API (tRPC)**:
+
+- `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getUnitYears`, `getMapFacilities`, `getFacility`, `getUnit`, `compareFacilities`, `getAuditLogs`, `getDatasets`, `getRetrievalOptions`, `getCampdPublishedThrough`, `getGranularEmissions`; mutation `retrieveCampd`.
 
 ---
 
