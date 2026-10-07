@@ -22,6 +22,12 @@ import {
   TOTAL_KEYS,
   type EmissionTotals,
 } from "~/lib/emissions-metrics";
+import {
+  activeCampdFilters,
+  describeCampdFilters,
+  type CampdFilters,
+} from "~/lib/facility-filters";
+import { uniqueStrings } from "~/lib/utils";
 import { db } from "~/server/db";
 import { annualRecords, datasets, facilities, units } from "~/server/db/schema";
 import {
@@ -32,6 +38,7 @@ import {
 
 const CAMPD_BASE_URL =
   "https://api.epa.gov/easey/emissions-mgmt/emissions/apportioned";
+const CAMPD_MASTER_DATA_URL = "https://api.epa.gov/easey/master-data-mgmt";
 /** Safety cap for one annual sync: 100 pages × 500 = 50,000 unit-years (~4,700 today). */
 const MAX_SYNC_PAGES = 100;
 
@@ -195,12 +202,13 @@ function extractCampdError(body: unknown, status: number): string {
 async function fetchCampd(
   path: string,
   query: URLSearchParams,
+  baseUrl = CAMPD_BASE_URL,
 ): Promise<CampdFetchResult> {
   if (!env.CAMPD_API) {
     return { items: [], error: "CAMPD_API key is not configured." };
   }
   try {
-    const res = await fetch(`${CAMPD_BASE_URL}${path}?${query.toString()}`, {
+    const res = await fetch(`${baseUrl}${path}?${query.toString()}`, {
       headers: { "x-api-key": env.CAMPD_API, Accept: "application/json" },
       cache: "no-store",
       signal: AbortSignal.timeout(30000),
@@ -241,103 +249,136 @@ async function fetchAllCampdPages(
 /**
  * Ingestion engine: normalizes CAMPD annual records page by page, runs physical
  * sanity checks, derives efficiency metrics, and upserts in chunked batches.
+ * `filters` narrow the request (CAMPD matches them against unit attributes) and
+ * are stored with the year in `datasets.query_params`; a failure is saved to `notes`.
  */
 export async function syncCampdAnnualEmissions({
   year,
   perPage = 500,
+  filters = {},
 }: {
   year: number;
   perPage?: number;
+  filters?: CampdFilters;
 }) {
   perPage = Math.min(perPage, 500);
+  const active = activeCampdFilters(filters);
+  const label = describeCampdFilters(active);
   const datasetId = crypto.randomUUID();
   await db.insert(datasets).values({
     id: datasetId,
-    name: `CAMPD API ${year} Ingestion Batch`,
+    name: `CAMPD API ${year}${label ? ` [${label}]` : ""} Ingestion Batch`,
     source: "API",
     reportingYear: year,
-    queryParams: { endpoint: "/annual", year, perPage },
+    queryParams: { endpoint: "/annual", year, perPage, ...active },
   });
 
-  let rawRecordCount = 0;
-  let validRecords = 0;
-  let flaggedRecords = 0;
-  let anomalyCount = 0;
-
-  // Pages until a short one; the cap only guards against a runaway API.
-  for (let page = 1; page <= MAX_SYNC_PAGES; page++) {
-    const { items, error } = await fetchCampd(
-      "/annual",
-      new URLSearchParams({
-        year: String(year),
-        page: String(page),
-        perPage: String(perPage),
-      }),
-    );
-    if (error) throw new Error(`CAMPD API error: ${error}`);
-    if (page === MAX_SYNC_PAGES && items.length === perPage) {
-      throw new Error(
-        `CAMPD returned more than ${MAX_SYNC_PAGES * perPage} records for ${year}; raise MAX_SYNC_PAGES.`,
-      );
-    }
-    if (items.length === 0) break;
-    rawRecordCount += items.length;
-
-    // Dedupe on the natural key (facilityId, unitId, year).
-    const batch = new Map<string, NormalizedCampdRecord>();
-    for (const item of items) {
-      const res = rawCampdRecordSchema.safeParse(item);
-      if (res.success) {
-        batch.set(
-          `${res.data.facilityId}:${res.data.unitId}:${res.data.year}`,
-          res.data,
-        );
-      }
-    }
-
-    const records = [...batch.values()];
-    await insertMissingFacilities(
-      records.map((r) => ({
-        id: r.facilityId,
-        name: r.facilityName,
-        stateCode: r.stateCode,
-      })),
-    );
-    const unitIds = await upsertUnits(
-      records.map(({ facilityId, unitId, unit }) => ({
-        facilityId,
-        unitId,
-        ...unit,
-      })),
-    );
-    const flagged = await upsertAnnualRecords(
-      datasetId,
-      records.map((r) => ({
-        ...r.metrics,
-        facilityId: r.facilityId,
-        unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
-        year,
-      })),
-    );
-    validRecords += records.length;
-    flaggedRecords += flagged.flaggedRecords;
-    anomalyCount += flagged.anomalyCount;
-    if (items.length < perPage) break;
+  const query = new URLSearchParams({ year: String(year) });
+  for (const [key, value] of Object.entries(active)) {
+    query.set(key, Array.isArray(value) ? value.join("|") : String(value));
   }
 
-  await db
-    .update(datasets)
-    .set({ rawRecordCount, validRecords, flaggedRecords })
-    .where(eq(datasets.id, datasetId));
+  const counts = { rawRecordCount: 0, validRecords: 0, flaggedRecords: 0 };
+  let anomalyCount = 0;
+  let notes: string | undefined;
 
-  return {
-    datasetId,
-    year,
-    rawRecordCount,
-    validRecords,
-    flaggedRecords,
-    anomalyCount,
-  };
+  try {
+    // Pages until a short one; the cap only guards against a runaway API.
+    for (let page = 1; page <= MAX_SYNC_PAGES; page++) {
+      query.set("page", String(page));
+      query.set("perPage", String(perPage));
+      const { items, error } = await fetchCampd("/annual", query);
+      if (error) throw new Error(`CAMPD API error: ${error}`);
+      if (page === MAX_SYNC_PAGES && items.length === perPage) {
+        throw new Error(
+          `CAMPD returned more than ${MAX_SYNC_PAGES * perPage} records for ${year}; raise MAX_SYNC_PAGES.`,
+        );
+      }
+      if (items.length === 0) break;
+      counts.rawRecordCount += items.length;
+
+      // Dedupe on the natural key (facilityId, unitId, year).
+      const batch = new Map<string, NormalizedCampdRecord>();
+      for (const item of items) {
+        const res = rawCampdRecordSchema.safeParse(item);
+        if (res.success) {
+          batch.set(
+            `${res.data.facilityId}:${res.data.unitId}:${res.data.year}`,
+            res.data,
+          );
+        }
+      }
+
+      const records = [...batch.values()];
+      await insertMissingFacilities(
+        records.map((r) => ({
+          id: r.facilityId,
+          name: r.facilityName,
+          stateCode: r.stateCode,
+        })),
+      );
+      const unitIds = await upsertUnits(
+        records.map(({ facilityId, unitId, unit }) => ({
+          facilityId,
+          unitId,
+          ...unit,
+        })),
+      );
+      const flagged = await upsertAnnualRecords(
+        datasetId,
+        records.map((r) => ({
+          ...r.metrics,
+          facilityId: r.facilityId,
+          unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
+          year,
+        })),
+      );
+      counts.validRecords += records.length;
+      counts.flaggedRecords += flagged.flaggedRecords;
+      anomalyCount += flagged.anomalyCount;
+      if (items.length < perPage) break;
+    }
+  } catch (err) {
+    notes = `Error: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
+  } finally {
+    await db
+      .update(datasets)
+      .set({ ...counts, notes })
+      .where(eq(datasets.id, datasetId));
+  }
+
+  return { datasetId, year, ...counts, anomalyCount };
+}
+
+async function fetchMasterDataList(path: string, field: string) {
+  const { items } = await fetchCampd(
+    path,
+    new URLSearchParams(),
+    CAMPD_MASTER_DATA_URL,
+  );
+  return uniqueStrings(items.map((row) => toStr(row[field]))).sort();
+}
+
+let retrievalOptionsCache: Record<
+  "fuels" | "unitTypes" | "controls",
+  string[]
+> | null = null;
+
+/** Values CAMPD accepts for the fuel, unit-type, and control filters (master-data descriptions). */
+export async function getCampdRetrievalOptions() {
+  if (retrievalOptionsCache) return retrievalOptionsCache;
+  const [fuels, unitTypes, controls] = await Promise.all([
+    fetchMasterDataList("/fuel-type-codes", "fuelTypeDescription"),
+    fetchMasterDataList("/unit-type-codes", "unitTypeDescription"),
+    fetchMasterDataList("/control-codes", "controlDescription"),
+  ]);
+  const options = { fuels, unitTypes, controls };
+  // Master data rarely changes; cache only complete answers so an outage is retried.
+  if (fuels.length && unitTypes.length && controls.length) {
+    retrievalOptionsCache = options;
+  }
+  return options;
 }
 
 const PUBLISHED_THROUGH_TTL_MS = 60 * 60 * 1000;

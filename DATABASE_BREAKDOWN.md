@@ -128,7 +128,7 @@ erDiagram
         text original_filename "Uploaded file name (uploads only)"
         text archived_path "Copy of the original file under uploads/"
         text query_params "CAMPD retrieval parameters as JSON (API only)"
-        text notes "Free-text notes, e.g. rejected/duplicate counts"
+        text notes "Upload rejected/duplicate counts, or 'Error: …' for a failed sync"
     }
 
     ANNUAL_RECORDS {
@@ -253,20 +253,20 @@ Tracks batch ingestion history from the EPA REST API or uploaded CSV/Excel files
 
 Rows are never deleted: a re-sync of a year moves its `annual_records` to the new batch, and the earlier API batch is kept as retrieval history. The app treats an API batch that owns no records as **superseded** (`isSuperseded` in the facilities router) and counts only active batches on the home page. Uploads are never marked superseded, because facility files own no annual records by design.
 
-| Column             | Type               | What It Means                                                         | Where and How It Is Used                                                          |
-| :----------------- | :----------------- | :-------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
-| `id`               | `TEXT PRIMARY KEY` | UUID batch ID.                                                        | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
-| `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                   | **Provenance**: Identifies which import run last touched linked `annual_records`. |
-| `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads). | **Data Lineage**: Distinguishes ingestion channels.                               |
-| `reportingYear`    | `INTEGER`          | The calendar year ingested.                                           | **Lineage**: Calendar year the batch applied to.                                  |
-| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                      | **Audit Trail**: When the sync completed.                                         |
-| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                        | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
-| `validRecords`     | `INTEGER`          | Clean records saved to database.                                      | **Health Check**: Returned by CLI output.                                         |
-| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                              | **Health Check**: Returned by CLI output.                                         |
-| `originalFilename` | `TEXT`             | Uploaded file name (uploads only).                                    | **Provenance**: Which file a batch came from.                                     |
-| `archivedPath`     | `TEXT`             | Copy of the original file under `uploads/`.                           | **Provenance**: Lets the original upload be recovered.                            |
-| `queryParams`      | `TEXT` (JSON)      | CAMPD request parameters (endpoint, year, paging) for API syncs.      | **Reproducibility**: Records exactly what was retrieved.                          |
-| `notes`            | `TEXT`             | Free text (uploads record rejected/duplicate counts).                 | **Provenance**: Shown alongside the batch.                                        |
+| Column             | Type               | What It Means                                                                 | Where and How It Is Used                                                          |
+| :----------------- | :----------------- | :---------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| `id`               | `TEXT PRIMARY KEY` | UUID batch ID.                                                                | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
+| `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                           | **Provenance**: Identifies which import run last touched linked `annual_records`. |
+| `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads).         | **Data Lineage**: Distinguishes ingestion channels.                               |
+| `reportingYear`    | `INTEGER`          | The calendar year ingested.                                                   | **Lineage**: Calendar year the batch applied to.                                  |
+| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                              | **Audit Trail**: When the sync completed.                                         |
+| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                                | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
+| `validRecords`     | `INTEGER`          | Clean records saved to database.                                              | **Health Check**: Returned by CLI output.                                         |
+| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                                      | **Health Check**: Returned by CLI output.                                         |
+| `originalFilename` | `TEXT`             | Uploaded file name (uploads only).                                            | **Provenance**: Which file a batch came from.                                     |
+| `archivedPath`     | `TEXT`             | Copy of the original file under `uploads/`.                                   | **Provenance**: Lets the original upload be recovered.                            |
+| `queryParams`      | `TEXT` (JSON)      | CAMPD request parameters (endpoint, year, paging, filters) for syncs.         | **Reproducibility**: Records exactly what was retrieved.                          |
+| `notes`            | `TEXT`             | Free text: upload rejected/duplicate counts, or `Error: …` for a failed sync. | **Provenance**: Shown alongside the batch; drives the Retrieve dialog's status.   |
 
 ### Table 6: `import_issues`
 
