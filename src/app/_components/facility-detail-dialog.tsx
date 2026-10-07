@@ -46,7 +46,12 @@ import {
   hasAirQualityControls,
   isOperatingStatus,
 } from "~/lib/plant-narrative";
-import { cn, formatQuantity, uniqueStrings } from "~/lib/utils";
+import {
+  cn,
+  DATASET_SOURCE_LABELS,
+  formatQuantity,
+  uniqueStrings,
+} from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 import { AuditPanel } from "./audit-logs-table";
 import { GranularEmissionsWindow } from "./granular-emissions-window";
@@ -334,6 +339,19 @@ function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
                           <span className="text-fg-muted ml-1.5 text-[10px]">
                             ({rec.unit.primaryFuel})
                           </span>
+                        )}
+                        {rec.dataset && (
+                          <div
+                            className="text-fg-muted pt-0.5 font-sans text-[10px]"
+                            title={rec.dataset.name}
+                          >
+                            {DATASET_SOURCE_LABELS[rec.dataset.source] ??
+                              rec.dataset.source}{" "}
+                            ·{" "}
+                            {new Date(
+                              rec.dataset.importedAt,
+                            ).toLocaleDateString()}
+                          </div>
                         )}
                       </TableCell>
                       <EmissionCells

@@ -10,14 +10,17 @@ import {
   type ImportResult,
   type ParsedUpload,
 } from "~/lib/data-import";
+import { PYTHON } from "~/lib/python";
 import { db } from "~/server/db";
 import {
   annualRecords,
   datasets,
   type facilities,
+  importIssues,
   units,
 } from "~/server/db/schema";
 import {
+  insertInChunks,
   insertMissingFacilities,
   upsertAnnualRecords,
   upsertFacilities,
@@ -36,7 +39,7 @@ export async function parseUpload(
   try {
     await fs.writeFile(filePath, bytes);
     const { stdout } = await execFileAsync(
-      "python3",
+      PYTHON,
       [path.join(process.cwd(), "scripts", "parse_import.py"), filePath],
       { maxBuffer: 1024 ** 3 },
     );
@@ -75,13 +78,16 @@ export async function previewUpload(parsed: ParsedUpload) {
 
 /** Stores an upload's valid records as a dataset; with `original`, archives the file under `uploads/`. */
 export async function importUpload(
-  { records, summary, reportingYear }: ParsedUpload,
+  { records, rejectedRows, summary, reportingYear }: ParsedUpload,
   fileName: string,
   original?: Buffer,
 ): Promise<ImportResult> {
   const datasetId = crypto.randomUUID();
   const datasetName = `Upload: ${fileName}`;
   const source = /\.[ct]sv$/i.test(fileName) ? "BULK_CSV" : "BULK_EXCEL";
+  const archivedFile = original
+    ? path.join("uploads", `${datasetId}_${fileName.replace(/[^\w.-]/g, "_")}`)
+    : null;
   await db.insert(datasets).values({
     id: datasetId,
     name: datasetName,
@@ -89,7 +95,19 @@ export async function importUpload(
     reportingYear: reportingYear ?? new Date().getFullYear(),
     rawRecordCount: summary.totalRows,
     validRecords: summary.validCount,
+    originalFilename: fileName,
+    archivedPath: archivedFile,
+    notes: `${summary.invalidCount} rejected, ${summary.duplicateCount} duplicate rows`,
   });
+  await insertInChunks(rejectedRows, (chunk) =>
+    db.insert(importIssues).values(
+      chunk.map(({ data, ...issue }) => ({
+        ...issue,
+        datasetId,
+        rawRow: data,
+      })),
+    ),
+  );
 
   // Rows without a name and state may only create placeholder facilities, never overwrite real ones.
   const named = records.facilities.filter((f) => f.name && f.stateCode);
@@ -110,12 +128,7 @@ export async function importUpload(
     .set({ flaggedRecords })
     .where(eq(datasets.id, datasetId));
 
-  let archivedFile: string | null = null;
-  if (original) {
-    archivedFile = path.join(
-      "uploads",
-      `${datasetId}_${fileName.replace(/[^\w.-]/g, "_")}`,
-    );
+  if (original && archivedFile) {
     await fs.mkdir("uploads", { recursive: true });
     await fs.writeFile(archivedFile, original);
   }
@@ -128,6 +141,7 @@ export async function importUpload(
     units: unitIds.size,
     annualRecords: records.annual.length,
     anomalies: anomalyCount,
+    issues: rejectedRows.length,
     archivedFile,
   };
 }

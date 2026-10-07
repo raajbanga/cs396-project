@@ -16,6 +16,12 @@ import {
   computeHeatRateMMBtuMWh,
   pickCleanestByCarbonIntensity,
 } from "./emissions-metrics";
+import {
+  activeCampdFilters,
+  campdRetrievalSchema,
+  describeCampdFilters,
+  parseFacilityIds,
+} from "./facility-filters";
 import { FUEL_CATEGORIES, getFuelTheme, getMarkerRadius } from "./map-utils";
 import {
   cleanOwnerOperator,
@@ -127,6 +133,7 @@ void test("yearly rollups aggregate records by reporting year", () => {
       so2MassTons: 0,
       noxMassTons: 0,
       heatInputMMBtu: 800,
+      steamLoadKlb: 0,
       operatingHours: 4000,
     },
     {
@@ -137,6 +144,7 @@ void test("yearly rollups aggregate records by reporting year", () => {
       so2MassTons: 0,
       noxMassTons: 0,
       heatInputMMBtu: 400,
+      steamLoadKlb: 0,
       operatingHours: 2000,
     },
   ]);
@@ -149,4 +157,36 @@ void test("yearly rollups aggregate records by reporting year", () => {
   assert.equal(rollups[0]?.co2IntensityLbsMWh, 1000);
   assert.equal(rollups[0]?.maxOperatingHours, 4000);
   assert.equal(rollups[0]?.heatRateMMBtuMWh, 8);
+});
+
+void test("CAMPD retrieval filters parse, drop 'ALL', and describe themselves", () => {
+  assert.deepEqual(parseFacilityIds(" 3, 1355 |7 "), [3, 1355, 7]);
+  assert.deepEqual(parseFacilityIds(""), []);
+  assert.equal(parseFacilityIds("3, abc"), null);
+  assert.equal(parseFacilityIds("2.5"), null);
+
+  const active = activeCampdFilters({
+    stateCode: "KY",
+    facilityId: [],
+    unitFuelType: "Coal",
+    unitType: "ALL",
+    controlTechnologies: "",
+  });
+  assert.deepEqual(active, { stateCode: "KY", unitFuelType: "Coal" });
+  assert.equal(describeCampdFilters(active), "KY · Coal");
+  assert.equal(
+    describeCampdFilters({ facilityId: [3, 7], unitType: "Cyclone boiler" }),
+    "Facility 3, 7 · Cyclone boiler",
+  );
+  assert.equal(describeCampdFilters({ stateCode: "ALL" }), "");
+
+  assert.ok(
+    campdRetrievalSchema.safeParse({ fromYear: 2020, toYear: 2024 }).success,
+  );
+  assert.ok(
+    !campdRetrievalSchema.safeParse({ fromYear: 2024, toYear: 2020 }).success,
+  );
+  assert.ok(
+    !campdRetrievalSchema.safeParse({ fromYear: 1990, toYear: 1991 }).success,
+  );
 });

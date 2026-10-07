@@ -1,19 +1,22 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Project Requirements
+epaData_requirements.txt
+
 # dataImports Test Cases
 /dataImports
 /uploads
 
 # dependencies
 /node_modules
+/.venv
 /.pnp
 .pnp.js
 
 # testing
 /coverage
 
-# database
-db.sqlite
+# database (db.sqlite is committed as the sample dataset)
 db.sqlite-journal
 
 # next.js

@@ -18,7 +18,7 @@ import sys
 from collections import Counter
 
 PREVIEW_ROWS = 50
-MAX_LISTED = 500  # cap on listed errors/duplicates; counts in `summary` stay exact
+MAX_LISTED = 500  # cap on listed errors/duplicates; counts in `summary` and `rejectedRows` stay exact
 
 # Database column -> accepted headers, compared with case and punctuation stripped,
 # so "Facility ID", "facility_id", and "facilityId" all match "facilityid".
@@ -42,6 +42,7 @@ SCHEMA = {
         "secondaryFuel": ["secondaryfueltype", "secondaryfuel", "secondaryfuelinfo"],
         "operatingStatus": ["operatingstatus"],
         "commercialOpDate": ["commercialoperationdate", "commercialopdate"],
+        "retirementDate": ["retirementdate", "retiredate"],
         "maxHourlyHIRate": ["maxhourlyhiratemmbtuhr", "maxhourlyhirate"],
         "nameplateCapacityMW": ["associatedgeneratorsnameplatecapacitymwe", "nameplatecapacitymw"],
         "so2Controls": ["so2controls", "so2controlinfo"],
@@ -55,6 +56,7 @@ SCHEMA = {
         "operatingHours": ["sumoftheoperatingtime", "operatingtime", "operatinghours", "sumoptime", "optime"],
         "grossGenerationMWh": ["grossloadmwh", "grossgenerationmwh", "grossload"],
         "heatInputMMBtu": ["heatinputmmbtu", "heatinput"],
+        "steamLoadKlb": ["steamload1000lb", "steamloadklb", "steamload"],
         "co2MassTons": ["co2massshorttons", "co2shorttons", "co2masstons", "co2mass"],
         "so2MassTons": ["so2massshorttons", "so2shorttons", "so2masstons", "so2mass"],
         "noxMassTons": ["noxmassshorttons", "noxshorttons", "noxmasstons", "noxmass"],
@@ -177,7 +179,7 @@ def parse(path):
     missing = Counter()
     status_counts = Counter()
     years = Counter()
-    errors, duplicates, preview = [], [], []
+    errors, duplicates, preview, rejected = [], [], [], []
     first_seen, facilities, units, annual = {}, {}, {}, []
     total = 0
 
@@ -205,13 +207,17 @@ def parse(path):
             status = "invalid"
             ids = {"facilityId": row.get(cols["facilities"].get("id"), ""), "unitId": row.get(cols["units"].get("unitId"), "")}
             errors.extend({"rowNumber": total, **ids, **issue} for issue in issues[: MAX_LISTED - len(errors)])
+            reason = "; ".join(f"{i['field']}: {i['reason']}" for i in issues) or "Columns don't match the project schema"
+            rejected.append({"rowNumber": total, "kind": "REJECTED", "reason": reason, "data": row})
         elif key in first_seen:
             status = "duplicate"
+            reason = f"Same facility-unit-year as row {first_seen[key]}; skipped"
             if len(duplicates) < MAX_LISTED:
                 duplicates.append({
                     "rowNumber": total, "firstSeenRow": first_seen[key], "facilityId": fid, "unitId": uid,
-                    "year": year or None, "reason": f"Same facility-unit-year as row {first_seen[key]}; skipped",
+                    "year": year or None, "reason": reason,
                 })
+            rejected.append({"rowNumber": total, "kind": "DUPLICATE", "reason": reason, "data": row})
         else:
             status = "valid"
             first_seen[key] = total
@@ -245,6 +251,7 @@ def parse(path):
         "validationErrors": errors,
         "duplicates": duplicates,
         "previewRows": preview,
+        "rejectedRows": rejected,
         "records": {"facilities": list(facilities.values()), "units": list(units.values()), "annual": annual},
     }
 
