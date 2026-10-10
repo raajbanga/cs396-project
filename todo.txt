@@ -295,11 +295,11 @@ Accept:
   - Cancel writes nothing (datasets count unchanged).
 
 ================================================================================
-STAGE C — DESCRIPTION-BASED SEARCH (rubric §6, 7 pts)
+STAGE C — DESCRIPTION-BASED SEARCH (rubric §6, 7 pts)  ✅ DONE 2026-10-10
 ================================================================================
 Prereqs from Stage D: D3 (operatingStatus filter), D4 (year range).
 
-C1 [ ] Parser src/lib/describe-search.ts (pure, no DB):
+C1 [x] Parser src/lib/describe-search.ts (pure, no DB):
        parseDescription(text, vocab) → { filters: Partial<FacilityFilters>,
        tab?: "explorer"|"units", sort?: {by, dir}, qualitative:
        {metric, level:"high"|"low"}[], matched: {text, key, value}[],
@@ -336,7 +336,7 @@ C1 [ ] Parser src/lib/describe-search.ts (pure, no DB):
          qualitative.
        - Stopwords dropped (find, show, me, with, in, the, emissions, …).
          Anything left → unrecognized.
-C2 [ ] Server: facilities.describeSearch({text}) query.
+C2 [x] Server: facilities.describeSearch({text}) query.
        - Builds vocab (cached like getFilterOptions) and runs the parser.
        - Resolves qualitative terms: P75 (high) / P25 (low) of the metric over
          rankedUnitYears(other filters), via ORDER BY metric LIMIT 1
@@ -346,7 +346,7 @@ C2 [ ] Server: facilities.describeSearch({text}) query.
          "parser+llm", note?}.
        - Facilities view: thresholds apply per unit-year (the existing "≥1
          matching unit-year" semantics); say so in the note.
-C3 [ ] OpenRouter fallback (optional; only when unrecognized has content
+C3 [x] OpenRouter fallback (optional; only when unrecognized has content
        words).
        - env (server-only, src/env.js + .env.example): OPENROUTER_API_KEY
          (optional), OPENROUTER_MODEL (default: a current `:free` model that
@@ -361,7 +361,7 @@ C3 [ ] OpenRouter fallback (optional; only when unrecognized has content
          browser.
        - Negation the schema can't express ("not coal") → reported, not
          guessed.
-C4 [ ] UI (FacilityFilterBar, no new hooks):
+C4 [x] UI (FacilityFilterBar, no new hooks):
        - SegmentedControl "Name | Describe" inside the search box. In Describe
          mode, Enter → utils.facilities.describeSearch.fetch(text) → apply:
          setFilters({...DEFAULT_FILTERS, ...filters}), set the tab, set the
@@ -376,7 +376,7 @@ C4 [ ] UI (FacilityFilterBar, no new hooks):
        - Placeholder examples rotate: "coal units in Kentucky with high CO2",
          "top 10 facilities by CO2 in 2024", "gas units in TX under 50 tons
          SO2".
-C5 [ ] Tests src/lib/describe-search.test.ts, ≥ 30 table cases:
+C5 [x] Tests src/lib/describe-search.test.ts, ≥ 30 table cases:
        - rubric + spec examples
        - 3 word-order permutations of the same query
        - synonyms, typos, k/M numbers, between, year ranges
@@ -385,6 +385,54 @@ C5 [ ] Tests src/lib/describe-search.test.ts, ≥ 30 table cases:
        - unknown words, negation
        Integration (script or test against db.sqlite copy): "coal units in
        Kentucky in 2025 with CO2 over 500,000 tons" → 25 rows = hand SQL.
+   Done notes:
+   - Prereqs: D3 operatingStatus filter (prefix match, so "Retired" doesn't
+     catch "Operating (Retired …)"); D4 yearMin/yearMax via RANGE_FIELDS
+     (year + the six metrics) in the range grid. Both work in the URL, the
+     chips, and the CSV.
+   - src/lib/describe-search.ts: greedy ≤6-word phrase matching over a table
+     built from getFilterOptions plus synonyms, then a binding pass:
+       · comparators look forward from the number, then back from the
+         comparator ("over 500k tons of CO2" / "CO2 over 500k")
+       · "tons" alone → CO₂
+       · year-like numbers become year/yearMin/yearMax
+       · ranking words: N before or after; no N → 10, or 1 for a singular
+         noun ("top facility in each state")
+       · leftover metric words sort by that metric
+     Extras:
+       · "owned by / operated by / named X" → the existing text search
+       · typo tolerance only for filter values (≤1 edit, ≤2 for 9+ letters)
+       · negation reported as "not X", never inverted
+       · a facility-view query needing a non-CO₂ sort switches to Units
+   - Select now shows a current value that isn't a listed option ("Oil", "Low
+     NOx Burner", URL values).
+   - facilities.describeSearch: parser → OpenRouter fallback only if words
+     are left over → P75/P25 threshold (3 significant figures) over
+     rankedUnitYears(other filters) → {filters, tab, sort, unrecognized,
+     via, notes}. getFilterOptions logic is now filterOptions(db), shared.
+   - src/server/llm-search.ts: strict JSON schema of vocab enums + numeric
+     bounds; additions only; values re-validated; 8 s timeout; per-text
+     cache. Default model "openrouter/free" (OpenRouter's router over free
+     models with structured outputs; checked /api/v1/models 2026-10-10).
+   - UI:
+       · Name | Describe toggle; Describe = form + datalist of examples
+       · removable chips for EVERY active filter (both modes, also in the
+         Download dialog)
+       · "Not understood …", "via parser | parser + LLM", notes
+       · ?q= in the URL (display only)
+   Verified:
+   - 36 tests (12 describe groups, ~60 phrasings) + validate green.
+   - Real DB: spec sentence → 25 rows (= hand SQL); rubric sentence → KY ·
+     Coal · CO₂ ≥ 2,660,000 (top 25% of KY coal unit-years) → 103 rows,
+     sorted CO₂↓; "top CO2-emitting facility in each state in 2024" → 51
+     (= earlier check); "operating gas units in Texas with low NOx since
+     2020" → 5 conditions, 670 rows.
+   - No key → note "LLM fallback off"; bogus key → "unavailable (OpenRouter
+     401)" with the parser result kept. The success path is UNTESTED until
+     a real key is added.
+   - SSR of a ?q= URL renders the chips + toggle; CSV for the interpreted
+     search = 103 rows.
+   NOT verified in a browser: clicking Describe, chip ✕, the mode toggle.
 Accept:
   - Rubric example "Find coal units in Kentucky with high CO2 emissions."
     → Units · KY · Coal · CO₂ ≥ P75 · sort CO₂↓. Results all KY coal units
@@ -395,7 +443,7 @@ Accept:
 ================================================================================
 STAGE D — SPEC CONFORMANCE + BUG FIXES (small)
 ================================================================================
-D1 [ ] Retrieval dialog names its method (§9.2): "Method: EPA CAM API —
+D1 [x] Retrieval dialog names its method (§9.2): "Method: EPA CAM API —
        apportioned annual emissions (/annual)". Hint: CAMPD Custom Data
        Download files → use Upload.
 D2 [ ] Home intro (§9.1): replace the marketing hero with a plain epaData
@@ -404,10 +452,10 @@ D2 [ ] Home intro (§9.1): replace the marketing hero with a plain epaData
        - data sources (CAMPD API, CSV/Excel uploads; TRACI = Phase 2)
        - coverage (existing DataCoverage)
        - navigation: one line naming Retrieve / Upload / Explore / Download
-D3 [ ] operatingStatus filter (units.operating_status, indexed):
+D3 [x] operatingStatus filter (units.operating_status, indexed):
        facilityFilterSchema + unitConditions + "More filters" select (options
        from getFilterOptions).
-D4 [ ] Year range yearMin/yearMax on annual_records.year: add Year to the
+D4 [x] Year range yearMin/yearMax on annual_records.year: add Year to the
        existing range grid (same RANGE_KEYS pattern). The single Year select
        stays in the toolbar. Gives §8.3 "same unit 2015–2025" in the explorer.
 D5 [ ] Fix hasAirQualityControls (`??` → non-blank `||`). Make SQL

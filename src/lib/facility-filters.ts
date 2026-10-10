@@ -13,9 +13,14 @@ export const UNIT_METRICS = [
   { key: "so2MassTons", label: "SO₂", unit: "tons" },
   { key: "noxMassTons", label: "NOₓ", unit: "tons" },
 ] as const;
-type UnitMetric = (typeof UNIT_METRICS)[number]["key"];
-type RangeKey = `${UnitMetric}${"Min" | "Max"}`;
-const RANGE_KEYS = UNIT_METRICS.flatMap(
+/** §8.2 min/max filters: the reporting year (for 2015–2025 style history) plus every metric. */
+export const RANGE_FIELDS = [
+  { key: "year", label: "Reporting year", unit: "yr" },
+  ...UNIT_METRICS,
+] as const;
+type RangeField = (typeof RANGE_FIELDS)[number]["key"];
+type RangeKey = `${RangeField}${"Min" | "Max"}`;
+const RANGE_KEYS = RANGE_FIELDS.flatMap(
   ({ key }) => [`${key}Min`, `${key}Max`] as const,
 );
 
@@ -55,6 +60,7 @@ export const facilityFilterSchema = z.object({
   so2Control: text,
   noxControl: text,
   pmControl: text,
+  operatingStatus: text,
   topN: text,
   rankGroup: text, // "state" = rank within each state
   origin: text, // "API" | "UPLOAD": where the unit-year record came from
@@ -79,6 +85,7 @@ export const DEFAULT_FILTERS = {
   so2Control: "ALL",
   noxControl: "ALL",
   pmControl: "ALL",
+  operatingStatus: "ALL",
   topN: "ALL",
   rankGroup: "ALL",
   origin: "ALL",
@@ -166,6 +173,8 @@ export type ExplorerTab = (typeof EXPLORER_TABS)[number];
 
 export interface ExplorerState {
   tab: ExplorerTab;
+  /** The last description-search text (display only; the filters it produced are in `filters`). */
+  q: string;
   filters: FacilityFilters;
   table: typeof DEFAULT_TABLE_STATE;
   unitTable: typeof DEFAULT_UNIT_TABLE_STATE;
@@ -213,18 +222,20 @@ export function parseExplorerParams(params: Params): ExplorerState {
       sortDir: sortDir ?? table.sortDir,
     });
   }
-  return { tab, filters, table, unitTable };
+  return { tab, q: get("q") ?? "", filters, table, unitTable };
 }
 
 /** Query string for the explorer state, keeping only non-default values (the inverse of parseExplorerParams). */
 export function explorerSearchParams({
   tab,
+  q,
   filters,
   table,
   unitTable,
 }: ExplorerState) {
   const params = new URLSearchParams();
   if (tab !== "explorer") params.set("tab", tab);
+  if (q.trim()) params.set("q", q.trim());
   for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
     if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
   }
