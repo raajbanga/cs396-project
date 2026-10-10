@@ -7,6 +7,8 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     DATABASE_AUTH_TOKEN: z.string().optional(),
     CAMPD_API: z.string().min(1).optional(),
+    OPENROUTER_API_KEY: z.string().optional(),
+    OPENROUTER_MODEL: z.string().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -19,6 +21,8 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     DATABASE_AUTH_TOKEN: process.env.DATABASE_AUTH_TOKEN,
     CAMPD_API: process.env.CAMPD_API,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_CARTO_API: process.env.NEXT_PUBLIC_CARTO_API,
   },

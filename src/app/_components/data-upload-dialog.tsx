@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState } from "react";
 import {
   CheckCircle2,
   Database,
@@ -8,21 +8,14 @@ import {
   FileUp,
   Loader2,
 } from "lucide-react";
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
+import { Badge, SourceBadge, type BadgeVariant } from "~/components/ui/badge";
 import { Button, buttonClass } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { ErrorBanner, ReportTable, Section } from "~/components/ui/report";
 import { exportUrl } from "~/lib/csv";
 import {
   canImport,
@@ -32,7 +25,7 @@ import {
   type ImportResult,
   type RowStatus,
 } from "~/lib/data-import";
-import { cn, formatQuantity } from "~/lib/utils";
+import { cn, formatNumber, formatQuantity } from "~/lib/utils";
 import { AuditTable } from "./audit-logs-table";
 
 type Tab = "preview" | "quality" | "duplicates" | "columns";
@@ -43,8 +36,6 @@ const STATUS_BADGES: Record<RowStatus, [BadgeVariant, string]> = {
   duplicate: ["secondary", "Duplicate"],
   invalid: ["destructive", "Rejected"],
 };
-
-const count = (n: number) => formatQuantity(n, "", { fallback: "0" });
 
 async function postUpload<T>(file: File, commit: boolean): Promise<T> {
   const body = new FormData();
@@ -169,7 +160,7 @@ export function DataUploadDialog({
               ) : (
                 <CheckCircle2 className="h-3.5 w-3.5" />
               )}
-              Approve & Import {count(report.summary.validCount)} Records
+              Approve & Import {formatNumber(report.summary.validCount)} Records
             </Button>
           </>
         ) : null
@@ -183,11 +174,7 @@ export function DataUploadDialog({
         onChange={(e) => selectFile(e.target.files?.[0])}
       />
 
-      {error && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-400 sm:text-sm">
-          {error}
-        </div>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {result ? (
         <ImportSuccess result={result} />
@@ -251,34 +238,34 @@ function ReportView({
         <StatTile
           variant="card"
           label="Rows"
-          value={count(summary.totalRows)}
+          value={formatNumber(summary.totalRows)}
           subtext={`${columns.length} columns`}
         />
         <StatTile
           variant="card"
           label="Valid"
-          value={count(summary.validCount)}
+          value={formatNumber(summary.validCount)}
           valueClassName="text-emerald-400"
           subtext="Will be imported"
         />
         <StatTile
           variant="card"
           label="Rejected"
-          value={count(summary.invalidCount)}
+          value={formatNumber(summary.invalidCount)}
           valueClassName={summary.invalidCount ? "text-red-400" : undefined}
           subtext="Not imported"
         />
         <StatTile
           variant="card"
           label="Duplicates"
-          value={count(summary.duplicateCount)}
+          value={formatNumber(summary.duplicateCount)}
           valueClassName={summary.duplicateCount ? "text-amber-400" : undefined}
           subtext="Facility-unit-year, skipped"
         />
         <StatTile
           variant="card"
           label="Audit Flags"
-          value={count(report.anomalies.length)}
+          value={formatNumber(report.anomalies.length)}
           valueClassName={
             report.anomalies.length ? "text-amber-400" : undefined
           }
@@ -303,6 +290,20 @@ function ReportView({
                 {table}
               </Badge>
             ))}
+            {report.destinationTables.includes("annual_records") && (
+              <span className="text-fg-2 flex flex-wrap items-center gap-1.5 sm:ml-auto">
+                <SourceBadge kind="db" />
+                compared with stored records:
+                <strong className="text-emerald-400">
+                  {formatNumber(report.diff.inserted)} new
+                </strong>
+                ·
+                <strong className="text-amber-400">
+                  {formatNumber(report.diff.updated)} changed
+                </strong>
+                · {formatNumber(report.diff.unchanged)} unchanged
+              </span>
+            )}
           </>
         )}
       </div>
@@ -314,11 +315,11 @@ function ReportView({
           { value: "preview", label: "Preview" },
           {
             value: "quality",
-            label: `Data Quality (${count(summary.invalidCount + report.anomalies.length)})`,
+            label: `Data Quality (${formatNumber(summary.invalidCount + report.anomalies.length)})`,
           },
           {
             value: "duplicates",
-            label: `Duplicates (${count(report.duplicates.length)})`,
+            label: `Duplicates (${formatNumber(report.duplicates.length)})`,
           },
           { value: "columns", label: `Columns (${columns.length})` },
         ]}
@@ -326,7 +327,7 @@ function ReportView({
 
       {tab === "preview" && (
         <Section
-          title={`First ${report.previewRows.length} of ${count(summary.totalRows)} rows`}
+          title={`First ${report.previewRows.length} of ${formatNumber(summary.totalRows)} rows`}
         >
           <ReportTable
             head={["Row", "Status", ...previewColumns]}
@@ -355,7 +356,7 @@ function ReportView({
           <>
             {report.validationErrors.length > 0 && (
               <Section
-                title={`Rejected rows (${count(summary.invalidCount)})`}
+                title={`Rejected rows (${formatNumber(summary.invalidCount)})`}
                 note={`These rows are not imported.${summary.invalidCount > report.validationErrors.length ? ` Showing the first ${report.validationErrors.length} problems.` : ""}`}
               >
                 <ReportTable
@@ -378,7 +379,7 @@ function ReportView({
             )}
             {report.anomalies.length > 0 && (
               <Section
-                title={`Physical sanity flags (${count(report.anomalies.length)})`}
+                title={`Physical sanity flags (${formatNumber(report.anomalies.length)})`}
                 note="These records are imported and the flags are logged to data_audit_logs."
               >
                 <DataPanel>
@@ -430,7 +431,7 @@ function ReportView({
                 m.targetTable,
                 m.targetColumn,
                 m.required ? "Yes" : "No",
-                count(report.missingValueCounts[m.fileColumn] ?? 0),
+                formatNumber(report.missingValueCounts[m.fileColumn] ?? 0),
               ])}
             />
           </Section>
@@ -458,25 +459,25 @@ function ImportSuccess({ result }: { result: ImportResult }) {
         <StatTile
           variant="card"
           label="Facilities"
-          value={count(result.facilities)}
+          value={formatNumber(result.facilities)}
           subtext="facilities table"
         />
         <StatTile
           variant="card"
           label="Units"
-          value={count(result.units)}
+          value={formatNumber(result.units)}
           subtext="units table"
         />
         <StatTile
           variant="card"
           label="Annual Records"
-          value={count(result.annualRecords)}
-          subtext="annual_records table"
+          value={formatNumber(result.annualRecords)}
+          subtext={`${formatNumber(result.diff.inserted)} new · ${formatNumber(result.diff.updated)} updated · ${formatNumber(result.diff.unchanged)} unchanged`}
         />
         <StatTile
           variant="card"
           label="Audit Flags"
-          value={count(result.anomalies)}
+          value={formatNumber(result.anomalies)}
           subtext="See the Audits tab"
         />
       </KpiStrip>
@@ -488,7 +489,7 @@ function ImportSuccess({ result }: { result: ImportResult }) {
             className={buttonClass({ variant: "outline", size: "sm" })}
           >
             <FileDown className="h-3.5 w-3.5 text-red-400" />
-            Download rejected rows ({count(result.issues)})
+            Download rejected rows ({formatNumber(result.issues)})
           </a>
         )}
         <p className="text-fg-muted font-mono text-xs sm:ml-auto">
@@ -496,60 +497,5 @@ function ImportSuccess({ result }: { result: ImportResult }) {
         </p>
       </div>
     </div>
-  );
-}
-
-export function Section({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="space-y-2">
-      <h4 className="text-fg text-xs font-semibold tracking-wider uppercase">
-        {title}
-      </h4>
-      {note && <p className="text-fg-muted text-xs">{note}</p>}
-      {children}
-    </div>
-  );
-}
-
-export function ReportTable({
-  head,
-  rows,
-}: {
-  head: string[];
-  rows: ReactNode[][];
-}) {
-  return (
-    <DataPanel>
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow>
-            {head.map((h, i) => (
-              <TableHead key={i} className="whitespace-nowrap">
-                {h}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((cells, i) => (
-            <TableRow key={i}>
-              {cells.map((cell, j) => (
-                <TableCell key={j} className="max-w-56 truncate font-mono">
-                  {cell}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </DataPanel>
   );
 }

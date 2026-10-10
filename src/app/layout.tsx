@@ -7,9 +7,9 @@ import { ThemeProvider } from "next-themes";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
-  title: "GridPulse | US Power & Emissions Intelligence",
+  title: "epaData",
   description:
-    "Real-time US power grid, generation capacity, and continuous emissions monitoring platform.",
+    "Retrieve, validate, store, search, and download EPA Clean Air Markets (CAMPD) power-sector emissions data.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 

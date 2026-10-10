@@ -1,189 +1,597 @@
-epaData Phase 1 — Remaining Work (mini PRD)
-Audited against epaData_requirements.txt on 2026-10-06. Work top to bottom.
-
-ALREADY DONE: §6 Upload (CSV/Excel, Python validation, preview, approve/cancel,
-dupes, rejected-row report, archive), facility compare, facility detail dialog,
-facility-level pagination/sort, CAMPD key kept server-side (CAMPD_API env var).
-
-GROUND RULES (apply to every step)
-- DRY + uniform UI: new views reuse the hooks/patterns already in
-  DatabaseExplorer (api.*.useQuery, useState table/filter state from
-  ~/lib/facility-filters, useDeferredValue) and src/components/ui/* primitives.
-  No new custom hooks, no parallel components.
-- New views are DIALOGS opened from DatabaseExplorer, like Inspect/Compare/Upload
-  (no new Next.js routes).
-- Extend facilityFilterSchema + the facilities router; don't fork query paths.
-- One drizzle migration per step that touches schema; update README ER diagram
-  + DATABASE_BREAKDOWN.md in the same step.
-- `npm run validate` passes at the end of each step.
+epaData Phase 1 — Remaining Work (PRD v2)
+Full audit against epaData_requirements.txt + rubric.txt on 2026-10-09.
+Work top to bottom; each stage leaves `npm run validate` green.
 
 ================================================================================
-STAGE 1 — QUICK WINS  ✅ DONE 2026-10-06 (npm run validate passes)
+0. AUDIT SUMMARY
 ================================================================================
+Baseline: `npm run validate` passes (format, lint, typecheck, 12 tests, build).
+DB: 1,619 facilities · 5,204 units · 50,947 unit-years (2015–2026) · 6,958 audit
+flags · 17 datasets, ALL source=API (no upload datasets in the DB) · 0 import_issues.
+Previous PRD stages 1–4 (§5 retrieval, §6 upload, §8 search, §10 download) are done.
 
-1. Housekeeping ✅
-   [x] Stray venv path/to/ removed; repo venv at .venv (gitignored).
-       Server + tests use .venv/bin/python3 when present (src/lib/python.ts).
-   [x] Stale uploads/staged_*.csv deleted.
-   [x] db.sqlite kept as committed sample dataset; ignore line removed.
-   [x] FIX: CLI scripts never loaded .env → now `tsx --env-file=.env`.
-   [x] FIX: db.sqlite had no __drizzle_migrations (built via push); baselined
-       0000/0001 so `npm run db:migrate` works. drizzle-kit added as devDep,
-       new `npm run db:generate`.
+Requirement / rubric coverage (✅ met · ⚠ partial · ❌ missing):
+  §5  Retrieval ................ ✅ CAM API, filters, history, key server-side
+                                 ⚠ page doesn't name the "retrieval method"
+                                 ⚠ CAMPD rows failing validation or repeated
+                                   across pages are dropped/overwritten SILENTLY
+                                   (only visible as raw − valid); §6 says never
+                                 ⚠ no "what's already in the DB vs what the API
+                                   sent" view (user's #1 ask)
+  §6  Upload ................... ✅ steps 1–11
+                                 ⚠ nothing to demo it with: dataImports/ is
+                                   gitignored, DB has no upload datasets
+  §7  Database ................. ✅ all required tables/columns, FKs, unique keys
+                                 ⚠ controls/program code stored per unit, not per
+                                   unit-year (document as an assumption)
+                                 ⚠ annual_records.dataset_id = last writer only;
+                                   re-syncs leave superseded datasets with 0 rows
+                                   (document; origin shown in Stage B)
+  §8  Search ................... ✅ 8.1, 8.2, 8.3, 8.4, indexes
+                                 ⚠ no operating-status filter; year is a single
+                                   value (historical 2015–2025 only via unit page)
+  R6  Description search ....... ❌ missing (7 pts) → Stage C
+  §9  Pages .................... ⚠ home page "project introduction" is marketing
+                                   copy ("US Power & Emissions Intelligence");
+                                   rest ✅
+  §10 Download ................. ✅ all six types, CSV
+  R1  UI feedback .............. ⚠ compare limit uses window.alert()
+                                 ⚠ Audits tab shows the newest 50 of 6,958
+                                   flags with no paging
+  R8  Back-end ................. ⚠ duplicated query/paging code (Stage A)
+  §11/R9–R11 Deliverables ...... ❌ README stale (says 1,582 facilities / 5,030
+                                   units, "six tables"), no report, slides, or
+                                   demo script → Stages E–G
+Bugs found:
+  - hasAirQualityControls() uses `??`, so so2Controls = "" hides a real NOx
+    control (src/lib/plant-narrative.ts:71). The SQL controlledUnitsCount
+    counts '' as controlled (IS NOT NULL). The two disagree.
+  - fetchAllCampdPages has its own 50-page cap that ignores MAX_SYNC_PAGES.
+  - "PRD Section 3.x" comments point to a document that doesn't exist.
+  - Build warns about a stray ~/package-lock.json (outside the repo).
 
-2. Schema migration ✅ (drizzle/0002_wakeful_obadiah_stane.sql)
-   [x] annual_records.steam_load_klb (CAMPD steamLoad / "Steam Load (1000 lb)").
-   [x] units.retirement_date (mapped from "Retirement Date" uploads).
-   [x] datasets.original_filename, archived_path, query_params (JSON), notes.
-   [x] import_issues table; every upload stores ALL rejected/duplicate rows
-       (parser emits uncapped `rejectedRows`; not sent to the browser).
-       Audit flags stay in data_audit_logs (not duplicated here).
-   [x] Tests: steam load, retirement date, rejectedRows (12/12 pass).
-   [x] README ER diagram + DATABASE_BREAKDOWN.md updated.
+DECISIONS (from Q&A 2026-10-09)
+  - Description search: rule-based parser first; OpenRouter free-model
+    fallback only for words the parser can't interpret (optional key).
+  - "high/low <metric>": percentile threshold (≥ P75 / ≤ P25 of that metric
+    within the other filters), shown as a concrete number, sorted to match.
+  - DB vs API: all four (retrieve diff, preview-then-save, app-wide source
+    labels, per-record origin column + filter).
+  - "Trim fat" = remove redundant code + flashy UI, same functionality. No
+    features are removed.
+  - Rename GridPulse → epaData; tone down hype copy and gratuitous animation.
+  - NL input: "Name | Describe" toggle inside the existing search box.
+  - Deliverables: README rewrite, LaTeX report (university-grade prose, code
+    listings, TikZ diagrams incl. ER), demo script + committed sample file,
+    slides outline.
+  - Deployment stage dropped; app runs locally.
+  - /docs is gitignored (private course files). Deliverables we write go in
+    report/ and presentation/ instead, so they ship in the repo and the zip.
 
-3. CAMPD sync year arguments ✅
-   [x] npm run sync:campd -- --year N | --from N --to M (default last year).
-   [x] Params stored in datasets.query_params.
-   [x] Backfilled 2015–2025 (~4.0–4.7k unit-years each, ~47k total).
-   [x] Tiny 2–9 record datasets were leftovers from an older dev run
-       (2026-09-10), not a sync bug: a full 2024 sync returns 4,024 rows.
-       Deleted 2026-10-06 (15 datasets, owned no records/issues); real
-       superseded syncs and the AK · Coal retrieval kept as §5 history.
+SOURCES IN /docs (private, gitignored)
+  - Submission Guidelines.pdf: a single .zip containing the README (step-by-step
+    reproduction, system setup, env config) and the project report with
+    exactly 10 sections (see Stage F). Section 10 must disclose generative AI
+    assistance.
+  - Banga_Bawankule_Phase1Proposal.pdf: roles. Its timeline is inaccurate;
+    do NOT follow it.
+      Raaj Banga (Backend Lead): schema design, SQLite indexing, CAMPD API
+        integration, CSV parsing, validation, anomaly detection,
+        search/pagination API.
+      Arnav Bawankule (Frontend Lead): UI routing, explorer layout, filter
+        forms, Leaflet map, plant comparator UI, CSV upload modals, export
+        triggers.
+      Shared: API contracts, integration testing, sample data, rubric
+        verification, documentation.
+    Git history differs: Arnav authored the CSV/Excel import feature (Python
+    validation + data-quality report, 2026-09-29); everything else is Raaj's.
+    Confirm the final split with both members before writing §9.
+  - Proposal promises vs. what was built (report §2 has to list what was
+    planned but not completed or changed):
+      Prisma → Drizzle ORM · Zod + Fast-CSV upload parsing → Python parser
+      (scripts/parse_import.py) · Leaflet "coordinate clustering" → not
+      built (scaled circle markers + 3D globe instead) · "spike" anomaly
+      detection → not built (3 physical-sanity rules) · large-dataset
+      stress tests → not done (note ~47k-row sync timings instead).
+      Added beyond the proposal: Excel upload, granular live time series, 3D
+      globe, retrieval history/provenance, description search, DB-vs-API
+      diff.
 
-4. Provenance + coverage ✅
-   [x] Home: DataCoverage strip (sources, records per year, datasets + last
-       import) fed by the existing getStats query.
-   [x] Facility detail: each unit-year row shows dataset source + import date.
-
-Stage 1 follow-ups ✅
-   [x] Superseded datasets kept as retrieval history (§5). An API dataset that
-       owns no annual_records = superseded (computed, no schema change);
-       home coverage shows "N active (+M superseded)". Uploads never marked.
-   [x] Sync pages until a short page (cap MAX_SYNC_PAGES=100 → 50k rows,
-       throws if hit) instead of a fixed 10-page / 5,000-row limit.
-   [x] 2026 re-synced: 3,959 records (EPA has published part of the year).
-       DB now covers 2015–2026, 12 active datasets.
-   [ ] Re-sync 2026 periodically as EPA publishes more quarters.
-
-================================================================================
-STAGE 2 — §5 RETRIEVAL DIALOG  ✅ DONE 2026-10-06 (npm run validate passes)
-================================================================================
-5. [x] Header button "Retrieve" → DataRetrievalDialog (same Dialog shell;
-       shares Section/ReportTable with DataUploadDialog).
-   [x] Filters: year range, state, facility IDs, fuel, unit type, control tech
-       → facilities.retrieveCampd mutation → syncCampdAnnualEmissions({filters}).
-       Schema campdRetrievalSchema in ~/lib/facility-filters (picks stateCode
-       from facilityFilterSchema). Fuel/unit-type/control options come from
-       CAMPD master data (getRetrievalOptions, cached 24h) because local unit
-       values are combos ("Coal, Natural Gas") CAMPD rejects. All 74 values
-       checked against /annual. Filters stored in queryParams + dataset name.
-   [x] Status (running / done / error) + received/stored counts from the
-       mutation; a failed year writes "Error: …" to datasets.notes and stops
-       the run.
-   [x] Past retrievals list (facilities.getDatasets): year, source, params,
-       date, received/stored, Active / Superseded / Error.
-   [x] FIX: isSuperseded's correlated subquery was unqualified in single-table
-       selects ("dataset_id" = "id" bound to annual_records.id), so getStats
-       over-counted superseded datasets. Now hand-qualified; retrievals that
-       matched 0 rows are no longer counted as superseded.
-   [x] Verified live (on a DB copy): KY+Coal 2023–24 = 28/yr (matches CAMPD
-       directly), facility IDs + SCR, zero-match, invalid fuel → error.
-
-================================================================================
-STAGE 3 — §8 SEARCH (data explorer)  ✅ DONE 2026-10-06 (npm run validate passes)
-================================================================================
-6. [x] Unit-year query facilities.getUnitYears: annual_records ⨝ units ⨝
-       facilities, one row per facility-unit-year. "Units" option added to
-       the header SegmentedControl; filter bar shared with Facilities.
-7. [x] Basic filters (8.1) in FacilityFilterBar's "More filters" panel:
-       facility ID, unit ID, county (options narrowed by state), year,
-       secondary fuel, unit type, SO2/NOx/PM control. Fuels/type/controls
-       match by "contains"; options are split values (multiValueOptions).
-       NOTE: primary fuel is now "contains" too, so "Coal" also matches
-       "Coal Refuse" and "Coal, Pipeline Natural Gas" (373 → 391 facilities).
-8. [x] Range filters (8.2): min/max (inclusive) operating hours, gross load,
-       heat input, CO2, SO2, NOx. All filters AND together.
-       Acceptance verified: KY + Coal + 2025 + CO2 > 500,000 = 25 units, same
-       count as hand-written SQL. Facilities view: unit/range filters keep
-       facilities with ≥1 matching unit-year; a Year filter scopes totals.
-9. [x] Ranking (8.3): "First N" + sort column/direction = Top-N / Bottom-N;
-       Group "Per state" uses ROW_NUMBER() OVER (PARTITION BY state_code),
-       in both views (e.g. top CO2 facility per state). Compare dock takes
-       facilities and units (compareFacilities({ ids, unitIds })). Unit
-       history = UnitDetailDialog (every year for the unit).
-10.[x] Results (8.4): every metric column sortable; pagination, sortable
-       header, skeleton moved to ui/table.tsx and shared with FacilitiesTable;
-       row → UnitDetailDialog (identification, fuel + controls, operating
-       data + emissions by year with source dataset, audit flags).
-   [x] Filters/tab/sort/page synced to URL (explorerSearchParams /
-       parseExplorerParams; page.tsx reads searchParams + prefetches).
-   [x] Index: facilities(county) (drizzle/0003). Skipped on purpose:
-       annual_records(year) is already the prefix of annual_record_year_co2_idx;
-       units(unit_type)/units(secondary_fuel) can't serve "contains" LIKE
-       '%…%' matches, so an index there would never be used.
-
-================================================================================
-STAGE 4 — §10 DOWNLOAD (CSV)  ✅ DONE 2026-10-06 (npm run validate passes)
-================================================================================
-11.[x] GET /api/export?type=…&<params> → text/csv, Content-Disposition
-       attachment, JSON 400/404 on a bad request (src/server/export.ts).
-       One shared CSV writer src/lib/csv.ts (RFC 4180 quoting of comma, quote,
-       CR/LF; CRLF lines) + csv.test.ts.
-12.[x] Types: dataset (id → every unit-year it holds + audit_flags column),
-       valid (id → that dataset's records with no audit flags), invalid
-       (id → data-quality report: import_issues rows + original columns, plus
-       one FLAGGED row per audit flag of the dataset's records), search (the explorer's
-       own URL params via parseExplorerParams; Facilities or Units, table
-       order, no paging, rank column with First N), selection (ids/unitIds →
-       every year of the compare selection), provenance (all datasets or one:
-       source, params, file, dates, counts, current records, status).
-       No forked query paths: getFacilities/getUnitYears/getDatasets now call
-       exported rankedFacilities / rankedUnitYears(scope) / datasetHistory.
-       NOTE: "valid" = unflagged records. Uploads and syncs share one write path
-       (rejected rows never become records), so "accepted rows" alone would just
-       repeat "dataset". Facility-only uploads own no annual records, so their
-       dataset/valid exports are empty (header only).
-   [x] §10 re-check: invalid now also lists questionable (audit-flagged)
-       records, so it works for CAMPD datasets too (valid + flagged = dataset);
-       unit-year CSVs gained §7 fields program_code, hg_controls,
-       operating_status, commercial_op_date, retirement_date.
-   [ ] Known limits: superseded datasets export 0 rows (later syncs upsert
-       over their unit-years; history isn't versioned). "Selected" = compare
-       selection, capped at 4.
-13.[x] DataDownloadDialog (header "Download"): type, dataset picker (uploads
-       only for "invalid"; "All datasets" for provenance), the explorer's
-       FacilityFilterBar for search (same state; Facilities/Unit-years), the
-       compare selection, format select (CSV).
-   [x] "CSV" link beside the explorer result count (FacilityFilterBar
-       `actions` slot); "Download rejected rows (N)" after an upload import.
-   [x] Verified live: KY+Coal+2025+CO2≥500k = 25 unit-years / 8 facilities
-       (same as SQL); 2025 dataset 3,989 rows, valid 3,569 (420 flagged =
-       datasets.flagged_records); top-1 per state 2024 = 51 rows; selection
-       counts match SQL; a test upload (on a DB copy) exported its 1 duplicate +
-       3 rejected rows with quotes and an embedded newline intact.
+GROUND RULES (every step)
+  - DRY + uniform UI: reuse DatabaseExplorer's state pattern (useState +
+    ~/lib/facility-filters, useDeferredValue, api.*.useQuery) and
+    src/components/ui/*. No new custom hooks, no parallel components.
+  - New views are dialogs/sections inside existing dialogs; no new routes.
+  - Extend facilityFilterSchema + the facilities router; don't fork queries.
+  - One drizzle migration per schema change; update README ER diagram +
+    DATABASE_BREAKDOWN.md in the same step.
+  - Cleanup steps must not change behavior: same queries, same counts, same
+    CSV bytes (except renamed filenames).
 
 ================================================================================
-STAGE 5 — DELIVERABLES (§11)
+STAGE A — CLEANUP (redundant code + flashy UI; behavior unchanged)  ✅ DONE 2026-10-09
 ================================================================================
-14.[ ] README updated for all of the above.
-   [ ] Project report: sources, assumptions (controls/program code stored per
-       unit not per unit-year), equations, units, limitations, and why
-       Next.js was used instead of the spec's Flask.
-   [ ] Presentation slides.
+Do this first; Stages B/C build on the shared pieces it creates.
+
+A1 [x] Move shared report UI out of data-upload-dialog.tsx into
+       src/components/ui/report.tsx: Section, ReportTable, and Field (from
+       data-retrieval-dialog.tsx) + FIELD_LABEL (facility-filters.tsx).
+       Retrieval/download/unit-detail stop importing from the upload dialog.
+A2 [x] One error banner: the identical red <div> in upload + retrieval dialogs
+       → ui/alert.tsx (or an "error" EmptyState variant).
+A3 [x] formatCount(n) in ~/lib/utils replaces the 10 copies of
+       formatQuantity(n, "", { fallback: "0" }) (`count`/`num` helpers).
+A4 [x] datasetOriginLabel(dataset) in ~/lib/utils replaces the 5 hand-built
+       "`${DATASET_SOURCE_LABELS[...]} · date`" strings (facility detail, unit
+       detail, coverage, retrieval history, download picker). Stage B uses it.
+A5 [x] Header: the 3 identical Retrieve/Download/Upload <Button>s → one array
+       + map.
+A6 [x] Router: getFacilities/getUnitYears share a byte-identical count +
+       page body → one pageOf(ranked, where, orderBy, paging) helper.
+       Collapse facilityMetrics/perFacility into one definition.
+A7 [x] CAMPD paging: fetchAllCampdPages (50-page cap) and the sync loop
+       (MAX_SYNC_PAGES) → one campdPages(path, query) async generator with a
+       single cap. (B2 also needs a fetch-without-write.)
+A8 [x] Replace "PRD Section x.y" comments with real refs
+       (epaData_requirements §n) or drop them.
+A9 [x] Flashy UI → plain (no feature removed):
+       - Remove the pulsing animate-ping dot, the "v1.0" badge, hover
+         recoloring of row titles, and the emerald tint on every icon.
+       - Audit the 16 animate-in/backdrop-blur/shadow-2xl uses: keep them on
+         dialogs/overlays, drop them from inline panels.
+       - Rename jargon/hype labels: "Facility Dossier" → "Facility details",
+         "Temporal Emissions Telemetry" → "Emissions over time", "CEMS Store"
+         → "Local database", "Automated Thermodynamic Auditing" →
+         "Data-quality checks", "Intelligence"/"stack sensors" copy → plain.
+       - Plant narrative, role badges, globe, and compare tabs stay; only their
+         copy gets toned down where it overclaims.
+A10[x] Rename GridPulse → epaData: <title>/metadata in layout.tsx, header,
+       README, export filenames (gridpulse_* → epadata_*), temp-dir prefix in
+       server/data-import.ts.
+A11[x] Dead-code sweep: `npx knip` (or ts-prune) once; delete unused exports
+       and files.
+   Done notes:
+   - A1/A2: src/components/ui/report.tsx (Field, FIELD_LABEL, Section,
+     ReportTable, ErrorBanner). The retrieval dialog's labels now use the
+     shared uppercase caption style.
+   - A3: formatNumber(value, digits). A4: sourceLabel() + datasetOriginLabel();
+     DATASET_SOURCE_LABELS is now private.
+   - A5: icon-only header buttons on mobile for all three (Upload used to
+     show text).
+   - A6: pageOf(). facilityMetrics/perFacility kept as-is: one is raw SQL
+     for ORDER BY, the other the aliased select; merging them doesn't save
+     anything.
+   - A7: campdPages() generator + MAX_CAMPD_PAGES/CAMPD_PAGE_SIZE; the
+     sync's perPage arg is gone (always 500). Granular fetches now share the
+     100-page cap instead of silently stopping at 50.
+   - A9: hype copy rewritten in the explorer, granular, compare, detail,
+     audit, and primer views. "Annual CO₂" tile relabeled "CO₂, all years"
+     (it sums every year; the old label was wrong). Inline-panel animations
+     and row hover tint removed; dialog/select/map-overlay effects kept.
+   - A10: README title only. The full README rewrite is E1.
+   - A11: knip: no dead files. 2 consts + 8 types unexported.
+     topojson-specification is a type-only transitive (@types) import; left.
+   - ~/package-lock.json deleted → build lockfile warning gone.
+   Verified: validate green (20 tests). search units KY+Coal+2025+CO₂≥500k
+   = 25, facilities = 8, top-1/state 2024 = 51, 2025 dataset 3,989 / valid
+   3,569, provenance 17. Dev pages /, units, map, audit → 200, no errors.
+Accept: validate green. Spot checks unchanged:
+  - KY+Coal+2025+CO₂≥500k = 25 unit-years / 8 facilities.
+  - dataset/valid/search CSV row counts unchanged.
+  - Facilities/Units/Map/Audits/Compare/detail dialogs look the same minus
+    the removed effects.
 
 ================================================================================
-STAGE 6 (OPTIONAL) — VERCEL DEPLOYMENT
+STAGE B — DATABASE vs API PROVENANCE (user's #1 ask)  ✅ DONE 2026-10-09
 ================================================================================
-Today the app only runs locally: Vercel functions have no python3/openpyxl and
-a read-only filesystem (only /tmp, wiped between calls), so the bundled
-db.sqlite and uploads/ archive can't be written. requirements.txt alone won't fix it.
-15.[ ] Hosted DB: keep Drizzle + @libsql/client, point DATABASE_URL at Turso
-       (libsql://…) + auth token in Vercel env; run db:migrate + db:seed (and
-       sync:campd) against it once. Drop db.sqlite from outputFileTracingIncludes.
-16.[ ] Upload parser: port scripts/parse_import.py to TypeScript (e.g. `xlsx`
-       npm package for Excel) so it runs in the Node function; keep the
-       ParsedUpload contract + existing tests. (Alt: separate Vercel Python
-       function under api/ with requirements.txt.)
-17.[ ] Upload archive: write originals to blob storage (e.g. Vercel Blob)
-       instead of uploads/; store the blob URL in datasets.archived_path.
-   [ ] Verify upload → preview → approve end-to-end on a Vercel preview deploy.
+B1 [x] Write-path diff (shared by sync + upload). upsertAnnualRecords first
+       reads the existing rows by id (ids are deterministic:
+       `${unitInternalId}_${year}`) and classifies each incoming record:
+       new / changed (any metric differs by > 1e-6) / unchanged. It returns
+       {inserted, updated, unchanged} plus the changed fields per record.
+       Migration 0004: datasets.inserted_records, updated_records,
+       unchanged_records, dropped_records (int, default 0).
+B2 [x] Never drop CAMPD rows silently (§6 rule applied to §5).
+       - Rows failing rawCampdRecordSchema → import_issues (kind REJECTED,
+         reason = zod message, raw_row = CAMPD JSON as strings).
+       - Duplicates of the natural key → kind DUPLICATE. Dedupe ACROSS pages,
+         not just within one page.
+       - dropped_records + notes summary. The "invalid" export then works for
+         API datasets as-is.
+B3 [x] Preview-then-save retrieval (mirrors the upload flow):
+       - Split syncCampdAnnualEmissions into fetchCampdAnnual(year, filters) →
+         {records, dropped} (no writes) and storeCampdAnnual(...).
+       - New query facilities.previewCampd(campdRetrievalSchema) → per year:
+         received / new / changed / unchanged / dropped, plus the first 50
+         rows tagged New|Changed|Same|Dropped. Changed rows carry
+         {field, database, api} pairs.
+       - Dialog flow: Parameters → "Preview" → per-year KPI strip +
+         SegmentedControl tabs (New | Changed | Unchanged | Dropped) using
+         ReportTable. Changed rows show "DB value → API value" per field.
+         → "Approve & save N records" / "Cancel".
+       - Commit = the existing retrieveCampd mutation (re-fetches, like upload
+         re-posts the file). If its counts differ from the preview, say so.
+       - CLI sync:campd stays direct (no preview).
+B4 [x] "Already in the database" panel (before Preview): a new query
+       facilities.getLocalCoverage({years, stateCode, facilityId, fuel/type/
+       control}) reuses rankedUnitYears' conditions (contains-match for
+       fuel/type/control, since local values are combos) → per year: local
+       unit-years + which dataset(s) own them (datasetOriginLabel).
+B5 [x] After save: the history table gains New / Updated / Unchanged /
+       Dropped columns from B1 (getDatasets + provenance CSV).
+B6 [x] App-wide source labels via one ui component <SourceBadge kind="db" |
+       "api" detail="…"/> (wording: "Local database · last import <date>" /
+       "Live EPA CAMPD API"). Placed on:
+         - explorer result count (Facilities/Units/Map)
+         - facility + unit detail headers
+         - compare dialog
+         - granular window (replaces "Live EPA CAMPD"/"CEMS Store"; yearly =
+           db, others = api)
+         - Retrieve dialog panels (B3 = api, B4 = db)
+         - home DataCoverage, one sentence: "The explorer reads only the local
+           SQLite database; Retrieve and the granular time series call the EPA
+           API live."
+B7 [x] Per-record origin.
+       - rankedUnitYears LEFT JOINs datasets → origin (source),
+         datasetName, datasetImportedAt.
+       - Units table: "Origin" column (SourceBadge-styled: CAMPD API / CSV
+         upload / Excel upload, date on hover).
+       - Unit-year CSVs: origin + dataset_imported_at columns (next to
+         dataset_id).
+       - New filter `origin` (ALL | API | UPLOAD) in facilityFilterSchema →
+         recordConditions: dataset_id IN (SELECT id FROM datasets WHERE source
+         IN …). Facilities view works through the existing IN-subquery path;
+         the URL syncs for free. Lives under "More filters".
+       - Limit (document it): facilities/units rows have no dataset link, so
+         origin is per unit-year only.
+   Done notes:
+   - Migration 0004 (applied to db.sqlite): datasets.inserted_records /
+     updated_records / unchanged_records / dropped_records, NULLABLE so
+     older datasets show "—" instead of a fake 0.
+   - src/lib/record-diff.ts (pure: recordKey, diffRecord, countDiff; tested).
+     ingest.storedRecords(years, facilityIds) is the DB side used by both
+     previews; upsertAnnualRecords classifies before writing.
+   - Uploads: report.diff + per-row reasons ("unchanged" / "will update
+     co2MassTons"), ImportResult.diff, and the dataset diff columns.
+   - CAMPD: fetchCampdAnnual (no writes; dedupes across pages, keeps the
+     first row like uploads) → storeCampdAnnual. The whole year is fetched
+     before any write, so a failed fetch no longer leaves a half-written
+     dataset.
+   - Router: previewCampd (query), getLocalCoverage (query).
+     retrieveCampd results now carry inserted/updated/unchanged/dropped.
+   - Retrieve dialog: Parameters → "Already in the database" (live, follows
+     the form) → Preview (KPIs, per-year table, New/Changed/Unchanged/
+     Dropped tabs; Changed shows "DB → API" per field) → Approve & save /
+     Cancel → saved counts → history with New/Updated/Unchanged/Dropped.
+     Editing a parameter invalidates the preview. The header names the
+     method (also covers D1).
+   - SourceBadge (ui/badge.tsx) on: explorer result bar (with last import
+     date), map, facility + unit detail, compare, download, retrieve
+     panels, granular window (yearly = db, else api); coverage strip
+     sentence.
+   - Origin: Units table column (API / Upload badge, dataset + date on
+     hover), "Origin" filter under More filters (URL-synced), CSV columns
+     origin + dataset_imported_at, provenance CSV diff columns.
+   Verified (DB copies; real db.sqlite still 17 datasets / 50,947 records):
+   - KY+Coal 2023: one CO₂ edited → preview 1 changed (80,614.43 →
+     79,614.43) / 27 unchanged → save 0/1/27 → re-preview 28 unchanged.
+   - KY+Coal 2023–24 over HTTP: coverage 28+28 stored; preview 28/28
+     unchanged; save → history rows 0/0/28/0 each; preview wrote nothing
+     (datasets 17 before save).
+   - Upload (same / edited / new / invalid rows): preview diff 1/1/1 with
+     reasons, commit 1/1/1 + 1 issue. Origin=Upload → 3 unit-years / 2
+     facilities, Origin=API → 50,945. CSV has origin + dataset_imported_at.
+   - Earlier counts unchanged (25 / 8). validate green, 24 tests.
+   NOT verified: the new dialogs haven't been looked at in a browser (only
+   typecheck + HTTP + SSR). Click through Retrieve/Upload once before the
+   demo.
+Accept:
+  - Preview KY+Coal 2023–24 on a DB copy → 28/yr "Unchanged" (already
+    synced). Approve → history row shows 0 new / 0 updated / 28 unchanged.
+  - Edit one record's CO₂ on the copy → preview shows 1 Changed with
+    DB → API values.
+  - Upload the B-stage sample (E2) → Origin filter "Upload" lists exactly its
+    rows.
+  - Cancel writes nothing (datasets count unchanged).
+
+================================================================================
+STAGE C — DESCRIPTION-BASED SEARCH (rubric §6, 7 pts)
+================================================================================
+Prereqs from Stage D: D3 (operatingStatus filter), D4 (year range).
+
+C1 [ ] Parser src/lib/describe-search.ts (pure, no DB):
+       parseDescription(text, vocab) → { filters: Partial<FacilityFilters>,
+       tab?: "explorer"|"units", sort?: {by, dir}, qualitative:
+       {metric, level:"high"|"low"}[], matched: {text, key, value}[],
+       unrecognized: string[] }.
+       Order-independent entity extraction (not sentence templates):
+       - Normalize: lowercase, CO₂→co2, strip punctuation except . , - > <.
+       - Greedy longest n-gram match (≤4 words) so "natural gas", "new york",
+         "west virginia" beat "gas"/"york"/"virginia".
+       - Vocab = getFilterOptions (states, fuels, secondary fuels, unit types,
+         SO₂/NOₓ/PM controls, counties, years) + static tables:
+           · US state names → codes
+           · synonyms: gas → Natural Gas, coal-fired → Coal, scrubber/FGD →
+             SO₂ control, SCR/low-NOx burner → NOₓ control, baghouse →
+             Fabric Filter, ESP → Electrostatic, combined cycle, …
+           · metric words: co2/carbon, so2/sulfur, nox/nitrogen, heat input,
+             generation/gross load/output/MWh, operating time/hours
+           · views: unit(s)/generator/boiler → units; plant/facility →
+             facilities
+           · status: operating/active, retired
+       - Two-letter codes count only when typed in UPPERCASE ("IN", "OR",
+         "ME" are English words). Counties need the word "county".
+       - Fuzzy match (Damerau-Levenshtein ≤ 1, words ≥ 5 chars) for state and
+         fuel names ("Kentuky", "natual gas").
+       - Numbers: 500,000 · 500k · 1.2M · 5e5. Comparators: >, <, ≥, over,
+         above, more/greater than, at least, under, below, less than, at most,
+         between A and B. A comparator binds to the nearest metric word in the
+         same clause, in either order. A unit word disambiguates (tons needs
+         a pollutant word; MWh → generation; hr → hours; MMBtu → heat input).
+       - Years: "2025" → year; "2015-2025" / "from 2015 to 2025" / "since
+         2020" → yearMin/yearMax.
+       - Ranking: top/highest/largest/most [N] → sort desc (+ topN, default 10
+         when N is omitted); bottom/lowest/least/cleanest → asc; "per state" /
+         "in each state" → rankGroup=state. "high/low <metric>" without N →
+         qualitative.
+       - Stopwords dropped (find, show, me, with, in, the, emissions, …).
+         Anything left → unrecognized.
+C2 [ ] Server: facilities.describeSearch({text}) query.
+       - Builds vocab (cached like getFilterOptions) and runs the parser.
+       - Resolves qualitative terms: P75 (high) / P25 (low) of the metric over
+         rankedUnitYears(other filters), via ORDER BY metric LIMIT 1
+         OFFSET floor(n·p). Sets `${metric}Min`/`Max` rounded to 3
+         significant figures and the matching sort.
+       - Returns {filters, tab, sort, unrecognized, via: "parser" |
+         "parser+llm", note?}.
+       - Facilities view: thresholds apply per unit-year (the existing "≥1
+         matching unit-year" semantics); say so in the note.
+C3 [ ] OpenRouter fallback (optional; only when unrecognized has content
+       words).
+       - env (server-only, src/env.js + .env.example): OPENROUTER_API_KEY
+         (optional), OPENROUTER_MODEL (default: a current `:free` model that
+         supports response_format json_schema; pick at implementation time
+         from openrouter.ai/models with max_price=0).
+       - Prompt = allowed vocab + the JSON schema of the filter subset + the
+         parser's interpretation + the unparsed words. Ask for ADDITIONS ONLY.
+       - Validate with zod (facilityFilterSchema.partial() + enums). Values
+         outside the vocab are dropped and reported back as unrecognized.
+       - 8 s timeout; in-memory cache keyed by text. Any failure → parser
+         result + note "LLM fallback unavailable". The key never reaches the
+         browser.
+       - Negation the schema can't express ("not coal") → reported, not
+         guessed.
+C4 [ ] UI (FacilityFilterBar, no new hooks):
+       - SegmentedControl "Name | Describe" inside the search box. In Describe
+         mode, Enter → utils.facilities.describeSearch.fetch(text) → apply:
+         setFilters({...DEFAULT_FILTERS, ...filters}), set the tab, set the
+         table sort, resetPages.
+       - Chips row "Interpreted as: …" built from the ACTIVE FILTERS (one
+         derive-chips function, so manual filters show chips too). Each chip
+         ✕ resets its key.
+       - Then "Not understood: …" and "via parser | parser + LLM".
+       - The real filter controls update, so the user can refine by hand.
+       - URL: q + mode=describe added to explorerSearchParams/
+         parseExplorerParams (display only; the filters already round-trip).
+       - Placeholder examples rotate: "coal units in Kentucky with high CO2",
+         "top 10 facilities by CO2 in 2024", "gas units in TX under 50 tons
+         SO2".
+C5 [ ] Tests src/lib/describe-search.test.ts, ≥ 30 table cases:
+       - rubric + spec examples
+       - 3 word-order permutations of the same query
+       - synonyms, typos, k/M numbers, between, year ranges
+       - top-N / bottom-N / per state
+       - uppercase vs lowercase "IN"/"OR", county
+       - unknown words, negation
+       Integration (script or test against db.sqlite copy): "coal units in
+       Kentucky in 2025 with CO2 over 500,000 tons" → 25 rows = hand SQL.
+Accept:
+  - Rubric example "Find coal units in Kentucky with high CO2 emissions."
+    → Units · KY · Coal · CO₂ ≥ P75 · sort CO₂↓. Results all KY coal units
+    with CO₂ in the top quartile.
+  - Works with no OPENROUTER key.
+  - CSV button exports exactly the interpreted search.
+
+================================================================================
+STAGE D — SPEC CONFORMANCE + BUG FIXES (small)
+================================================================================
+D1 [ ] Retrieval dialog names its method (§9.2): "Method: EPA CAM API —
+       apportioned annual emissions (/annual)". Hint: CAMPD Custom Data
+       Download files → use Upload.
+D2 [ ] Home intro (§9.1): replace the marketing hero with a plain epaData
+       introduction:
+       - purpose (one paragraph)
+       - data sources (CAMPD API, CSV/Excel uploads; TRACI = Phase 2)
+       - coverage (existing DataCoverage)
+       - navigation: one line naming Retrieve / Upload / Explore / Download
+D3 [ ] operatingStatus filter (units.operating_status, indexed):
+       facilityFilterSchema + unitConditions + "More filters" select (options
+       from getFilterOptions).
+D4 [ ] Year range yearMin/yearMax on annual_records.year: add Year to the
+       existing range grid (same RANGE_KEYS pattern). The single Year select
+       stays in the toolbar. Gives §8.3 "same unit 2015–2025" in the explorer.
+D5 [ ] Fix hasAirQualityControls (`??` → non-blank `||`). Make SQL
+       controlledUnitsCount use notBlank() so the two agree; add a test.
+D6 [ ] Audits tab paginated: getAuditLogs({page, pageSize}) → {items,
+       totalCount} via A6's pageOf + the shared TablePagination. Replaces
+       "latest 50".
+D7 [ ] Compare limit: replace window.alert() with an inline message in the
+       compare dock (rubric R1 "user feedback").
+D8 [ ] Drop deployment leftovers: the Vercel/Lambda /tmp copy in
+       src/server/db/index.ts and outputFileTracingIncludes in next.config.js.
+       (~/package-lock.json, an empty stub, deleted 2026-10-09; that
+       removes the build warning.)
+D9 [ ] Re-sync 2026 (EPA publishes more quarters) right before the demo.
+
+================================================================================
+STAGE E — README, SAMPLE DATA, DEMO SCRIPT
+================================================================================
+E1 [ ] README rewrite:
+       - epaData name, live counts, seven tables, Stage B/C features
+       - "Where data comes from" section: diagram + table of each view →
+         local DB or live API
+       - env vars incl. OPENROUTER_*
+       - Next.js-instead-of-Flask note
+       - DATABASE_BREAKDOWN.md synced
+E2 [ ] Committed sample upload samples/annual-emissions-sample.csv (~25
+       rows, real CAMPD headers). Deliberately includes:
+       - 3 rejected rows (bad state "KZ", negative CO₂, missing unit ID)
+       - 1 in-file duplicate
+       - 2 rows already in the DB (one identical → Unchanged, one edited →
+         Changed)
+       - 1 row tripping a sanity rule (heat input, 0 CO₂)
+       - the rest new
+       Plus a small .xlsx copy to show Excel support. README + demo point to
+       them.
+E3 [ ] presentation/demo-script.md: an ordered live workflow mapped to rubric rows,
+       with timings and the exact clicks/inputs:
+       1. home → coverage
+       2. Retrieve preview (DB vs API diff) → approve
+       3. upload sample → validation report → approve → rejected-rows CSV
+       4. basic search
+       5. multi-constraint KY+Coal+2025+CO₂>500k
+       6. description search (rubric sentence)
+       7. Top-10 per state
+       8. unit history 2015–2025
+       9. compare
+       10. Download dialog (search, invalid, provenance)
+       Also: a fallback plan if the network is down (everything except
+       Retrieve and the granular view works offline).
+
+================================================================================
+STAGE F — PROJECT REPORT (LaTeX, rubric §11, 20 pts)
+================================================================================
+The structure is fixed by docs/Submission Guidelines.pdf: exactly these 10
+numbered sections, in this order, with these titles.
+Style: university-grade scientific report. Full explanatory paragraphs, no
+bullet dumps; each design choice is motivated and its trade-offs stated. Code
+via `listings` (TS/SQL/Python styles, line numbers, captions). Diagrams in
+TikZ. Build: `tectonic report/main.tex` (installed; no pdflatex), via a new
+`npm run report`. Commit sources + PDF under report/ (NOT docs/, which is
+gitignored).
+F1 [ ] Skeleton report/: main.tex, sections/01–10*.tex, figures/
+       (screenshots), refs.bib (EPA CAMPD API + master-data docs, CAMPD Custom
+       Data Download, Next.js, tRPC, Drizzle, SQLite window functions, RFC
+       4180, OpenRouter, Leaflet, D3, TopoJSON atlases). Title page: epaData,
+       CS396 Phase 1, Raaj Banga & Arnav Bawankule, date.
+F2 [ ] Sections (guideline wording → our content):
+        1 Project description: the problem (CAMPD data is rich but hard to
+          query or validate), intended users (students, analysts, regulators),
+          objectives (requirements §2 items 1–7, 11–12), Phase 1 scope (data
+          management, not evaluation; TRACI/scoring = Phase 2).
+        2 Functions implemented: for each function (retrieval, upload,
+          explorer search: basic / multi-constraint / description, ranking,
+          detail pages, compare, map, granular time series, download, audits),
+          what it does and how the user interacts with it, mapped to
+          requirement § and rubric row in a traceability table. "Planned but
+          not completed / changed" subsection from the proposal-vs-built list
+          above.
+        3 System design: TikZ architecture diagram (browser ↔ Next.js RSC /
+          tRPC / route handlers ↔ Drizzle ↔ SQLite; Python parser subprocess;
+          EPA CAM API; optional OpenRouter). Component interaction and the
+          lifecycle of one search request. TikZ ER diagram (all 7 tables,
+          PK/FK, cardinalities) with keys, uniqueness, cascades, indexes. TikZ
+          data-flow diagram: what comes from the DB vs the live API, and the
+          provenance model (datasets, import_issues, diff counts).
+        4 Technical details: SQLite/libSQL, Drizzle ORM + migrations, Next.js
+          16 App Router, React 19, tRPC + TanStack Query, Zod, Python 3 +
+          openpyxl, Tailwind v4, Leaflet, D3/TopoJSON, node:test; npm scripts
+          (db:migrate, db:seed, sync:campd, validate, report); the role of
+          each. Languages: TypeScript, SQL, Python.
+        5 Highlighted features, each with screenshots + an example workflow:
+          - DB-vs-API retrieval preview/diff
+          - description-based search (parser algorithm pseudocode, percentile
+            method, LLM fallback safety, worked-examples table)
+          - multi-constraint + ranking SQL (listing of ROW_NUMBER() OVER
+            (PARTITION BY state))
+          - upload validation report
+          - physical-sanity audits (equations + thresholds)
+          - provenance + CSV exports
+          Screenshots captured via the run skill.
+        6 Testing and results: unit tests (parser, CSV writer, upload parser,
+          domain utils) and acceptance queries vs hand-written SQL. Table of
+          representative cases: input → expected → actual (e.g.
+          KY+Coal+2025+CO₂>500k = 25; 2025 dataset 3,989 = 3,569 valid +
+          420 flagged; sample upload 3 rejected / 1 duplicate / 1 changed).
+          Known issues. Explicit verdict on whether each objective is met.
+        7 Discussion: which tools fit which tasks (SQL window functions for
+          ranking, Python for file parsing, TS for the shared write path);
+          technical choices vs alternatives (Next.js/tRPC/Drizzle vs
+          Flask/Jinja/SQLAlchemy and why the substitution still meets the
+          objectives; rule-based parser vs LLM; preview-then-save vs direct
+          sync). Challenges + lessons:
+          - CAMPD combo values vs master-data filter values
+          - superseded datasets
+          - the unqualified-subquery bug in isSuperseded
+          - natural-language ambiguity ("IN"/"OR")
+          - CAMPD published-through quarter detection
+        8 Limitations and future improvements:
+          - controls stored per unit, not per unit-year
+          - record history not versioned (last writer wins)
+          - origin known per unit-year only
+          - local-only deployment
+          - NL negation not supported
+          Future: Phase 2 TRACI, indicators, weighted scoring, map
+          clustering, spike detection, hosted DB.
+        9 Individual contributions: per member, from the proposal roles
+          reconciled with git history (see SOURCES above). Confirm with both
+          members first.
+       10 References and acknowledgments: datasets (EPA CAMPD), libraries,
+          TopoJSON atlases (BSD), reused code. Generative AI disclosure per
+          course policy: what AI assisted with (code, docs, this report) and
+          how output was reviewed.
+       Appendices (optional): tRPC/API reference, export types, env vars, DDL.
+F2b[ ] Last line of the last page, bottom of page (e.g. \vfill then the line
+       at the end of §10 / the final page): "We used AI to help with this
+       project."
+F3 [ ] Proofread pass:
+       - consistent terms (unit-year, dataset, facility)
+       - figure/table refs resolve
+       - no orphaned TODOs
+       - all 10 guideline headings present verbatim
+       - PDF builds cleanly
+
+================================================================================
+STAGE G — PRESENTATION OUTLINE (rubric §10, 5 pts)
+================================================================================
+G1 [ ] presentation/slides-outline.md, ~12 slides with speaker notes:
+       1. title + team
+       2. problem
+       3. architecture diagram (reuse F TikZ export)
+       4. data sources + DB vs API flow
+       5. schema/ER
+       6. ingestion & validation
+       7. search (basic → multi → description)
+       8. ranking SQL
+       9. export/provenance
+       10. challenges
+       11. contributions (Raaj backend, Arnav frontend/upload; confirmed
+           split)
+       12. demo hand-off
+       Sized for 10–15 minutes total (≈7 min slides + ≈6 min live demo +
+       buffer); demo-script timings (E3) add up to that.
+
+================================================================================
+STAGE H — SUBMISSION ZIP
+================================================================================
+H1 [ ] `npm run package` (or a documented zip command) → epaData_Phase1.zip
+       containing:
+       - source (git archive HEAD, so node_modules/.env/uploads are excluded)
+       - db.sqlite sample
+       - README.md
+       - report/main.pdf
+       - samples/
+       Not included: docs/, .env, the API key.
+H2 [ ] Clean-machine check: unzip into a temp dir and follow README step by
+       step (npm install, venv, .env from .env.example, db:migrate, dev). The
+       app loads, the sample upload works, and `npm run validate` passes.
+
+================================================================================
+OPEN QUESTIONS
+================================================================================
+  - Confirm the contribution split (proposal roles vs git history: Arnav = the
+    upload/import feature) with both team members before report §9.
+  - OpenRouter key: user adds it later. Slots OPENROUTER_API_KEY /
+    OPENROUTER_MODEL are already in .env, .env.example, and src/env.js.
+  - Course generative-AI policy wording for report §10 (what exactly must be
+    disclosed).

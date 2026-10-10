@@ -95,11 +95,11 @@ export function AuditLogsTable({
     <DataPanel className="border-edge/80 bg-surface/30 shadow-xs">
       <div className="border-edge/60 space-y-1.5 border-b p-4">
         <h3 className="text-fg text-base font-semibold tracking-tight sm:text-lg">
-          Automated Data Sanity & Quality Audits
+          Data-Quality Audit Flags
         </h3>
         <p className="text-fg-muted text-xs leading-relaxed sm:text-sm">
-          Thermodynamic validation flagging heat rate bounds, zero-emissions
-          combustion, and phantom generation.
+          Records flagged for an out-of-range heat rate, generation with zero
+          operating hours, or heat input with zero CO₂.
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export function AuditPanel({ logs }: { logs: AuditLog[] }) {
     <EmptyState
       variant="success"
       title="All Physical Sanity Checks Clean"
-      description="No thermodynamic anomalies or reporting violations detected for this plant."
+      description="No data-quality flags for this facility."
     />
   ) : (
     <DataPanel>

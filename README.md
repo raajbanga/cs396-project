@@ -1,4 +1,4 @@
-# GridPulse — EPA CAMPD Power & Emissions Intelligence
+# epaData — EPA CAMPD Data Management System
 
 A Next.js web application and relational registry for US power plants, continuous emissions monitoring (CEMS) data, and automated thermodynamic sanity audits, backed by the EPA Clean Air Markets Program Data (CAMPD) API.
 
@@ -140,6 +140,10 @@ erDiagram
         integer raw_record_count "Total records received from EPA"
         integer valid_records "Successfully saved records"
         integer flagged_records "Records with sanity anomalies"
+        integer inserted_records "Unit-years new to the database (null = not tracked)"
+        integer updated_records "Unit-years whose values changed"
+        integer unchanged_records "Unit-years identical to what was stored"
+        integer dropped_records "Source rows rejected or duplicate (see import_issues)"
         text original_filename "Uploaded file name (uploads only)"
         text archived_path "Copy of the original file under uploads/"
         text query_params "CAMPD retrieval parameters as JSON (API only)"

@@ -68,8 +68,8 @@ export function deriveRates(totals: EmissionTotals, heatRateDecimals = 2) {
 }
 
 /**
- * Physical Sanity Audit Thresholds (PRD Section 3.3):
- * Standard thermodynamic and operational bounds for CEMS data.
+ * Physical-sanity audit thresholds:
+ * Operational bounds every stored unit-year is checked against.
  */
 const AUDIT_THRESHOLDS = {
   ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
@@ -129,7 +129,7 @@ export function pickCleanestByCarbonIntensity<
     .sort((a, b) => a.carbonIntensityLbsMWh! - b.carbonIntensityLbsMWh!)[0];
 }
 
-export interface AnnualRecordForRollup extends EmissionTotals {
+interface AnnualRecordForRollup extends EmissionTotals {
   id: string | number;
   year: number;
   co2IntensityLbsMWh?: number | null;

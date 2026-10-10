@@ -2,6 +2,9 @@
 
 # Project Requirements
 epaData_requirements.txt
+rubric.txt
+prompt.txt
+/docs
 
 # dataImports Test Cases
 /dataImports

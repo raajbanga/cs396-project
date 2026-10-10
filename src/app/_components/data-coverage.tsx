@@ -1,6 +1,6 @@
 import { Database } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import { DATASET_SOURCE_LABELS } from "~/lib/utils";
+import { sourceLabel } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
 type Stats = RouterOutputs["facilities"]["getStats"];
@@ -19,7 +19,9 @@ export function DataCoverage({
         <span className="text-fg text-base font-medium">Data coverage</span>
         <span className="text-fg-muted text-xs">
           Sources: EPA Clean Air Markets Program Data (CAMPD) and validated
-          CSV/Excel uploads
+          CSV/Excel uploads. The explorer, detail views, and downloads read only
+          the local SQLite database; Retrieve and the granular time series call
+          the EPA API live.
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -47,7 +49,7 @@ export function DataCoverage({
                   : undefined
               }
             >
-              {DATASET_SOURCE_LABELS[source] ?? source} · {datasets} active
+              {sourceLabel(source)} · {datasets} active
               {superseded > 0 && ` (+${superseded} superseded)`} · last{" "}
               {new Date(lastImportedAt).toLocaleDateString()}
             </Badge>

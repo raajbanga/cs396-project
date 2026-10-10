@@ -125,6 +125,10 @@ erDiagram
         integer raw_record_count "Total records received from EPA"
         integer valid_records "Successfully saved records"
         integer flagged_records "Records with sanity anomalies"
+        integer inserted_records "Unit-years new to the database (null = not tracked)"
+        integer updated_records "Unit-years whose values changed"
+        integer unchanged_records "Unit-years identical to what was stored"
+        integer dropped_records "Source rows rejected or duplicate (see import_issues)"
         text original_filename "Uploaded file name (uploads only)"
         text archived_path "Copy of the original file under uploads/"
         text query_params "CAMPD retrieval parameters as JSON (API only)"
@@ -253,33 +257,37 @@ Tracks batch ingestion history from the EPA REST API or uploaded CSV/Excel files
 
 Rows are never deleted: a re-sync of a year moves its `annual_records` to the new batch, and the earlier API batch is kept as retrieval history. The app treats an API batch that owns no records as **superseded** (`isSuperseded` in the facilities router) and counts only active batches on the home page. Uploads are never marked superseded, because facility files own no annual records by design.
 
-| Column             | Type               | What It Means                                                                 | Where and How It Is Used                                                          |
-| :----------------- | :----------------- | :---------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
-| `id`               | `TEXT PRIMARY KEY` | UUID batch ID.                                                                | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
-| `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                           | **Provenance**: Identifies which import run last touched linked `annual_records`. |
-| `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads).         | **Data Lineage**: Distinguishes ingestion channels.                               |
-| `reportingYear`    | `INTEGER`          | The calendar year ingested.                                                   | **Lineage**: Calendar year the batch applied to.                                  |
-| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                              | **Audit Trail**: When the sync completed.                                         |
-| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                                | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
-| `validRecords`     | `INTEGER`          | Clean records saved to database.                                              | **Health Check**: Returned by CLI output.                                         |
-| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                                      | **Health Check**: Returned by CLI output.                                         |
-| `originalFilename` | `TEXT`             | Uploaded file name (uploads only).                                            | **Provenance**: Which file a batch came from.                                     |
-| `archivedPath`     | `TEXT`             | Copy of the original file under `uploads/`.                                   | **Provenance**: Lets the original upload be recovered.                            |
-| `queryParams`      | `TEXT` (JSON)      | CAMPD request parameters (endpoint, year, paging, filters) for syncs.         | **Reproducibility**: Records exactly what was retrieved.                          |
-| `notes`            | `TEXT`             | Free text: upload rejected/duplicate counts, or `Error: …` for a failed sync. | **Provenance**: Shown alongside the batch; drives the Retrieve dialog's status.   |
+| Column             | Type               | What It Means                                                                   | Where and How It Is Used                                                          |
+| :----------------- | :----------------- | :------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------- |
+| `id`               | `TEXT PRIMARY KEY` | UUID batch ID.                                                                  | **Batch FK**: Referenced by `annual_records.datasetId`.                           |
+| `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                             | **Provenance**: Identifies which import run last touched linked `annual_records`. |
+| `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads).           | **Data Lineage**: Distinguishes ingestion channels.                               |
+| `reportingYear`    | `INTEGER`          | The calendar year ingested.                                                     | **Lineage**: Calendar year the batch applied to.                                  |
+| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                                | **Audit Trail**: When the sync completed.                                         |
+| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                                  | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
+| `validRecords`     | `INTEGER`          | Clean records saved to database.                                                | **Health Check**: Returned by CLI output.                                         |
+| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                                        | **Health Check**: Returned by CLI output.                                         |
+| `insertedRecords`  | `INTEGER`          | Unit-years this import added that were not stored before (null on older rows).  | **DB vs API**: "New" in the Retrieve history and provenance CSV.                  |
+| `updatedRecords`   | `INTEGER`          | Unit-years whose stored values this import changed.                             | **DB vs API**: "Updated" in the Retrieve history and provenance CSV.              |
+| `unchangedRecords` | `INTEGER`          | Unit-years the import rewrote with identical values.                            | **DB vs API**: "Unchanged" in the Retrieve history and provenance CSV.            |
+| `droppedRecords`   | `INTEGER`          | Source rows not stored (rejected or duplicate); each one is in `import_issues`. | **Data quality**: "Dropped" column; rows are in the invalid-records CSV.          |
+| `originalFilename` | `TEXT`             | Uploaded file name (uploads only).                                              | **Provenance**: Which file a batch came from.                                     |
+| `archivedPath`     | `TEXT`             | Copy of the original file under `uploads/`.                                     | **Provenance**: Lets the original upload be recovered.                            |
+| `queryParams`      | `TEXT` (JSON)      | CAMPD request parameters (endpoint, year, paging, filters) for syncs.           | **Reproducibility**: Records exactly what was retrieved.                          |
+| `notes`            | `TEXT`             | Free text: upload rejected/duplicate counts, or `Error: …` for a failed sync.   | **Provenance**: Shown alongside the batch; drives the Retrieve dialog's status.   |
 
 ### Table 6: `import_issues`
 
-The data-quality report for each upload: every row that was rejected or skipped as a duplicate, so invalid records are never silently discarded.
+The data-quality report for each upload **and CAMPD retrieval**: every row that was rejected or skipped as a duplicate, so invalid records are never silently discarded.
 
-| Column      | Type               | What It Means                                        | Where and How It Is Used                               |
-| :---------- | :----------------- | :--------------------------------------------------- | :----------------------------------------------------- |
-| `id`        | `TEXT PRIMARY KEY` | UUID.                                                | **Key**.                                               |
-| `datasetId` | `TEXT`             | Foreign key referencing `datasets.id` (cascade).     | **Provenance**: Ties the issue to its upload batch.    |
-| `rowNumber` | `INTEGER`          | Data row number in the uploaded file (1 = first).    | **Traceability**: Find the row in the original file.   |
-| `kind`      | `TEXT`             | `REJECTED` (invalid values) or `DUPLICATE`.          | **Categorization**.                                    |
-| `reason`    | `TEXT`             | Every failing field and why, or the duplicate's row. | **Data-quality report**.                               |
-| `rawRow`    | `TEXT` (JSON)      | The original row, header → cell text.                | **Export**: Basis for the planned invalid-records CSV. |
+| Column      | Type               | What It Means                                                  | Where and How It Is Used                                 |
+| :---------- | :----------------- | :------------------------------------------------------------- | :------------------------------------------------------- |
+| `id`        | `TEXT PRIMARY KEY` | UUID.                                                          | **Key**.                                                 |
+| `datasetId` | `TEXT`             | Foreign key referencing `datasets.id` (cascade).               | **Provenance**: Ties the issue to its upload batch.      |
+| `rowNumber` | `INTEGER`          | Row number in the uploaded file or CAMPD response (1 = first). | **Traceability**: Find the row in the original file.     |
+| `kind`      | `TEXT`             | `REJECTED` (invalid values) or `DUPLICATE`.                    | **Categorization**.                                      |
+| `reason`    | `TEXT`             | Every failing field and why, or the duplicate's row.           | **Data-quality report**.                                 |
+| `rawRow`    | `TEXT` (JSON)      | The original row, header → cell text.                          | **Export**: Original columns in the invalid-records CSV. |
 
 ---
 

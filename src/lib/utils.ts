@@ -22,12 +22,26 @@ export function formatQuantity(
   return unit ? `${num} ${unit}` : num;
 }
 
+/** Plain number for tables and counts; zero/missing renders "0". */
+export const formatNumber = (value: number | null | undefined, digits = 0) =>
+  formatQuantity(value, "", { digits, fallback: "0" });
+
 /** Display names for `datasets.source`. */
-export const DATASET_SOURCE_LABELS: Record<string, string> = {
+const DATASET_SOURCE_LABELS: Record<string, string> = {
   API: "EPA CAMPD API",
   BULK_CSV: "CSV upload",
   BULK_EXCEL: "Excel upload",
 };
+
+export const sourceLabel = (source: string) =>
+  DATASET_SOURCE_LABELS[source] ?? source;
+
+/** Where a record came from, e.g. "EPA CAMPD API · 10/7/2026". */
+export const datasetOriginLabel = (d: {
+  source: string;
+  importedAt: Date | number;
+}) =>
+  `${sourceLabel(d.source)} · ${new Date(d.importedAt).toLocaleDateString()}`;
 
 /** A dataset's history status: a failed retrieval, superseded by a later one, or active. */
 export const datasetStatus = (d: {

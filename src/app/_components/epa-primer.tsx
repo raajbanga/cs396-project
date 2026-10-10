@@ -41,8 +41,8 @@ const GUIDE_CARDS = [
   {
     icon: ShieldCheck,
     tone: "text-rose-400",
-    title: "Automated Thermodynamic Auditing",
-    body: "Continuous rule validation detecting thermodynamic discrepancies such as out-of-bounds heat rates, phantom power generation, or zero-emissions combustion flags.",
+    title: "Data-Quality Checks",
+    body: "Every stored unit-year is checked against three physical-sanity rules: heat rate outside 5–25 MMBtu/MWh, generation with zero operating hours, and high heat input with zero CO₂.",
     wide: true,
   },
 ];
@@ -84,7 +84,7 @@ export function EpaPrimer() {
       </div>
 
       {isOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 border-edge/80 grid grid-cols-1 gap-3 border-t p-3 duration-150 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
+        <div className="border-edge/80 grid grid-cols-1 gap-3 border-t p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-3">
           {GUIDE_CARDS.map(({ icon: Icon, tone, title, body, wide }) => (
             <div
               key={title}

@@ -10,7 +10,7 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { Badge, SourceBadge } from "~/components/ui/badge";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { StatTile } from "~/components/ui/stat-tile";
 import type {
@@ -102,6 +102,7 @@ export function FacilitiesMap({
                   ? "..."
                   : `${facilities.length.toLocaleString()} facilities`}
               </Badge>
+              <SourceBadge kind="db" className="hidden sm:inline-flex" />
             </div>
             <p className="text-fg-muted hidden text-xs sm:block">
               {isGlobe

@@ -1,34 +1,66 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { CloudDownload, Loader2 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { useDeferredValue, useState } from "react";
+import { CheckCircle2, CloudDownload, Eye, Loader2 } from "lucide-react";
+import { Badge, SourceBadge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
+import {
+  ErrorBanner,
+  Field,
+  ReportTable,
+  Section,
+} from "~/components/ui/report";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Select, toOptions } from "~/components/ui/select";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import {
   DEFAULT_RETRIEVAL,
   describeCampdFilters,
+  type CampdRetrieval as RetrievalInput,
   parseFacilityIds,
+  UNIT_METRICS,
 } from "~/lib/facility-filters";
+import type { FieldChange } from "~/lib/record-diff";
 import {
-  DATASET_SOURCE_LABELS,
+  datasetOriginLabel,
   datasetStatus,
-  formatQuantity,
+  formatNumber,
+  sourceLabel,
 } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
-import { ReportTable, Section } from "./data-upload-dialog";
 
 type DatasetRow = RouterOutputs["facilities"]["getDatasets"][number];
+type PreviewYear = RouterOutputs["facilities"]["previewCampd"]["years"][number];
+type PreviewTab = "new" | "changed" | "unchanged" | "dropped";
 
 /** First year of Acid Rain Program annual data in CAMPD. */
 const FIRST_CAMPD_YEAR = 1995;
 const LAST_YEAR = new Date().getFullYear() - 1;
 
-const count = (n: number) => formatQuantity(n, "", { fallback: "0" });
+const METRIC_LABELS: Record<FieldChange["field"], string> = {
+  ...(Object.fromEntries(UNIT_METRICS.map((m) => [m.key, m.label])) as Record<
+    (typeof UNIT_METRICS)[number]["key"],
+    string
+  >),
+  steamLoadKlb: "Steam load",
+};
+
+const changeText = (changes: FieldChange[]) =>
+  changes
+    .map(
+      (c) =>
+        `${METRIC_LABELS[c.field]}: ${formatNumber(c.database, 2)} → ${formatNumber(c.incoming, 2)}`,
+    )
+    .join(" · ");
+
+/** A diff count, or "—" for datasets imported before diffs were tracked. */
+const tracked = (n: number | null) => (n === null ? "—" : formatNumber(n));
+
+const sum = (years: PreviewYear[], key: keyof PreviewYear) =>
+  years.reduce((n, y) => n + Number(y[key]), 0);
 
 export function datasetParams(row: DatasetRow) {
   if (row.source !== "API") return row.originalFilename ?? "—";
@@ -36,7 +68,11 @@ export function datasetParams(row: DatasetRow) {
   return describeCampdFilters(row.queryParams) || "All units";
 }
 
-/** §5 retrieval: CAMPD annual emissions by year range and filters, plus the dataset history. */
+/**
+ * §5 retrieval: CAMPD annual emissions by year range and filters. Shows what the database already
+ * holds, previews what the API returns against it (new / changed / unchanged / dropped), and saves
+ * only after approval. Also lists the dataset history.
+ */
 export function DataRetrievalDialog({
   open,
   onOpenChange,
@@ -48,15 +84,58 @@ export function DataRetrievalDialog({
 }) {
   const [form, setForm] = useState(DEFAULT_RETRIEVAL);
   const [years, setYears] = useState({ from: LAST_YEAR, to: LAST_YEAR });
+  const [previewInput, setPreviewInput] = useState<RetrievalInput | null>(null);
+  const [tab, setTab] = useState<PreviewTab>("changed");
   const setField = (key: keyof typeof DEFAULT_RETRIEVAL, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const facilityIds = parseFacilityIds(form.facilityIds);
+  const yearCount = years.to - years.from + 1;
+  const invalid =
+    facilityIds === null
+      ? "Facility IDs must be whole numbers separated by commas."
+      : yearCount < 1
+        ? "From year must not be after To year."
+        : null;
+  const input: RetrievalInput | null =
+    invalid || !facilityIds
+      ? null
+      : {
+          fromYear: years.from,
+          toYear: years.to,
+          stateCode: form.stateCode,
+          facilityId: facilityIds,
+          unitFuelType: form.unitFuelType,
+          unitType: form.unitType,
+          controlTechnologies: form.controlTechnologies,
+        };
+  const deferredInput = useDeferredValue(input);
+  // A preview belongs to the parameters it was run with; editing them asks for a new one.
+  const previewIsCurrent =
+    previewInput !== null &&
+    JSON.stringify(previewInput) === JSON.stringify(input);
+
   const retrieve = api.facilities.retrieveCampd.useMutation({
     onSettled: onImported,
+    onSuccess: () => setPreviewInput(null),
   });
   const running = retrieve.isPending;
   const runError = retrieve.data?.error ?? retrieve.error?.message;
   const results = retrieve.data?.results ?? [];
+
+  const previewQuery = api.facilities.previewCampd.useQuery(previewInput!, {
+    enabled: open && previewInput !== null,
+    staleTime: Infinity,
+  });
+  const preview = previewIsCurrent ? previewQuery.data : undefined;
+  const previewYears = preview?.years ?? [];
+  const previewing = previewIsCurrent && previewQuery.isFetching;
+
+  const coverageQuery = api.facilities.getLocalCoverage.useQuery(
+    deferredInput!,
+    { enabled: open && deferredInput !== null },
+  );
+  const coverage = coverageQuery.data ?? [];
 
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery(
     undefined,
@@ -83,27 +162,6 @@ export function DataRetrievalDialog({
       (_, i) => latestYear - i,
     ),
   );
-  const facilityIds = parseFacilityIds(form.facilityIds);
-  const yearCount = years.to - years.from + 1;
-  const invalid =
-    facilityIds === null
-      ? "Facility IDs must be whole numbers separated by commas."
-      : yearCount < 1
-        ? "From year must not be after To year."
-        : null;
-
-  const submit = () => {
-    if (invalid || !facilityIds) return;
-    retrieve.mutate({
-      fromYear: years.from,
-      toYear: years.to,
-      stateCode: form.stateCode,
-      facilityId: facilityIds,
-      unitFuelType: form.unitFuelType,
-      unitType: form.unitType,
-      controlTechnologies: form.controlTechnologies,
-    });
-  };
 
   const selects = [
     { key: "stateCode", label: "State", values: filterOptions?.states },
@@ -120,6 +178,14 @@ export function DataRetrievalDialog({
     },
   ] as const;
 
+  const toSave = sum(previewYears, "inserted") + sum(previewYears, "updated");
+  const previewRows = previewYears.flatMap((y) =>
+    tab === "dropped" ? [] : y.rows[tab],
+  );
+  const droppedRows = previewYears.flatMap((y) =>
+    y.droppedRows.map((d) => ({ ...d, year: y.year })),
+  );
+
   return (
     <Dialog
       open={open}
@@ -134,29 +200,61 @@ export function DataRetrievalDialog({
           </span>
           <DialogTitle>Retrieve EPA CAMPD Annual Emissions</DialogTitle>
           <p className="text-fg-muted text-xs sm:text-sm">
-            Pull apportioned annual emissions from the EPA Clean Air Markets
-            API. Each year is stored as its own dataset with these parameters;
-            existing facility-unit-years are updated in place.
+            Method: EPA Clean Air Markets (CAM) API, apportioned annual
+            emissions (<code>/annual</code>). Preview compares what the API
+            returns with what the database already holds; nothing is saved until
+            you approve. Each year is stored as its own dataset. Files from
+            CAMPD Custom Data Download go through Upload instead.
           </p>
         </div>
       }
       footer={
-        <Button size="sm" disabled={running || !!invalid} onClick={submit}>
-          {running ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <CloudDownload className="h-3.5 w-3.5" />
-          )}
-          {running
-            ? "Retrieving…"
-            : `Retrieve ${yearCount > 1 ? `${yearCount} years` : "year"}`}
-        </Button>
+        preview && !preview.error ? (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPreviewInput(null)}
+              disabled={running}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={running}
+              onClick={() => retrieve.mutate(previewInput!)}
+            >
+              {running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {running
+                ? "Saving…"
+                : `Approve & save ${yearCount > 1 ? `${yearCount} years` : "year"} (${formatNumber(toSave)} new or changed)`}
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="sm"
+            disabled={!input || previewing}
+            onClick={() => input && setPreviewInput(input)}
+          >
+            {previewing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+            {previewing
+              ? "Fetching from EPA…"
+              : `Preview ${yearCount > 1 ? `${yearCount} years` : "year"}`}
+          </Button>
+        )
       }
     >
-      {runError && (
-        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-400 sm:text-sm">
-          Retrieval stopped at {runError}
-        </div>
+      {runError && <ErrorBanner>Retrieval stopped at {runError}</ErrorBanner>}
+      {preview?.error && (
+        <ErrorBanner>Preview stopped at {preview.error}</ErrorBanner>
       )}
 
       <Section title="Parameters">
@@ -201,12 +299,181 @@ export function DataRetrievalDialog({
         {invalid && <p className="text-xs text-red-400">{invalid}</p>}
       </Section>
 
+      <Section
+        title="Already in the database"
+        note="Stored unit-years for these years and filters, by the dataset that last wrote them. Fuel, unit type, and control match by name, so this approximates what CAMPD will return."
+      >
+        <SourceBadge kind="db" />
+        {coverageQuery.isLoading && deferredInput ? (
+          <InlineLoading className="py-6" title="Checking the database…" />
+        ) : coverage.length === 0 ? (
+          <EmptyState title="Nothing stored for these years and filters yet." />
+        ) : (
+          <ReportTable
+            head={["Year", "Stored unit-years", "Last written by"]}
+            rows={coverage.map((c) => [
+              c.year,
+              formatNumber(c.records),
+              <span
+                key="from"
+                className="font-sans"
+                title={c.datasetName ?? ""}
+              >
+                {c.source && c.importedAt
+                  ? datasetOriginLabel({
+                      source: c.source,
+                      importedAt: c.importedAt,
+                    })
+                  : "Unknown dataset"}
+              </span>,
+            ])}
+          />
+        )}
+      </Section>
+
+      {previewIsCurrent && (
+        <Section
+          title="Preview: what the API returned"
+          note="Compared with the stored values for each facility-unit-year. Approving writes new and changed records; unchanged ones are rewritten with the same values, and dropped rows are listed in the invalid-records report."
+        >
+          <SourceBadge kind="api" />
+          {previewing && !preview ? (
+            <InlineLoading
+              className="py-6"
+              title="Fetching from the EPA CAMPD API…"
+            />
+          ) : previewYears.length > 0 ? (
+            <>
+              <KpiStrip>
+                <StatTile
+                  label="Received"
+                  value={formatNumber(sum(previewYears, "received"))}
+                  subtext="Rows from CAMPD"
+                />
+                <StatTile
+                  label="New"
+                  value={formatNumber(sum(previewYears, "inserted"))}
+                  valueClassName="text-emerald-400"
+                  subtext="Not in the database"
+                />
+                <StatTile
+                  label="Changed"
+                  value={formatNumber(sum(previewYears, "updated"))}
+                  valueClassName="text-amber-400"
+                  subtext="Values differ"
+                />
+                <StatTile
+                  label="Unchanged"
+                  value={formatNumber(sum(previewYears, "unchanged"))}
+                  subtext="Same as stored"
+                />
+                <StatTile
+                  label="Dropped"
+                  value={formatNumber(sum(previewYears, "dropped"))}
+                  valueClassName={
+                    sum(previewYears, "dropped") ? "text-red-400" : undefined
+                  }
+                  subtext="Invalid or duplicate"
+                  className="col-span-2 sm:col-span-1"
+                />
+              </KpiStrip>
+              {previewYears.length > 1 && (
+                <ReportTable
+                  head={[
+                    "Year",
+                    "Received",
+                    "New",
+                    "Changed",
+                    "Unchanged",
+                    "Dropped",
+                  ]}
+                  rows={previewYears.map((y) => [
+                    y.year,
+                    formatNumber(y.received),
+                    formatNumber(y.inserted),
+                    formatNumber(y.updated),
+                    formatNumber(y.unchanged),
+                    formatNumber(y.dropped),
+                  ])}
+                />
+              )}
+              <SegmentedControl
+                value={tab}
+                onChange={setTab}
+                options={[
+                  { value: "new", label: "New" },
+                  { value: "changed", label: "Changed" },
+                  { value: "unchanged", label: "Unchanged" },
+                  { value: "dropped", label: "Dropped" },
+                ]}
+                className="w-fit"
+              />
+              {tab === "dropped" ? (
+                droppedRows.length === 0 ? (
+                  <EmptyState
+                    variant="success"
+                    title="Every CAMPD row passed validation"
+                  />
+                ) : (
+                  <ReportTable
+                    head={["Year", "Row", "Kind", "Reason"]}
+                    rows={droppedRows.map((d) => [
+                      d.year,
+                      d.rowNumber,
+                      d.kind,
+                      d.reason,
+                    ])}
+                  />
+                )
+              ) : previewRows.length === 0 ? (
+                <EmptyState title={`No ${tab} records`} />
+              ) : (
+                <ReportTable
+                  head={[
+                    "Year",
+                    "Facility",
+                    "Unit",
+                    "Gross MWh (API)",
+                    "CO₂ t (API)",
+                    ...(tab === "changed" ? ["Database → API"] : []),
+                  ]}
+                  rows={previewRows.map((r) => [
+                    r.year,
+                    <span key="f" className="font-sans" title={r.facilityName}>
+                      {r.facilityName} (#{r.facilityId})
+                    </span>,
+                    r.unitId,
+                    formatNumber(r.grossGenerationMWh),
+                    formatNumber(r.co2MassTons),
+                    ...(tab === "changed"
+                      ? [
+                          <span
+                            key="c"
+                            className="font-sans"
+                            title={changeText(r.changes)}
+                          >
+                            {changeText(r.changes)}
+                          </span>,
+                        ]
+                      : []),
+                  ])}
+                />
+              )}
+              <p className="text-fg-muted text-xs">
+                Up to 50 rows per category and year are listed; the counts above
+                cover every row.
+              </p>
+            </>
+          ) : null}
+        </Section>
+      )}
+
       {retrieve.variables && (
         <Section title="This retrieval">
-          <KpiStrip className="sm:grid-cols-3">
+          <KpiStrip>
             <StatTile
               label="Status"
-              value={running ? "Running" : runError ? "Error" : "Done"}
+              value={running ? "Saving" : runError ? "Error" : "Saved"}
               valueClassName={
                 running
                   ? "text-sky-400"
@@ -217,15 +484,26 @@ export function DataRetrievalDialog({
               subtext={`${results.length} of ${retrieve.variables.toYear - retrieve.variables.fromYear + 1} years saved`}
             />
             <StatTile
-              label="Received"
-              value={count(results.reduce((n, r) => n + r.rawRecordCount, 0))}
-              subtext="Rows from CAMPD"
+              label="New"
+              value={formatNumber(results.reduce((n, r) => n + r.inserted, 0))}
+              valueClassName="text-emerald-400"
+              subtext="Inserted"
             />
             <StatTile
-              label="Stored"
-              value={count(results.reduce((n, r) => n + r.validRecords, 0))}
-              valueClassName="text-emerald-400"
-              subtext="annual_records"
+              label="Updated"
+              value={formatNumber(results.reduce((n, r) => n + r.updated, 0))}
+              subtext="Values changed"
+            />
+            <StatTile
+              label="Unchanged"
+              value={formatNumber(results.reduce((n, r) => n + r.unchanged, 0))}
+              subtext="Same as before"
+            />
+            <StatTile
+              label="Dropped"
+              value={formatNumber(results.reduce((n, r) => n + r.dropped, 0))}
+              subtext="See invalid-records CSV"
+              className="col-span-2 sm:col-span-1"
             />
           </KpiStrip>
         </Section>
@@ -233,7 +511,7 @@ export function DataRetrievalDialog({
 
       <Section
         title="Past retrievals"
-        note="Superseded datasets had all their records taken over by a later retrieval; they are kept as history."
+        note="New / Updated / Unchanged compare each import with what the database held before it (— = imported before this was tracked). Superseded datasets had all their records taken over by a later retrieval; they are kept as history."
       >
         {historyQuery.isLoading ? (
           <InlineLoading className="py-6" title="Loading datasets…" />
@@ -248,17 +526,25 @@ export function DataRetrievalDialog({
               "Imported",
               "Received",
               "Stored",
+              "New",
+              "Updated",
+              "Unchanged",
+              "Dropped",
               "Status",
             ]}
             rows={history.map((d) => [
               d.reportingYear,
-              DATASET_SOURCE_LABELS[d.source] ?? d.source,
+              sourceLabel(d.source),
               <span key="params" title={d.name}>
                 {datasetParams(d)}
               </span>,
               d.importedAt.toLocaleString(),
-              count(d.rawRecordCount),
-              count(d.validRecords),
+              formatNumber(d.rawRecordCount),
+              formatNumber(d.validRecords),
+              tracked(d.insertedRecords),
+              tracked(d.updatedRecords),
+              tracked(d.unchangedRecords),
+              tracked(d.droppedRecords),
               <DatasetStatus key="status" row={d} />,
             ])}
           />
@@ -283,24 +569,5 @@ function DatasetStatus({ row }: { row: DatasetRow }) {
     >
       {status}
     </Badge>
-  );
-}
-
-function Field({
-  label,
-  className,
-  children,
-}: {
-  label: string;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className={className}>
-      <span className="text-fg-muted mb-1 block text-xs font-medium">
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }

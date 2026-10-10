@@ -13,9 +13,9 @@ export const UNIT_METRICS = [
   { key: "so2MassTons", label: "SO₂", unit: "tons" },
   { key: "noxMassTons", label: "NOₓ", unit: "tons" },
 ] as const;
-export type UnitMetric = (typeof UNIT_METRICS)[number]["key"];
-export type RangeKey = `${UnitMetric}${"Min" | "Max"}`;
-export const RANGE_KEYS = UNIT_METRICS.flatMap(
+type UnitMetric = (typeof UNIT_METRICS)[number]["key"];
+type RangeKey = `${UnitMetric}${"Min" | "Max"}`;
+const RANGE_KEYS = UNIT_METRICS.flatMap(
   ({ key }) => [`${key}Min`, `${key}Max`] as const,
 );
 
@@ -57,6 +57,7 @@ export const facilityFilterSchema = z.object({
   pmControl: text,
   topN: text,
   rankGroup: text, // "state" = rank within each state
+  origin: text, // "API" | "UPLOAD": where the unit-year record came from
   ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, text])) as Record<
     RangeKey,
     typeof text
@@ -80,6 +81,7 @@ export const DEFAULT_FILTERS = {
   pmControl: "ALL",
   topN: "ALL",
   rankGroup: "ALL",
+  origin: "ALL",
   ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, ""])) as Record<
     RangeKey,
     string
@@ -157,8 +159,9 @@ export const campdRetrievalSchema = campdFilterSchema
   .refine((r) => r.fromYear <= r.toYear, {
     message: "From year must not be after To year.",
   });
+export type CampdRetrieval = z.infer<typeof campdRetrievalSchema>;
 
-export const EXPLORER_TABS = ["explorer", "units", "map", "audit"] as const;
+const EXPLORER_TABS = ["explorer", "units", "map", "audit"] as const;
 export type ExplorerTab = (typeof EXPLORER_TABS)[number];
 
 export interface ExplorerState {
