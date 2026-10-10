@@ -8,7 +8,7 @@ This document provides a plain-language, engineering-level breakdown of how our 
 
 The data in this application comes from the **EPA Clean Air Markets Program Data (CAMPD)** and the federal **Continuous Emission Monitoring Systems (CEMS)**.
 
-Every commercial power plant in the United States that burns fossil fuel and sells electricity to the grid is required by federal law (under programs like the Acid Rain Program and the Cross-State Air Pollution Rule) to install sensor packages directly inside their exhaust stacks. These sensors measure heat, electricity output, and exhaust gases 24 hours a day, 365 days a year.
+Fossil-fuel generating units covered by federal programs such as the Acid Rain Program and the Cross-State Air Pollution Rule must monitor and report their heat input, electricity output, and stack emissions, mostly hour by hour through continuous emission monitoring systems. EPA publishes the reports through CAMPD; epaData stores the annual totals per unit.
 
 To make sense of this data, we organize it into a five-level hierarchy:
 
@@ -29,6 +29,7 @@ flowchart TD
         AR["<b>annual_records</b> Table<br/>(Yearly output, fuel, emissions per unit)"]
         AL["<b>data_audit_logs</b> Table<br/>(Flags for physics/sanity violations)"]
         DS["<b>datasets</b> Table<br/>(Ingestion batch & provenance tracking)"]
+        II["<b>import_issues</b> Table<br/>(Rejected or duplicate source rows)"]
     end
 
     A --> F
@@ -41,17 +42,14 @@ flowchart TD
     U1 -->|reports per year| AR
     U2 -->|reports per year| AR
     U3 -->|reports per year| AR
-    U1 -->|reports per time interval| GR
-    U2 -->|reports per time interval| GR
-    U3 -->|reports per time interval| GR
     AR -->|triggers on anomaly| AL
-    DS -->|tracks source batch| AR
-    DS -->|tracks source batch| GR
+    DS -->|last wrote| AR
+    DS -->|rejected rows| II
 
     classDef real fill:#1e293b,stroke:#475569,stroke-width:1px,color:#f8fafc;
     classDef db fill:#0f172a,stroke:#10b981,stroke-width:2px,color:#f8fafc;
     class A,B1,B2,B3 real;
-    class F,U1,U2,U3,AR,GR,AL,DS db;
+    class F,U1,U2,U3,AR,AL,DS,II db;
 ```
 
 ### Key Real-World Concepts in Everyday Language
@@ -73,14 +71,14 @@ flowchart TD
 
 ## 2. Relational Database Schema
 
-Our relational database is stored in SQLite (via LibSQL / Turso) and managed with Drizzle ORM. It consists of 6 normalized tables:
+Our relational database is stored in SQLite (through the libSQL client) and managed with Drizzle ORM. It consists of 6 normalized tables:
 
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
     FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
-    DATASETS ||--o{ ANNUAL_RECORDS : "originates"
+    DATASETS ||--o{ ANNUAL_RECORDS : "last wrote"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
     DATASETS ||--o{ IMPORT_ISSUES : "rejects"
 
@@ -208,14 +206,14 @@ Represents individual generating machines (boilers, combustion turbines, generat
 | `secondaryFuel`       | `TEXT`             | Backup or startup fuel.                                                 | **Comparison**: Displayed in the comparison dialog to show multi-fuel flexibility.                                          |
 | `operatingStatus`     | `TEXT`             | Status (Operating, Retired, Cold Standby).                              | **Fleet Health**: Displayed in the unit breakdown table; used in comparison to count active vs retired units.               |
 | `commercialOpDate`    | `TEXT`             | Year/date the unit entered commercial service.                          | **Age Analysis**: Displayed in the unit table to indicate equipment age and generation era.                                 |
-| `retirementDate`      | `TEXT`             | Date the unit retired, if any.                                          | **Stored only**: Mapped from uploads with a "Retirement Date" column; not shown in the UI today.                            |
-| `maxHourlyHIRate`     | `REAL`             | Maximum design heat input rate (MMBtu/hour).                            | **Stored only**: Populated from CSV seed data; not shown in the UI today.                                                   |
+| `retirementDate`      | `TEXT`             | Date the unit retired, if any.                                          | **Unit dialog**: Identification section; CSV exports.                                                                       |
+| `maxHourlyHIRate`     | `REAL`             | Maximum design heat input rate (MMBtu/hour).                            | **Unit dialog**: Shown with capacity; populated from CSV seed data.                                                         |
 | `nameplateCapacityMW` | `REAL`             | Electrical generator nameplate capacity in Megawatts (MW).              | **Capacity Aggregations**: Summed at the plant level for table sorting, map pin scaling, and KPI cards (`totalCapacityMW`). |
 | `so2Controls`         | `TEXT`             | Sulfur scrubbers (e.g., Wet Limestone Scrubber).                        | **Environmental Abatement**: Checked to compute "controlled units count" badge in table; detailed in comparison modal.      |
 | `noxControls`         | `TEXT`             | Nitrogen reduction tech (e.g., Low-NOₓ Burner, SCR).                    | **Environmental Abatement**: Displayed in unit inspector and used in emission controls tally.                               |
-| `pmControls`          | `TEXT`             | Particulate matter filters (e.g., Fabric Filter baghouses).             | **Counting only**: Included in `controlledUnitsCount` / comparison tallies; not listed individually in the unit inspector.  |
-| `hgControls`          | `TEXT`             | Mercury sorbent systems (e.g., Activated Carbon).                       | **Counting only**: Same as `pmControls`.                                                                                    |
-| `programCode`         | `TEXT`             | Applicable Clean Air Act regulatory programs (ARP, CSNOX, MATS).        | **Stored only**: Ingested from CAMPD; not displayed in the UI today.                                                        |
+| `pmControls`          | `TEXT`             | Particulate matter filters (e.g., Fabric Filter baghouses).             | **Filter & tallies**: PM control filter; `controlledUnitsCount` / comparison tallies; listed in the unit dialog.            |
+| `hgControls`          | `TEXT`             | Mercury sorbent systems (e.g., Activated Carbon).                       | **Tallies & unit dialog**: Counted in `controlledUnitsCount`; listed in the unit dialog.                                    |
+| `programCode`         | `TEXT`             | Applicable Clean Air Act regulatory programs (ARP, CSNOX, MATS).        | **Unit dialog**: Fuel & Controls section; CSV exports. Stored per unit, not per unit-year (see Caveats).                    |
 
 ### Table 3: `annual_records`
 
@@ -225,13 +223,13 @@ Stores the annual operational metrics and pollution mass for one unit for one ca
 | :------------------- | :----------------- | :---------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                 | `TEXT PRIMARY KEY` | Set at ingestion to `${unitInternalId}_${year}` (schema default is UUID, but sync always supplies the composite). | **Unique Ledger ID**: Upsert target is `(unitInternalId, year)` so re-syncing the same year updates rather than duplicates.            |
 | `datasetId`          | `TEXT`             | Foreign key referencing `datasets.id`.                                                                            | **Provenance**: Links each row to the ingestion batch that last wrote it.                                                              |
-| `facilityId`         | `INTEGER`          | Foreign key referencing `facilities.id`.                                                                          | **Plant Rollups**: Fast indexing for plant-level SQL aggregations without multi-hop unit joins.                                        |
+| `facilityId`         | `INTEGER`          | Foreign key referencing `facilities.id`.                                                                          | **Plant Rollups**: Indexed with `year` (`annual_record_facility_year_idx`) for per-facility totals, overall or within one year.        |
 | `unitInternalId`     | `TEXT`             | Foreign key referencing `units.id`.                                                                               | **Unit Ledger**: Links this yearly row to the specific physical turbine/boiler.                                                        |
 | `year`               | `INTEGER`          | Calendar reporting year (e.g. 2022).                                                                              | **Time Slicing**: Filtering records by reporting year; displayed in timeline cards.                                                    |
 | `operatingHours`     | `REAL`             | Number of hours the machine ran during the year.                                                                  | **Utilization & Sanity**: Aggregated to total plant run time; audited against generation (`PHANTOM_GENERATION` check).                 |
 | `grossGenerationMWh` | `REAL`             | Total electricity produced (Megawatt-hours).                                                                      | **Productivity & Intensity**: Summed for total generation KPI; serves as the denominator for carbon intensity and heat rate.           |
 | `heatInputMMBtu`     | `REAL`             | Total fuel thermal energy consumed.                                                                               | **Efficiency**: Summed to determine fuel volume; numerator for heat rate calculation.                                                  |
-| `steamLoadKlb`       | `REAL`             | Steam delivered for non-electric use (1000 lb); 0 for units without steam output.                                 | **Stored only**: Synced from CAMPD `steamLoad` and uploads; summed in yearly rollups.                                                  |
+| `steamLoadKlb`       | `REAL`             | Steam delivered for non-electric use (1000 lb); 0 for units without steam output.                                 | **History & exports**: Unit dialog year table, retrieval preview, CSV exports; summed in yearly rollups.                               |
 | `co2MassTons`        | `REAL`             | Weight of carbon dioxide released (short tons).                                                                   | **Emissions Impact**: Summed for plant-level CO₂ rank, map bubble scaling, KPI totals, and carbon intensity numerator.                 |
 | `so2MassTons`        | `REAL`             | Weight of sulfur dioxide released (short tons).                                                                   | **Acid Rain Tracking**: Displayed in annual unit history and plant comparison benchmark.                                               |
 | `noxMassTons`        | `REAL`             | Weight of nitrogen oxides released (short tons).                                                                  | **Smog Tracking**: Displayed in annual unit history and plant comparison benchmark.                                                    |
@@ -263,10 +261,10 @@ Rows are never deleted: a re-sync of a year moves its `annual_records` to the ne
 | `name`             | `TEXT`             | Label (e.g. "CAMPD API 2022 [TX]").                                             | **Provenance**: Identifies which import run last touched linked `annual_records`. |
 | `source`           | `TEXT`             | `"API"` (CAMPD sync) or `"BULK_CSV"` / `"BULK_EXCEL"` (file uploads).           | **Data Lineage**: Distinguishes ingestion channels.                               |
 | `reportingYear`    | `INTEGER`          | The calendar year ingested.                                                     | **Lineage**: Calendar year the batch applied to.                                  |
-| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                                | **Audit Trail**: When the sync completed.                                         |
-| `rawRecordCount`   | `INTEGER`          | Total records parsed from EPA.                                                  | **Health Check**: Returned by `syncCampdAnnualEmissions()` CLI output.            |
-| `validRecords`     | `INTEGER`          | Clean records saved to database.                                                | **Health Check**: Returned by CLI output.                                         |
-| `flaggedRecords`   | `INTEGER`          | Records that raised physics audit flags.                                        | **Health Check**: Returned by CLI output.                                         |
+| `importedAt`       | `INTEGER`          | Unix timestamp when the job ran.                                                | **Audit Trail**: Retrieval/upload date; "last import" source labels.              |
+| `rawRecordCount`   | `INTEGER`          | Rows received from EPA or read from the file.                                   | **History**: "Received" in the Retrieve history; provenance CSV.                  |
+| `validRecords`     | `INTEGER`          | Records that passed validation and were saved.                                  | **History**: Retrieve history, Download dataset picker, provenance CSV.           |
+| `flaggedRecords`   | `INTEGER`          | Saved records that raised physical-sanity flags.                                | **History**: Retrieve history, upload result, provenance CSV.                     |
 | `insertedRecords`  | `INTEGER`          | Unit-years this import added that were not stored before (null on older rows).  | **DB vs API**: "New" in the Retrieve history and provenance CSV.                  |
 | `updatedRecords`   | `INTEGER`          | Unit-years whose stored values this import changed.                             | **DB vs API**: "Updated" in the Retrieve history and provenance CSV.              |
 | `unchangedRecords` | `INTEGER`          | Unit-years the import rewrote with identical values.                            | **DB vs API**: "Unchanged" in the Retrieve history and provenance CSV.            |
@@ -293,7 +291,7 @@ The data-quality report for each upload **and CAMPD retrieval**: every row that 
 
 ## 4. How the Data Is Split Across the Views
 
-Instead of dumping everything into one slow, overwhelming table, we split the data across **7 distinct views and modals**. Each view queries only the specific slice of data it requires:
+The data is split across the explorer tabs and dialogs below. Each view queries only the slice it needs. The diagram covers the read views (1–7); the Retrieve, Upload, and Download dialogs (8–10) are described after them.
 
 ```mermaid
 flowchart LR
@@ -311,9 +309,10 @@ flowchart LR
         direction TB
         qStats["facilities.getStats<br/><i>(SQL COUNT / SUM aggregates)</i>"]
         qFilters["facilities.getFilterOptions<br/><i>(Distinct states, fuels, NERC)</i>"]
-        qTable["facilities.getFacilities<br/><i>(Subqueries + LIMIT/OFFSET)</i>"]
+        qTable["facilities.getFacilities / getUnitYears<br/><i>(Subqueries + LIMIT/OFFSET)</i>"]
+        qDescribe["facilities.describeSearch<br/><i>(Sentence → filters)</i>"]
         qMap["facilities.getMapFacilities<br/><i>(Lat/Long + Fuel + Tonnage)</i>"]
-        qDetail["facilities.getFacility<br/><i>(Deep relational graph)</i>"]
+        qDetail["facilities.getFacility / getUnit<br/><i>(Deep relational graph)</i>"]
         qCompare["facilities.compareFacilities<br/><i>(Multi-plant side-by-side)</i>"]
         qAudit["facilities.getAuditLogs<br/><i>(4-way table INNER JOIN)</i>"]
         qPublished["facilities.getCampdPublishedThrough<br/><i>(EPA data freshness ceiling)</i>"]
@@ -323,9 +322,9 @@ flowchart LR
     subgraph UIViews["Client UI Views & Modals"]
         direction TB
         vKPI["<b>1. System KPI Cards</b><br/>Total MW, CO₂, fuel & grid mix"]
-        vTable["<b>2. Facilities Explorer Table</b><br/>Search, state/fuel/NERC filters, sort"]
+        vTable["<b>2. Facilities & Units Explorer</b><br/>Search, filters, ranking, sort"]
         vMap["<b>3. Geographic Map & 3D Globe</b><br/>Leaflet 2D pins & D3 orthographic globe"]
-        vDetail["<b>4. Facility Detail Inspector</b><br/>Complete boiler/turbine breakdown & history"]
+        vDetail["<b>4. Facility & Unit Detail</b><br/>Units, yearly history, source dataset"]
         vCompare["<b>5. Plant Benchmark Comparison</b><br/>Side-by-side comparative analysis"]
         vAudit["<b>6. Sanity Audit Log</b><br/>Flagged anomalies & physics checks"]
         vGranular["<b>7. Granular Time Series Window</b><br/>Hourly, Daily, Weekly, Monthly, Yearly dropdown view"]
@@ -333,6 +332,7 @@ flowchart LR
 
     F & U & AR & AL --> qStats --> vKPI
     F & U --> qFilters --> vTable
+    F & U & AR --> qDescribe --> vTable
     F & U & AR --> qTable --> vTable
     F & U & AR --> qMap --> vMap
     F & U & AR & AL --> qDetail --> vDetail
@@ -346,7 +346,7 @@ flowchart LR
     classDef trpcStyle fill:#1e293b,stroke:#10b981,stroke-width:1.5px,color:#f8fafc;
     classDef uiStyle fill:#18181b,stroke:#f59e0b,stroke-width:1.5px,color:#f8fafc;
     class F,U,AR,AR_YR,EPA,AL dbStyle;
-    class qStats,qFilters,qTable,qMap,qDetail,qCompare,qAudit,qPublished,qGranular trpcStyle;
+    class qStats,qFilters,qTable,qDescribe,qMap,qDetail,qCompare,qAudit,qPublished,qGranular trpcStyle;
     class vKPI,vTable,vMap,vDetail,vCompare,vAudit,vGranular uiStyle;
 ```
 
@@ -442,7 +442,7 @@ flowchart LR
 
 ### View 7: Granular Time Series Window (`GranularEmissionsWindow`)
 
-- **Purpose**: Provides high-resolution temporal emissions intelligence across Hourly, Daily, Weekly, Monthly, and Yearly intervals for deep operational dispatch and emissions peaking analysis.
+- **Purpose**: Shows one facility's operation and emissions over time at hourly, daily, weekly, monthly, or yearly resolution.
 - **Query Used**: `api.facilities.getGranularEmissions` (with dropdown filters for granularity, reporting year, unit ID, and date window)
 - **What Part of the Table / API It Uses**:
   - **EPA CAMPD API** (hourly, daily, weekly, monthly): apportioned endpoints fetched in `src/server/campd/client.ts`.
@@ -450,76 +450,107 @@ flowchart LR
   - **`facilities.getCampdPublishedThrough`**: clamps selectable dates/years to EPA’s published-through quarter.
   - Granularity dropdown options:
     - **Hourly**: 24-hour stack profile for selected operating date (peak load vs base load cycling).
-    - **Daily**: Day-by-day continuous stack telemetry across the selected calendar month.
+    - **Daily**: One row per day across the selected calendar month.
     - **Weekly**: 52-week aggregated run hours, generation, and fuel consumption across the calendar year.
     - **Monthly**: 12-month seasonal trajectory of generation, heat input, and emissions.
-    - **Yearly**: Multi-year historical macro-trends.
-  - Efficiency metrics: Evaluates interval dynamic carbon intensity and heat rate.
+    - **Yearly**: One row per reporting year, from the local database.
+  - Carbon intensity and heat rate are computed for each interval.
 - **Why It’s Built This Way**: Rather than pre-ingesting tens of millions of hourly rows, the backend fetches granular slices on demand. Results are held in **React Query cache** on the client.
+
+---
+
+### View 8: Retrieve Dialog (`DataRetrievalDialog`)
+
+- **Purpose**: Pulls annual emissions from the EPA CAM API into the database, showing what will change first.
+- **Queries Used**: `getRetrievalOptions` (fuel / unit type / control lists from CAMPD master data), `getLocalCoverage` (what the database already holds for the chosen years and filters), `previewCampd` (fetches and compares, writes nothing), mutation `retrieveCampd` (fetches again and saves), `getDatasets` (history).
+- **What Part of the Table It Uses**: reads `annual_records` ⨝ `units` to compare each facility-unit-year (New / Changed / Unchanged, with database → API values per changed field); writes `datasets`, `facilities`, `units`, `annual_records`, `data_audit_logs`, and `import_issues` (rows that failed validation or repeated a facility-unit-year).
+
+### View 9: Upload Dialog (`DataUploadDialog`)
+
+- **Purpose**: Imports a CSV or Excel file after a validation report.
+- **Endpoint Used**: `POST /api/upload` (preview, then `commit=true`). `scripts/parse_import.py` reads the file and validates every row; `src/server/data-import.ts` compares the records with the database and writes them through the same path as the retrieval.
+- **What Part of the Table It Uses**: the same tables as View 8. The original file is archived under `uploads/` and its path stored in `datasets.archived_path`.
+
+### View 10: Download Dialog (`DataDownloadDialog`)
+
+- **Purpose**: CSV downloads (§10).
+- **Endpoint Used**: `GET /api/export?type=…` (`src/server/export.ts`).
+- **What It Exports**: `dataset` (every record a dataset last wrote), `valid` (those without audit flags), `invalid` (`import_issues` rows with their original columns plus flagged records), `search` (the explorer's current filters, all pages), `selection` (chosen facilities or units), `provenance` (the `datasets` table with parameters and diff counts).
 
 ---
 
 ## 5. Ingestion & Sync Workflow
 
-There is **no in-app sync UI** today. Data enters via two CLI scripts:
+Data enters in four ways. All but the seed script go through the same write path in `src/server/ingest.ts`, so validation, the database comparison, and the sanity audits are identical.
 
-| Script                                | What it does                                                                                                                                              |
-| :------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/seed-facilities-from-csv.ts` | Seeds `facilities` + `units` from local CAMPD CSV exports (metadata only; no `datasets` rows). Uses `resolveDatabaseUrl` from `src/server/db/index.ts`.   |
-| `scripts/sync_campd.ts`               | Calls `syncCampdAnnualEmissions()` — fetches annual emissions from the EPA REST API, runs Zod validation + physics audits, upserts into `annual_records`. |
+| Path                                                      | What it does                                                                                                                   |
+| :-------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| **Retrieve** dialog                                       | Previews a CAMPD `/annual` request against the database, then saves on approval. One `datasets` row per year.                  |
+| **Upload** dialog                                         | Validates a CSV/Excel file with Python, previews it against the database, then saves on approval. One `datasets` row per file. |
+| `npm run sync:campd` (`scripts/sync_campd.ts`)            | The retrieval without the preview, for scripted refreshes.                                                                     |
+| `npm run db:seed` (`scripts/seed-facilities-from-csv.ts`) | Loads `facilities` and `units` from CAMPD facility CSV files (no emissions, no `datasets` rows).                               |
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Dev as Developer / CI
-    participant Script as sync_campd.ts
-    participant Client as CAMPD Client
-    participant EPA as EPA CAMPD REST API
-    participant DB as SQLite / LibSQL
+    actor User
+    participant Dialog as Retrieve dialog
+    participant Router as tRPC facilities router
+    participant Client as CAMPD client
+    participant EPA as EPA CAM API
+    participant DB as SQLite
 
-    Dev->>Script: Run with year + optional state
-    Script->>Client: syncCampdAnnualEmissions()
-    Client->>DB: Preload facility/unit maps, create datasets row
-    Client->>EPA: GET /emissions-mgmt/emissions/apportioned/annual
-    EPA-->>Client: JSON response (paged items + x-total-count)
-    Client->>Client: Zod parse, anomaly checks, intensity & heat rate
-    Client->>DB: Upsert into annual_records, insert into data_audit_logs
-    DB-->>Client: Commit
-    Client-->>Script: Sync result (synced, flagged, skipped)
-    Script-->>Dev: Print summary stats
+    User->>Dialog: Choose years and filters
+    Dialog->>Router: getLocalCoverage
+    Router->>DB: Count stored unit-years per year
+    User->>Dialog: Preview
+    Dialog->>Router: previewCampd
+    Router->>Client: fetchCampdAnnual (no writes)
+    Client->>EPA: GET /annual, page by page
+    EPA-->>Client: JSON rows
+    Client->>Client: Zod validation, dedupe across pages
+    Client->>DB: Read stored records for the same years
+    Client-->>Dialog: New / Changed / Unchanged / Dropped
+    User->>Dialog: Approve & save
+    Dialog->>Router: retrieveCampd
+    Router->>Client: fetch again, then storeCampdAnnual
+    Client->>DB: datasets row, upsert facilities/units/annual_records,<br/>replace audit flags, import_issues for dropped rows
+    Client-->>Dialog: Saved counts (new, updated, unchanged, dropped)
 ```
+
+The commit fetches again rather than reusing the preview, as the upload re-posts its file. If EPA's data changed in between, the saved counts say so.
 
 ---
 
 ## 6. Table-to-View Mapping Matrix
 
-| Database Table        | Column Name                                       |   System KPIs   | Explorer Table  | Geographic Map  |    Plant Inspector     |  Compare Modal  |        Audits Tab        | Granular Time Window |
-| :-------------------- | :------------------------------------------------ | :-------------: | :-------------: | :-------------: | :--------------------: | :-------------: | :----------------------: | :------------------: |
-| **`facilities`**      | `id` (ORISPL)                                     |                 |     **Yes**     |                 |        **Yes**         |     **Yes**     |         **Yes**          |   **Yes** (Filter)   |
-|                       | `name`                                            |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |         **Yes**          |   **Yes** (Header)   |
-|                       | `stateCode`                                       |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `county`                                          |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `latitude` / `longitude`                          |                 |                 |     **Yes**     |        **Yes**         |                 |                          |                      |
-|                       | `epaRegion`                                       |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                       | `nercRegion`                                      | **Yes** (count) |     **Yes**     |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `sourceCategory`                                  |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                       | `ownerOperator`                                   |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-| **`units`**           | `unitId`                                          |                 |                 |                 |        **Yes**         |                 |         **Yes**          |   **Yes** (Filter)   |
-|                       | `primaryFuel`                                     |                 |     **Yes**     |     **Yes**     |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `unitType`                                        |                 |                 |                 |        **Yes**         |                 |                          |                      |
-|                       | `operatingStatus`                                 |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `nameplateCapacityMW`                             | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                      |
-|                       | Environmental Controls (`so2`, `nox`, `pm`, `hg`) |                 | **Yes** (Count) |                 | **Yes** (SO₂/NOₓ only) | **Yes** (Tally) |                          |                      |
-| **`annual_records`**  | `grossGenerationMWh`                              |                 |                 |                 |        **Yes**         |     **Yes**     |                          |   **Yes** (yearly)   |
-|                       | `operatingHours`                                  |                 | **Yes** (Total) |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `heatInputMMBtu`                                  |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `co2MassTons`                                     | **Yes** (Total) | **Yes** (Total) | **Yes** (Scale) |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `so2MassTons` / `noxMassTons`                     |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `co2IntensityLbsMWh`                              |                 | **Yes** (Badge) |                 |        **Yes**         |     **Yes**     |                          |                      |
-|                       | `heatRateMMBtuMWh`                                |                 |                 |                 |        **Yes**         |     **Yes**     |                          |                      |
-| **EPA CAMPD API**     | apportioned hourly/daily/monthly payloads         |                 |                 |                 |                        |                 |                          |       **Yes**        |
-| **`data_audit_logs`** | `flagType` / `severity` / `details`               | **Yes** (Count) |                 |                 |        **Yes**         |                 |         **Yes**          |                      |
-| **`datasets`**        | `name` / `importedAt` / counts                    |                 |                 |                 |                        |                 | **CLI sync output only** |                      |
+| Database Table        | Column Name                                       |    System KPIs     |  Explorer Table  | Geographic Map  |    Plant Inspector     |  Compare Modal  | Audits Tab | Granular Time Window |
+| :-------------------- | :------------------------------------------------ | :----------------: | :--------------: | :-------------: | :--------------------: | :-------------: | :--------: | :------------------: |
+| **`facilities`**      | `id` (ORISPL)                                     |                    |     **Yes**      |                 |        **Yes**         |     **Yes**     |  **Yes**   |   **Yes** (Filter)   |
+|                       | `name`                                            |                    |     **Yes**      |     **Yes**     |        **Yes**         |     **Yes**     |  **Yes**   |   **Yes** (Header)   |
+|                       | `stateCode`                                       |                    |     **Yes**      |     **Yes**     |        **Yes**         |     **Yes**     |            |                      |
+|                       | `county`                                          |                    |                  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `latitude` / `longitude`                          |                    |                  |     **Yes**     |        **Yes**         |                 |            |                      |
+|                       | `epaRegion`                                       |                    |                  |                 |        **Yes**         |                 |            |                      |
+|                       | `nercRegion`                                      |  **Yes** (count)   |     **Yes**      |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `sourceCategory`                                  |                    |                  |                 |        **Yes**         |                 |            |                      |
+|                       | `ownerOperator`                                   |                    |     **Yes**      |     **Yes**     |        **Yes**         |     **Yes**     |            |                      |
+| **`units`**           | `unitId`                                          |                    |                  |                 |        **Yes**         |                 |  **Yes**   |   **Yes** (Filter)   |
+|                       | `primaryFuel`                                     |                    |     **Yes**      |     **Yes**     |        **Yes**         |     **Yes**     |            |                      |
+|                       | `unitType`                                        |                    |                  |                 |        **Yes**         |                 |            |                      |
+|                       | `operatingStatus`                                 |                    |                  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `nameplateCapacityMW`                             |  **Yes** (Total)   | **Yes** (Total)  | **Yes** (Scale) |        **Yes**         |     **Yes**     |            |                      |
+|                       | Environmental Controls (`so2`, `nox`, `pm`, `hg`) |                    | **Yes** (Count)  |                 | **Yes** (SO₂/NOₓ only) | **Yes** (Tally) |            |                      |
+| **`annual_records`**  | `grossGenerationMWh`                              |                    |                  |                 |        **Yes**         |     **Yes**     |            |   **Yes** (yearly)   |
+|                       | `operatingHours`                                  |                    | **Yes** (Total)  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `heatInputMMBtu`                                  |                    |                  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `co2MassTons`                                     |  **Yes** (Total)   | **Yes** (Total)  | **Yes** (Scale) |        **Yes**         |     **Yes**     |            |                      |
+|                       | `so2MassTons` / `noxMassTons`                     |                    |                  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `co2IntensityLbsMWh`                              |                    | **Yes** (Badge)  |                 |        **Yes**         |     **Yes**     |            |                      |
+|                       | `heatRateMMBtuMWh`                                |                    |                  |                 |        **Yes**         |     **Yes**     |            |                      |
+| **EPA CAMPD API**     | apportioned hourly/daily/monthly payloads         |                    |                  |                 |                        |                 |            |       **Yes**        |
+| **`data_audit_logs`** | `flagType` / `severity` / `details`               |  **Yes** (Count)   |                  |                 |        **Yes**         |                 |  **Yes**   |                      |
+| **`datasets`**        | `name` / `importedAt` / counts                    | **Yes** (Coverage) | **Yes** (Origin) |                 |   **Yes** (per year)   |                 |            |                      |
 
 ---
 
@@ -527,9 +558,12 @@ sequenceDiagram
 
 1. **Multi-year aggregation**: KPI cards, the explorer table, and the map sum `annual_records` across every year loaded — only the comparison modal scopes to the latest year per plant.
 2. **Column naming**: Drizzle uses camelCase (`stateCode`); SQLite stores snake_case (`state_code`). This doc uses Drizzle names in tables and SQL column names in query descriptions.
-3. **Seed vs sync**: CSV seeding populates plant/unit metadata; API sync populates emissions. Both are required for a fully enriched database.
-4. **Granular data path**: Hourly–monthly slices hit the EPA API at request time; yearly slices aggregate local `annual_records`.
-5. **Cross-doc index**: Setup, scripts, and repo layout are summarized in **[README.md](./README.md)**; this file is the schema and view-mapping reference.
+3. **Seed vs sync**: CSV seeding populates plant/unit metadata; API retrieval populates emissions. Both are required for a fully enriched database.
+4. **Controls and program codes are per unit**: The specification lists SO₂/NOₓ/PM controls and program code with the annual record. CAMPD reports them per unit, so they live on `units`, and the latest import's values win.
+5. **Last writer wins**: `annual_records.dataset_id` is the dataset that last wrote the record, and values are overwritten rather than versioned. Re-importing a year leaves the older dataset in the history as superseded.
+6. **Origin per unit-year only**: Facilities and units have no dataset link, so "Origin" (API or upload) is known for annual records only.
+7. **Granular data path**: Hourly–monthly slices hit the EPA API at request time; yearly slices aggregate local `annual_records`.
+8. **Cross-doc index**: Setup, scripts, and repo layout are summarized in **[README.md](./README.md)**; this file is the schema and view-mapping reference.
 
 ---
 

@@ -1,285 +1,423 @@
 # epaData — EPA CAMPD Data Management System
 
-A Next.js web application and relational registry for US power plants, continuous emissions monitoring (CEMS) data, and automated thermodynamic sanity audits, backed by the EPA Clean Air Markets Program Data (CAMPD) API.
+epaData is a web application for retrieving, validating, storing, searching, and downloading
+annual operating and emissions data for U.S. power-plant units. Data comes from the EPA Clean
+Air Markets Program Data (CAMPD) API and from CSV/Excel files that users upload. Everything is
+stored in a local SQLite database.
 
-Built for **CS396 Phase 1 Core**. Column-level schema, view mapping, and ingestion details live in **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+Built for **CS396 Phase 1 (Data Management Website)** by Raaj Banga and Arnav Bawankule.
+Environmental evaluation (TRACI factors, indicators, scoring) is Phase 2 and not part of this
+repository.
 
----
-
-## Key Features
-
-1. **Relational Generation & Emissions Registry**:
-   - Normalized database schema supporting **1,582 facilities** and **5,030 generation units** across all 50 US states, DC, and Puerto Rico.
-   - Comprehensive facility categorization by NERC Reliability Regions (ERCOT, SERC, WECC, RFC, MRO, NPCC, SPP, FRCC), Source Categories (Electric Utility, Cogeneration, Small Power Producer, etc.), and Owner/Operators.
-   - Granular unit attributes including nameplate capacity (MW), operating status, commercial operation dates, primary/secondary fuels, and environmental control systems (NOₓ, SO₂, PM, Hg).
-
-2. **EPA CAMPD API Live Ingestion Pipeline**:
-   - Direct integration with EPA Clean Air Markets Program API (`/emissions-mgmt/emissions/apportioned/annual`) using API keys.
-   - Batching and high-throughput bulk upsert pipeline syncing operating hours, gross generation (MWh), heat input (MMBtu), and mass emissions (tons of CO₂, SO₂, NOₓ).
-   - **Retrieve** in the header opens the retrieval dialog: pick a year range and optionally a state, facility IDs, fuel, unit type, and control technology (the fuel/unit-type/control lists come from CAMPD's master-data endpoints, so every choice is a value the API accepts). Each year is stored as its own `datasets` row with its parameters in `query_params`; the dialog shows the run status (running / done / error) and record counts, and lists past datasets with their parameters, counts, and an active / superseded / error label.
-   - Dynamic server-side computation of derived metrics:
-     - **Carbon Intensity**: $\text{lbs CO}_2 / \text{MWh} = \frac{\text{CO}_2\ (\text{tons}) \times 2000}{\text{Gross Generation}\ (\text{MWh})}$
-     - **Heat Rate**: $\text{MMBtu} / \text{MWh} = \frac{\text{Heat Input}\ (\text{MMBtu})}{\text{Gross Generation}\ (\text{MWh})}$
-
-3. **Automated Physical Sanity & Data Quality Auditing**:
-   - Ingestion-time validation engine enforcing thermodynamic and operational bounds (`AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts`, shared by the CAMPD sync and file uploads):
-     - `ZERO_EMISSIONS_HIGH_HEAT` (`ERROR`): Fossil units with heat input > 1,000 MMBtu reporting 0.0 tons of CO₂ emissions.
-     - `PHANTOM_GENERATION` (`ERROR`): Generating power (> 0 MWh) with 0 operating hours recorded.
-     - `EXTREME_HEAT_RATE` (`WARN`): Units operating outside thermodynamic boundaries (< 5.0 or > 25.0 MMBtu/MWh).
-   - Dedicated audit log explorer with severity tracking (`WARN` | `ERROR`) and plain-language diagnostic descriptions.
-
-4. **Geospatial Mapping & Interactive 3D Globe**:
-   - Seamless dual-mode geospatial visualization of all 1,582 facilities across the US grid.
-   - **2D Leaflet Map**: Interactive slippy map utilizing dark CARTO / OpenStreetMap basemaps with hardware-accelerated circle markers dynamically scaled by nameplate capacity (MW) or CO₂ mass (tons) and color-coded by fuel type (Natural Gas, Coal, Oil, Renewables/Nuclear).
-   - **3D D3 Orthographic Globe**: Canvas-rendered interactive globe powered by D3.js and TopoJSON (`us-states-10m` and `world-land-110m`), supporting drag rotation, momentum panning, zoom controls, auto-spin toggle, and responsive map pins.
-   - Synchronized state/fuel filtering, metric switching (Generation Capacity vs. Gross CO₂ Tonnage), and click-to-inspect facility modals.
-
-5. **Head-to-Head Plant Benchmarking**:
-   - Side-by-side comparative analysis of 2 to 4 power plants.
-   - Direct evaluation of grid region, generation capacity, fleet fuel diversity, gross carbon tonnage, carbon intensity, and thermal efficiency.
-
-6. **Granular Temporal Emissions Telemetry**:
-   - Hourly, daily, weekly, and monthly slices are fetched on demand from EPA CAMPD apportioned endpoints (no synthetic estimation).
-   - **Yearly** granularity is aggregated from local `annual_records` (synced via `npm run sync:campd`).
-
-7. **CSV & Excel Data Import** (**Upload Data** in the header):
-   - Drag or select a `.csv`/`.xlsx` file (100 MB max). `scripts/parse_import.py` reads it, maps its columns to the project schema, rejects rows with missing or invalid values, and skips duplicate facility-unit-year records.
-   - The dialog previews rows and lists every rejected, duplicate, and sanity-flagged record before anything is saved. Approving upserts `facilities`, `units`, and (for annual emissions files) `annual_records` + `data_audit_logs`, records a `datasets` row (filename, archive path, counts), saves every rejected/duplicate row to `import_issues`, and archives the original file in `uploads/`.
-
-8. **Data Explorer Search (§8)** (**Units** tab, **More filters**):
-   - Units view lists one row per facility-unit-year (`annual_records ⨝ units ⨝ facilities`); the Facilities view shares the same filters.
-   - Basic filters: facility ID, name, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control. Range filters: min/max operating hours, gross load, heat input, CO₂, SO₂, NOₓ. All filters AND together.
-   - Ranking: sort by any column, then keep the first N overall or per state (`ROW_NUMBER() OVER (PARTITION BY state_code …)`). Units can be compared across facilities, and clicking a row opens the unit's history across all years.
-   - Filters, sort, and page are kept in the URL, so a search can be shared or reloaded.
-
-9. **CSV Download (§10)** (**Download** in the header, **CSV** beside the explorer results):
-   - `GET /api/export?type=…` returns `text/csv` as an attachment, written by one shared CSV writer (`src/lib/csv.ts`, RFC 4180 quoting).
-   - Types: `dataset&id=` (every unit-year a dataset holds with unit fuels, controls, program code, dates, and audit flags; `valid` + flagged rows of `invalid` = `dataset`), `valid&id=` (the dataset's records with no audit flags), `invalid&id=` (data-quality report: an upload's rejected/duplicate rows from `import_issues` with the original columns, plus every audit-flagged record of the dataset), `search&<explorer URL params>` (all matching facilities or unit-years in table order, ignoring paging), `selection&ids=&unitIds=` (every year of the compare selection), `provenance[&id=]` (datasets with source, parameters, file, dates, counts, status).
-   - Search exports reuse the explorer's ranked queries (`rankedFacilities` / `rankedUnitYears`), so a download always matches the table. The upload report offers **Download rejected rows** after an import.
-
-10. **Clean, Modern UI (Tailwind CSS v4 & shadcn-style primitives)**:
-
-- Shared UI in `src/components/ui/` (`Button`, `Badge`, `Dialog`, `Table`, `Input`, `Select`, `StatTile`, `KpiStrip`, `SegmentedControl`, `MetricBar`, `FuelBadge`, `CarbonIntensityBadge`, `EmptyState`, `InlineLoading`, `DataPanel`, `ThemeToggle`).
-- App shell and views in `src/app/_components/` (`DatabaseExplorer`, facility/map/compare/upload/retrieval/download dialogs, audit table, EPA reference primer).
-- Dark/light themes via `next-themes`; icons from `lucide-react`.
-
-11. **Type-safe API (tRPC)**:
-
-- `facilities.getStats`, `getFilterOptions`, `getFacilities`, `getUnitYears`, `getMapFacilities`, `getFacility`, `getUnit`, `compareFacilities`, `getAuditLogs`, `getDatasets`, `getRetrievalOptions`, `getCampdPublishedThrough`, `getGranularEmissions`; mutation `retrieveCampd`.
+| Document                                                     | Contents                                                                 |
+| :----------------------------------------------------------- | :----------------------------------------------------------------------- |
+| This README                                                  | Setup, configuration, how to reproduce the results                       |
+| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)             | Column-level schema, which view reads which table, ingestion flow        |
+| [samples/README.md](./samples/README.md)                     | The sample upload file, row by row, with the expected validation report  |
+| [presentation/demo-script.md](./presentation/demo-script.md) | The live demo: steps, inputs, expected results, timings                  |
+| [report/main.pdf](./report/main.pdf)                         | Project report (LaTeX sources in `report/`, build with `npm run report`) |
 
 ---
 
-## Tech Stack
+## Contents of the committed database
 
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org) + [React 19](https://react.dev)
-- **API & RPC**: [tRPC v11](https://trpc.io) with [TanStack Query v5](https://tanstack.com/query)
-- **Database & ORM**: [Drizzle ORM](https://orm.drizzle.team) with [LibSQL / SQLite](https://github.com/tursodatabase/libsql-client-ts)
-- **Geospatial & 2D Mapping**: [Leaflet](https://leafletjs.com) with CARTO / OpenStreetMap basemap tiles
-- **3D Visualization & Math**: [D3.js](https://d3js.org) (orthographic projection, canvas rendering) + [TopoJSON](https://github.com/topojson/topojson-client)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com)
-- **UI Primitives**: [shadcn/ui](https://ui.shadcn.com) style design system + [Lucide React](https://lucide.dev)
-- **Validation**: [Zod](https://zod.dev)
+`db.sqlite` is committed, so the app works right after setup without an API key or seeding.
 
-Bundled TopoJSON assets come from the BSD-licensed
-[world-atlas](https://github.com/topojson/world-atlas) and
-[us-atlas](https://github.com/topojson/us-atlas) datasets.
+| Table             |   Rows | Notes                                                                                                   |
+| :---------------- | -----: | :------------------------------------------------------------------------------------------------------ |
+| `facilities`      |  1,619 | 50 states, DC, and Puerto Rico                                                                          |
+| `units`           |  5,204 | 1,067.5 GW nameplate capacity                                                                           |
+| `annual_records`  | 50,947 | One row per facility-unit-year, reporting years 2015–2026 (2026 is partial; EPA publishes it quarterly) |
+| `datasets`        |     18 | All from the CAMPD API; 12 own records, 6 were superseded by later re-syncs                             |
+| `data_audit_logs` |  6,960 | Physical-sanity flags: 6,105 ERROR, 855 WARN                                                            |
+| `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                               |
 
 ---
 
-## Database Architecture
+## Features
 
-Six normalized SQLite tables (via LibSQL), managed with Drizzle ORM. Granular (hourly–monthly) UI data comes live from the EPA API, with `annual_records` backing yearly rollups—see **[DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)**.
+The course specification calls for separate pages. epaData is a single page; the "pages"
+are the home view, four explorer tabs, and dialogs opened from the header.
+
+| Specification (`epaData_requirements` §) | Where it is in epaData                                                                                                                                                                                                                                                                                                                                                                                 |
+| :--------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §9.1 Home page                           | Introduction, data sources, coverage strip (records per year and source), summary tiles, numbered links to each function                                                                                                                                                                                                                                                                               |
+| §5, §9.2 Retrieval                       | **Retrieve** dialog. Method: EPA CAM API, apportioned annual emissions. Filters: year range, state, facility IDs, fuel, unit type, control technology. Shows what the database already holds, previews what the API returns (New / Changed / Unchanged / Dropped, with database → API values for changed fields), then saves on approval. Past retrievals are listed with their parameters and counts. |
+| §6, §9.3 Upload                          | **Upload** dialog. CSV or Excel (≤ 100 MB), read by `scripts/parse_import.py`. Shows the column mapping, missing values, rejected rows with reasons, duplicate facility-unit-years, sanity flags, and New/Changed/Unchanged counts. Approve or cancel. Rejected and duplicate rows are stored in `import_issues`; the original file is archived in `uploads/`.                                         |
+| §8.1 Basic search                        | **Facilities** and **Units** tabs: name/operator/county text search, facility ID, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control, operating status, NERC region, origin                                                                                                                                                                                           |
+| §8.2 Multi-criteria and range search     | All filters combine with AND. Min/max ranges for year, operating time, gross load, heat input, CO₂, SO₂, NOₓ (under **More filters**)                                                                                                                                                                                                                                                                  |
+| Rubric 6: Description search             | **Name \| Describe** toggle in the search box. A sentence such as "Find coal units in Kentucky with high CO2 emissions" becomes ordinary filters, shown as removable chips. See [Description search](#description-search).                                                                                                                                                                             |
+| §8.3 Ranking and comparison              | **Ranking**: sort by any metric, keep the first N, overall or per state (`ROW_NUMBER() OVER (PARTITION BY state)`). **Compare**: tick 2–4 facilities or units. **History**: the unit dialog lists every reporting year.                                                                                                                                                                                |
+| §8.4 Result requirements                 | Sortable, paginated tables; each unit row opens a detail dialog; **CSV** exports the current search; the tab, filters, sort, and page live in the URL                                                                                                                                                                                                                                                  |
+| §9.5 Facility / unit detail              | Facility and unit dialogs: identification, operating data and emissions per year, fuels and controls, source dataset and origin per year, audit flags. The facility dialog also opens a granular time series (hourly to yearly).                                                                                                                                                                       |
+| §9.6, §10 Download                       | **Download** dialog: complete dataset, valid records, invalid-record report, search results, selected facilities/units, provenance. CSV only.                                                                                                                                                                                                                                                          |
+| Data quality                             | **Audits** tab: every physical-sanity flag, paginated and filterable by rule and severity                                                                                                                                                                                                                                                                                                              |
+| Extras                                   | Leaflet map and D3 globe of all facilities; DB-vs-API source labels throughout                                                                                                                                                                                                                                                                                                                         |
+
+### Physical-sanity rules
+
+Applied to every annual record written by a retrieval, an upload, or the CLI sync
+(`AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts`). Flagged records are stored, not
+dropped, and appear in the Audits tab and the invalid-record report.
+
+| Flag                       | Severity | Condition                                     |
+| :------------------------- | :------- | :-------------------------------------------- |
+| `ZERO_EMISSIONS_HIGH_HEAT` | ERROR    | heat input > 1,000 MMBtu and CO₂ = 0          |
+| `PHANTOM_GENERATION`       | ERROR    | gross load > 0 MWh and operating time = 0 h   |
+| `EXTREME_HEAT_RATE`        | WARN     | heat input ÷ gross load < 5 or > 25 MMBtu/MWh |
+
+Derived values stored with each record: CO₂ intensity = CO₂ (short tons) × 2,000 ÷ gross load
+(lb/MWh), and heat rate = heat input ÷ gross load (MMBtu/MWh).
+
+### Description search
+
+`src/lib/describe-search.ts` turns a sentence into filters without a language model:
+
+1. It matches the longest known phrase at each position against a vocabulary built from the
+   database's own filter values (states, fuels, unit types, controls, counties) plus synonyms
+   ("scrubber" → SO₂ control, "gas" → Natural Gas, state names → codes). Two-letter state codes
+   count only in capitals, so "in" and "or" stay English.
+2. It binds numbers to metrics ("CO2 over 500k tons", "under 50 tons SO2", "between 2015 and
+   2020") and reads ranking words ("top 10", "lowest", "in each state").
+3. "High" and "low" become thresholds: the 75th or 25th percentile of that metric among the
+   unit-years that match the other filters, rounded to three significant figures.
+4. Words it could not use are listed as "Not understood". If `OPENROUTER_API_KEY` is set,
+   only those leftover words are sent to an OpenRouter model, which may add filters chosen
+   from the same vocabulary. Its output is validated before use. Without a key, the parser's
+   result is used as is.
+
+The result is applied to the normal filter controls, so it can be refined by hand, exported,
+and shared by URL like any other search.
+
+---
+
+## Where the data comes from
+
+The explorer, detail dialogs, comparisons, audits, and downloads read **only the local
+database**. Two features call the **EPA API live**: Retrieve (which then writes to the
+database) and the granular time series.
+
+```mermaid
+flowchart LR
+    EPA["EPA CAM API<br/>(api.epa.gov/easey)"]
+    FILE["CSV / Excel file<br/>(CAMPD Custom Data Download layout)"]
+    PY["scripts/parse_import.py<br/>column mapping + validation"]
+    W["Shared write path<br/>src/server/ingest.ts<br/>diff · upsert · sanity audits"]
+    DB[("SQLite<br/>db.sqlite")]
+    UI["Browser<br/>explorer, dialogs, downloads"]
+    LLM["OpenRouter (optional)<br/>leftover words only"]
+
+    EPA -- "Retrieve: preview, then save" --> W
+    EPA -- "npm run sync:campd" --> W
+    FILE --> PY -- "preview, then approve" --> W
+    W --> DB
+    DB -- "tRPC queries, /api/export" --> UI
+    EPA -. "granular time series (hourly–monthly), not stored" .-> UI
+    UI -. "describe search" .-> LLM
+```
+
+| View                                                          | Source                                                     |
+| :------------------------------------------------------------ | :--------------------------------------------------------- |
+| Home coverage strip and tiles, Facilities, Units, Map, Audits | Local database                                             |
+| Facility and unit detail, Compare                             | Local database                                             |
+| Granular time series: Yearly                                  | Local database (`annual_records`)                          |
+| Granular time series: Hourly, Daily, Weekly, Monthly          | EPA API, live; not stored                                  |
+| Retrieve: "Already in the database" panel                     | Local database                                             |
+| Retrieve: preview                                             | EPA API, live; nothing is written until **Approve & save** |
+| Upload: validation report                                     | The uploaded file, compared with the local database        |
+| Download (all six types)                                      | Local database                                             |
+
+Each panel carries a label saying which source it shows ("Local database · last import …"
+or "Live EPA CAMPD API"). Every unit-year also records the dataset that last wrote it, shown
+as its **Origin** (CAMPD API or file upload) in the Units table, the unit dialog, and the CSV
+exports.
+
+---
+
+## Setup
+
+Tested on macOS with Node.js 26 and Python 3.9. Linux works the same way. On Windows, use WSL,
+or install `openpyxl` into the `python3` on your PATH (the server only looks for a virtual
+environment at `.venv/bin/python3`).
+
+### Prerequisites
+
+- Node.js 20.9 or newer, with npm
+- Python 3.9 or newer (reads uploaded files)
+- Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
+  for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
+  without it.
+
+### Step by step
+
+```bash
+# 1. Get the code (or unzip the submission) and enter the folder
+git clone <repository-url> epaData && cd epaData
+
+# 2. JavaScript dependencies
+npm install
+
+# 3. Python environment for uploads (openpyxl reads .xlsx files)
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# 4. Configuration
+cp .env.example .env
+#    then edit .env: DATABASE_URL can stay as is; add CAMPD_API to enable live EPA features
+
+# 5. Bring the committed database up to the latest schema (no-op if already current)
+npm run db:migrate
+
+# 6. Start the app
+npm run dev
+```
+
+Open <http://localhost:3000>. The home page should show 1,619 facilities and coverage for
+2015–2026.
+
+To check the installation: `npm run validate` runs the format check, ESLint, the TypeScript
+compiler, the unit tests, and a production build. All five should pass.
+
+### Environment variables
+
+Defined and validated in `src/env.js`; `.env.example` lists them all. Only `DATABASE_URL` is
+required. Keys are read on the server only and never sent to the browser.
+
+| Variable                | Required | Purpose                                                                                                   |
+| :---------------------- | :------- | :-------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | yes      | `file:./db.sqlite` (relative paths resolve from the project folder)                                       |
+| `DATABASE_AUTH_TOKEN`   | no       | Only for a remote libSQL/Turso database; leave empty                                                      |
+| `CAMPD_API`             | no       | EPA API key, sent as the `x-api-key` header. Enables Retrieve, `sync:campd`, and the granular time series |
+| `OPENROUTER_API_KEY`    | no       | Enables the language-model fallback in description search                                                 |
+| `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `openrouter/free`                                                            |
+| `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the 2D map; public tiles are used without it                                        |
+
+---
+
+## Reproducing the results
+
+With the committed `db.sqlite` and `npm run dev` running, each link opens the explorer in a
+known state (the URL holds the whole search). The counts below were checked against
+hand-written SQL.
+
+| Check                                                               | Link                                                                                                                                                                                  | Expected                                                                                   |
+| :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------- |
+| Multi-criteria (spec §8.2 example): KY, coal, 2025, CO₂ ≥ 500,000 t | [`/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)         | 25 unit-years                                                                              |
+| Same search, facility level                                         | [`/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)                             | 8 facilities                                                                               |
+| Group-and-rank: top CO₂ facility in each state, 2024                | [`/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc`](http://localhost:3000/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc)                                                   | 51 facilities, one per state with 2024 data                                                |
+| Historical: one unit, 2015–2025                                     | [`/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc`](http://localhost:3000/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc) | 11 rows (Barry unit 1)                                                                     |
+| Description search                                                  | Units tab → **Describe** → "Find coal units in Kentucky with high CO2 emissions."                                                                                                     | KY · Coal · CO₂ ≥ 2,660,000 (top 25 %), sorted by CO₂, 103 unit-years                      |
+| Retired units                                                       | [`/?tab=units&operatingStatus=Retired`](http://localhost:3000/?tab=units&operatingStatus=Retired)                                                                                     | 31 unit-years                                                                              |
+| Sample upload                                                       | **Upload** → `samples/annual-emissions-sample.csv`                                                                                                                                    | 25 rows: 21 valid (19 new, 1 changed, 1 unchanged), 3 rejected, 1 duplicate, 1 sanity flag |
+
+The **CSV** button next to the results downloads exactly the rows the table shows (all pages).
+
+Uploading the sample or approving a retrieval changes `db.sqlite`. Restore the committed copy
+with `git restore db.sqlite`, then the numbers above apply again.
+
+---
+
+## Refreshing or rebuilding the data
+
+The committed database was built with these commands; you only need them to extend or rebuild
+it. They read `.env` themselves.
+
+```bash
+npm run sync:campd                           # last calendar year
+npm run sync:campd -- --year 2024            # one year
+npm run sync:campd -- --from 2015 --to 2025  # a range (one dataset per year)
+npm run db:seed -- --csv-dir "../CAMPD DATA" # facilities + units from CAMPD facility CSVs
+```
+
+`sync:campd` writes directly. The **Retrieve** dialog does the same with a preview and an
+approval step, and records the same dataset history.
+
+After editing `src/server/db/schema.ts`, generate a migration with `npm run db:generate` and
+apply it with `npm run db:migrate`.
+
+---
+
+## Database
+
+Six tables in SQLite, defined with Drizzle ORM in `src/server/db/schema.ts`, migrations in
+`drizzle/`. Facility, unit, and unit-year uniqueness is enforced by the primary key on
+`facilities.id` and unique indexes on `units(facility_id, unit_id)` and
+`annual_records(unit_internal_id, year)`. Foreign keys cascade on delete. Column-by-column
+details: [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md).
+
+Secondary indexes cover the common searches: facilities by state, name, county, NERC region,
+and source category; units by facility, primary fuel, and operating status;
+`annual_records(year, co2_mass_tons)` for year filters and CO₂ ranking;
+`annual_records(facility_id, year)` for per-facility totals within a year; and the foreign
+keys of `data_audit_logs` and `import_issues`. The `(facility_id, year)` index matters: with
+only a `facility_id` index, SQLite answered "per-facility CO₂ in 2024" by scanning all of 2024
+once per facility, and the top-facility-per-state query took 9.5 s instead of 22 ms.
 
 ```mermaid
 erDiagram
     FACILITIES ||--o{ UNITS : "houses"
     FACILITIES ||--o{ ANNUAL_RECORDS : "tracks"
     UNITS ||--o{ ANNUAL_RECORDS : "reports"
-    DATASETS ||--o{ ANNUAL_RECORDS : "originates"
+    DATASETS ||--o{ ANNUAL_RECORDS : "last wrote"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
     DATASETS ||--o{ IMPORT_ISSUES : "rejects"
 
     FACILITIES {
-        integer id PK "ORISPL Plant ID (e.g. 3, 56, 1378)"
-        text name "Facility Name"
-        text state_code "2-letter US State (e.g. TX, OH, PA)"
-        text county "County location"
-        real latitude "GPS Latitude coordinate"
-        real longitude "GPS Longitude coordinate"
-        integer epa_region "EPA Administrative Region (1-10)"
-        text nerc_region "Regional Reliability Grid (ERCOT, PJM/RFC, WECC, etc.)"
-        text source_category "Industrial sector (Electric Utility, Cogen, Small Power)"
-        text owner_operator "Operating utility or holding entity"
+        integer id PK "EPA facility ID (ORISPL)"
+        text name
+        text state_code
+        text county
+        real latitude
+        real longitude
+        integer epa_region
+        text nerc_region
+        text source_category
+        text owner_operator
     }
 
     UNITS {
-        text id PK "UUID internal key"
-        text unit_id "Generator Unit ID (e.g. '1', '2', 'CT1')"
-        integer facility_id FK "References facilities.id"
-        text unit_type "Boiler / Turbine / Combustion Engine type"
-        text primary_fuel "Primary fuel (Coal, Natural Gas, Oil, etc.)"
-        text secondary_fuel "Backup fuel"
-        text operating_status "Operating, Retired, etc."
-        text commercial_op_date "Original commissioning date"
-        text retirement_date "Retirement date, if retired"
-        real max_hourly_hi_rate "Max heat input rating (MMBtu/hr)"
-        real nameplate_capacity_mw "Electric generator size in Megawatts"
-        text so2_controls "Flue gas desulfurization / scrubbers"
-        text nox_controls "Selective catalytic reduction / low-NOₓ burners"
-        text pm_controls "Electrostatic precipitators / fabric filters"
-        text hg_controls "Activated carbon injection"
-        text program_code "Federal regulatory programs (ARP, CSNOX, MATS)"
+        text id PK "internal UUID"
+        integer facility_id FK "unique with unit_id"
+        text unit_id "EPA unit ID"
+        text unit_type
+        text primary_fuel
+        text secondary_fuel
+        text operating_status
+        text commercial_op_date
+        text retirement_date
+        real max_hourly_hi_rate
+        real nameplate_capacity_mw
+        text so2_controls
+        text nox_controls
+        text pm_controls
+        text hg_controls
+        text program_code
     }
 
     DATASETS {
-        text id PK "UUID batch identifier"
-        text name "Human label (e.g. 'CAMPD API 2022 [TX]')"
-        text source "API, BULK_CSV, or BULK_EXCEL"
-        integer reporting_year "Calendar reporting year"
-        integer imported_at "Unix epoch timestamp"
-        integer raw_record_count "Total records received from EPA"
-        integer valid_records "Successfully saved records"
-        integer flagged_records "Records with sanity anomalies"
-        integer inserted_records "Unit-years new to the database (null = not tracked)"
-        integer updated_records "Unit-years whose values changed"
-        integer unchanged_records "Unit-years identical to what was stored"
-        integer dropped_records "Source rows rejected or duplicate (see import_issues)"
-        text original_filename "Uploaded file name (uploads only)"
-        text archived_path "Copy of the original file under uploads/"
-        text query_params "CAMPD retrieval parameters as JSON (API only)"
-        text notes "Upload rejected/duplicate counts, or 'Error: …' for a failed sync"
+        text id PK "UUID"
+        text name
+        text source "API | BULK_CSV | BULK_EXCEL"
+        integer reporting_year
+        integer imported_at
+        integer raw_record_count
+        integer valid_records
+        integer flagged_records
+        integer inserted_records
+        integer updated_records
+        integer unchanged_records
+        integer dropped_records
+        text original_filename
+        text archived_path
+        text query_params "JSON, API only"
+        text notes
     }
 
     ANNUAL_RECORDS {
-        text id PK "Composite ID: unitInternalId_year"
-        text dataset_id FK "References datasets.id"
-        integer facility_id FK "References facilities.id"
-        text unit_internal_id FK "References units.id"
-        integer year "Reporting Year (e.g. 2022)"
-        real operating_hours "Hours the unit ran during the year"
-        real gross_generation_mwh "Total electrical generation"
-        real heat_input_mmbtu "Total thermal fuel consumed"
-        real steam_load_klb "Steam load (1000 lb)"
-        real co2_mass_tons "Mass of CO₂ emitted"
-        real so2_mass_tons "Mass of SO₂ emitted"
-        real nox_mass_tons "Mass of NOₓ emitted"
-        real co2_intensity_lbs_mwh "Stored derived intensity"
-        real heat_rate_mmbtu_mwh "Stored derived heat rate"
+        text id PK "unit_internal_id + year"
+        text dataset_id FK
+        integer facility_id FK
+        text unit_internal_id FK "unique with year"
+        integer year
+        real operating_hours
+        real gross_generation_mwh
+        real heat_input_mmbtu
+        real steam_load_klb
+        real co2_mass_tons
+        real so2_mass_tons
+        real nox_mass_tons
+        real co2_intensity_lbs_mwh
+        real heat_rate_mmbtu_mwh
     }
 
     IMPORT_ISSUES {
-        text id PK "UUID"
-        text dataset_id FK "References datasets.id"
-        integer row_number "Row in the uploaded file"
+        text id PK
+        text dataset_id FK
+        integer row_number
         text kind "REJECTED | DUPLICATE"
-        text reason "Why the row was not stored"
-        text raw_row "Original row as JSON"
+        text reason
+        text raw_row "JSON"
     }
 
     DATA_AUDIT_LOGS {
-        text id PK "UUID flag ID"
-        text annual_record_id FK "References annual_records.id"
-        text flag_type "ZERO_EMISSIONS_HIGH_HEAT | PHANTOM_GENERATION | EXTREME_HEAT_RATE"
+        text id PK
+        text annual_record_id FK
+        text flag_type
         text severity "WARN | ERROR"
-        text details "Plain-English diagnostic description"
-        integer created_at "Unix epoch timestamp"
+        text details
+        integer created_at
     }
 ```
 
----
+Design assumptions to be aware of:
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20.9+
-- npm
-- Python 3 (for file uploads). Create the repo venv so uploads get Excel support (the server uses `.venv/bin/python3` when it exists):
-
-  ```bash
-  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-  ```
-
-### 1. Environment Setup
-
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Ensure your `.env` matches `src/env.js` (see `.env.example`):
-
-```env
-DATABASE_URL="file:./db.sqlite"
-# Optional for remote Turso; omit for local file DB
-DATABASE_AUTH_TOKEN=""
-# Required for sync + live granular CAMPD calls
-CAMPD_API="your_epa_campd_api_key_here"
-# Optional; improves CARTO basemap tiles on the Leaflet map
-NEXT_PUBLIC_CARTO_API=""
-```
-
-### 2. Install Dependencies
-
-```bash
-npm install
-```
-
-### 3. Database Migrations
-
-`db.sqlite` is committed as the sample dataset (CAMPD facilities/units plus synced annual emissions), so the app runs without seeding. Apply any newer migrations to it:
-
-```bash
-npm run db:migrate
-```
-
-After editing `src/server/db/schema.ts`, create the next migration with `npm run db:generate`. The CLI scripts read `.env` themselves (`tsx --env-file=.env`).
-
-### 4. Seed / Ingest Data
-
-Optional, to rebuild or extend the data. Seed facilities/units from CAMPD CSVs, then sync annual emissions (defaults to last year):
-
-```bash
-npm run db:seed -- --csv-dir "../CAMPD DATA"
-npm run sync:campd                          # last year
-npm run sync:campd -- --year 2024           # one year
-npm run sync:campd -- --from 2015 --to 2025 # a range
-```
-
-### 5. Run the Development Server
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+- **Controls and program codes are stored per unit, not per unit-year.** The specification
+  lists them with the annual record; CAMPD reports them per unit, and the latest import wins.
+- **`annual_records.dataset_id` is the dataset that last wrote the record.** Re-importing a
+  year moves its records to the new dataset; the older dataset stays in the history as
+  "superseded". Values are overwritten, not versioned.
+- **Origin is known per unit-year only.** Facility and unit rows have no dataset link.
 
 ---
 
-## Verification & Testing
+## Technology
 
-| Script             | Purpose                                                                            |
-| :----------------- | :--------------------------------------------------------------------------------- |
-| `npm run validate` | Format check, lint, typecheck, unit tests, production build                        |
-| `npm test`         | Node test runner over `src/lib/*.test.ts` (lib helpers, upload parser, CSV writer) |
-| `npm run check`    | ESLint + `tsc --noEmit`                                                            |
+The specification suggests Flask, Jinja, and SQLAlchemy. epaData uses a TypeScript stack
+for the web layer and keeps SQLite and Python:
 
-```bash
-npm run validate
-```
+| Specification          | epaData                                                                          | Role                                                                 |
+| :--------------------- | :------------------------------------------------------------------------------- | :------------------------------------------------------------------- |
+| Flask routes           | Next.js 16 route handlers (`/api/upload`, `/api/export`) and tRPC v11 procedures | Server endpoints; tRPC gives the browser typed calls for every query |
+| Jinja templates        | React 19 components, rendered on the server first                                | Pages and dialogs                                                    |
+| SQLAlchemy             | Drizzle ORM with drizzle-kit migrations                                          | Schema, typed queries, migrations                                    |
+| SQLite                 | SQLite through the libSQL client                                                 | Unchanged                                                            |
+| Python data processing | `scripts/parse_import.py` (csv, openpyxl)                                        | Reads and validates every upload (§6 step 3)                         |
+| Bootstrap/CSS          | Tailwind CSS v4                                                                  | Styling, light and dark themes                                       |
 
-## Repository Layout (high level)
+Other libraries: TanStack Query (client caching), Zod (input validation on every endpoint),
+Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide-react
+(icons), node:test with tsx (unit tests), ESLint and Prettier.
 
-| Path                         | Role                                                                                   |
-| :--------------------------- | :------------------------------------------------------------------------------------- |
-| `src/app/`                   | Next.js App Router pages and `_components` UI                                          |
-| `src/server/api/`            | tRPC router (`facilities`) and context                                                 |
-| `src/server/db/`             | Drizzle schema, queries, LibSQL client (`resolveDatabaseUrl` lives in `index.ts`)      |
-| `src/server/campd/client.ts` | EPA sync and granular fetch                                                            |
-| `src/server/ingest.ts`       | Shared upserts + audit logging for the sync, seed script, and uploads                  |
-| `src/server/data-import.ts`  | File upload preview/commit behind `POST /api/upload`                                   |
-| `src/server/export.ts`       | CSV downloads behind `GET /api/export`                                                 |
-| `src/lib/`                   | Domain helpers (emissions math, CAMPD dates, plant narrative, map theming)             |
-| `src/trpc/`                  | React + RSC tRPC clients (`query-client.ts` holds shared React Query setup)            |
-| `scripts/`                   | `db:migrate`, `db:seed`, `sync:campd` CLI entrypoints; `parse_import.py` upload parser |
+## Scripts
+
+| Command                       | What it does                                                                                                   |
+| :---------------------------- | :------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                 | Development server on port 3000                                                                                |
+| `npm run build` / `npm start` | Production build and server                                                                                    |
+| `npm run validate`            | Format check, lint, typecheck, tests, build                                                                    |
+| `npm test`                    | Unit tests in `src/lib/*.test.ts` (description parser, CSV writer, upload report, record diff, domain helpers) |
+| `npm run check`               | ESLint and `tsc --noEmit`                                                                                      |
+| `npm run db:migrate`          | Apply migrations in `drizzle/` to `DATABASE_URL`                                                               |
+| `npm run db:generate`         | Create a migration after a schema change                                                                       |
+| `npm run db:seed`             | Load facilities and units from CAMPD facility CSV files                                                        |
+| `npm run sync:campd`          | Fetch annual emissions from the EPA API and store them                                                         |
+| `npm run report`              | Build the project report with Tectonic (`report/main.tex` → `report/main.pdf`)                                 |
+
+## Repository layout
+
+| Path                                                                            | Contents                                                                                                                          |
+| :------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/page.tsx`, `src/app/_components/`                                      | The page and its views: explorer, tables, filter bar, map, globe, and the retrieve, upload, download, detail, and compare dialogs |
+| `src/app/api/`                                                                  | Route handlers: tRPC endpoint, `upload` (preview and commit), `export` (CSV downloads)                                            |
+| `src/components/ui/`                                                            | Shared UI primitives (buttons, dialogs, tables, badges, report sections)                                                          |
+| `src/server/api/routers/facilities.ts`                                          | All tRPC queries and the retrieval mutation                                                                                       |
+| `src/server/db/`                                                                | Drizzle schema and database client                                                                                                |
+| `src/server/campd/client.ts`                                                    | EPA API client: retrieval, preview, granular time series                                                                          |
+| `src/server/ingest.ts`                                                          | Shared write path: diff against stored records, upserts, sanity audits                                                            |
+| `src/server/data-import.ts`, `src/server/export.ts`, `src/server/llm-search.ts` | Upload, CSV export, optional OpenRouter fallback                                                                                  |
+| `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer                         |
+| `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `sync_campd`) and `parse_import.py`                                      |
+| `drizzle/`                                                                      | SQL migrations                                                                                                                    |
+| `samples/`                                                                      | Sample upload files and their expected results                                                                                    |
+| `report/`                                                                       | Project report: LaTeX sources, figures, bibliography, PDF                                                                         |
+| `presentation/`                                                                 | Demo script                                                                                                                       |
+| `uploads/`                                                                      | Archived original upload files (not committed)                                                                                    |
+
+## Data and credits
+
+- Emissions, facility, and unit data: U.S. EPA Clean Air Markets Program Data (CAMPD), public
+  domain.
+- Map shapes: [us-atlas](https://github.com/topojson/us-atlas) and
+  [world-atlas](https://github.com/topojson/world-atlas) (ISC license), bundled in
+  `public/geo/`.
+- Basemap tiles: © OpenStreetMap contributors, © CARTO.
