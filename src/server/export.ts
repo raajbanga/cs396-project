@@ -47,7 +47,9 @@ const requestSchema = z.object({
 });
 
 type UnitYearRow = Awaited<ReturnType<typeof selectUnitYears>>[number];
-type FacilityRow = Awaited<ReturnType<typeof selectFacilities>>[number];
+type FacilityRow = Awaited<
+  ReturnType<ReturnType<typeof rankedFacilities>["rows"]>
+>[number];
 type DatasetRow = Awaited<ReturnType<typeof datasetHistory>>[number];
 
 const rankColumn: CsvColumn<{ rank: number }> = ["rank", (r) => r.rank];
@@ -127,30 +129,20 @@ const PROVENANCE_COLUMNS: CsvColumn<DatasetRow & { currentRecords: number }>[] =
 
 const NATURAL_ORDER = { sortBy: "facility", sortDir: "asc" } as const;
 
-async function selectUnitYears(
+/** Matching unit-years: in rank order, or by facility, unit, and year (`naturalOrder`, for whole datasets). */
+function selectUnitYears(
   input: FilterInput & { sortBy: UnitSortField; sortDir: "asc" | "desc" },
   scope: SQL[],
   naturalOrder: boolean,
 ) {
-  const { ranked, where, orderBy } = rankedUnitYears(db, input, scope);
+  const view = rankedUnitYears(db, input, scope);
+  if (!naturalOrder) return view.rows();
+  const { ranked } = view;
   return db
     .select()
     .from(ranked)
-    .where(where)
-    .orderBy(
-      ...(naturalOrder
-        ? [asc(ranked.facilityId), asc(ranked.unitId), asc(ranked.year)]
-        : orderBy),
-    );
-}
-
-async function selectFacilities(input: Parameters<typeof rankedFacilities>[1]) {
-  const { ranked, where, orderBy } = rankedFacilities(db, input);
-  return db
-    .select()
-    .from(ranked)
-    .where(where)
-    .orderBy(...orderBy);
+    .where(view.where)
+    .orderBy(asc(ranked.facilityId), asc(ranked.unitId), asc(ranked.year));
 }
 
 /** Unit-year CSV with each record's audit flags; `ranked` adds the §8.3 rank column. */
@@ -300,7 +292,7 @@ export async function buildExport(params: URLSearchParams) {
           ),
         };
       }
-      const rows = await selectFacilities({ ...filters, ...table });
+      const rows = await rankedFacilities(db, { ...filters, ...table }).rows();
       return {
         filename: `epadata_search_facilities_${today()}.csv`,
         csv: toCsv(

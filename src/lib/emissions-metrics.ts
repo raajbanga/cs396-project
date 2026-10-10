@@ -52,14 +52,13 @@ export function computeCo2IntensityLbsMWh(
 export function computeHeatRateMMBtuMWh(
   heatInputMMBtu: number | null,
   grossGenMWh: number | null,
-  decimals = 2,
 ): number | null {
   return heatInputMMBtu !== null && grossGenMWh !== null && grossGenMWh > 0
-    ? Number((heatInputMMBtu / grossGenMWh).toFixed(decimals))
+    ? Number((heatInputMMBtu / grossGenMWh).toFixed(2))
     : null;
 }
 
-export function deriveRates(totals: ReportedTotals, heatRateDecimals = 2) {
+export function deriveRates(totals: ReportedTotals) {
   return {
     co2IntensityLbsMWh: computeCo2IntensityLbsMWh(
       totals.co2MassTons,
@@ -68,7 +67,6 @@ export function deriveRates(totals: ReportedTotals, heatRateDecimals = 2) {
     heatRateMMBtuMWh: computeHeatRateMMBtuMWh(
       totals.heatInputMMBtu,
       totals.grossGenerationMWh,
-      heatRateDecimals,
     ),
   };
 }
@@ -196,7 +194,7 @@ export function buildYearlyRollups(records: AnnualRecordForRollup[] = []) {
       const totals = sumTotals(yearRecords);
       return {
         ...totals,
-        ...deriveRates(totals, 1),
+        ...deriveRates(totals),
         year,
         records: yearRecords,
         unitCount: yearRecords.length,

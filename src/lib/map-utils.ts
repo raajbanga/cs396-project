@@ -1,5 +1,3 @@
-import type { BadgeVariant } from "~/components/ui/badge";
-
 export interface MapFacility {
   id: number;
   name: string;
@@ -18,27 +16,25 @@ export interface MapFacility {
 
 /** Shared frame for the globe and Leaflet map containers. */
 export const MAP_FRAME =
-  "border-edge/80 relative h-[420px] w-full overflow-hidden rounded-xl border shadow-xs sm:h-[520px] lg:h-[620px]";
+  "border-edge relative h-[420px] w-full overflow-hidden rounded-md border sm:h-[520px] lg:h-[620px]";
 
 export type MetricMode = "capacity" | "co2" | "uniform";
 
-export type FuelIconKind =
+type FuelKind =
   "gas" | "nuclear" | "solar" | "wind" | "hydro" | "fossil" | "other";
 
+/** One color per fuel family, shared by the maps, their legend, and every fuel dot in the tables. */
 const FUEL_STYLES = {
-  coal: { name: "Coal", color: "#f59e0b", variant: "destructive" },
-  gas: { name: "Natural Gas", color: "#10b981", variant: "sky" },
-  nuclear: { name: "Nuclear", color: "#06b6d4", variant: "sky" },
-  oil: { name: "Oil / Petroleum", color: "#f43f5e", variant: "warning" },
-  hydro: { name: "Hydro", color: "#3b82f6", variant: "success" },
-  renewable: { name: "Solar / Wind", color: "#84cc16", variant: "success" },
-  other: { name: "Other / Mixed", color: "#a1a1aa", variant: "secondary" },
-} satisfies Record<
-  string,
-  { name: string; color: string; variant: BadgeVariant }
->;
+  coal: { name: "Coal", color: "#f59e0b" },
+  gas: { name: "Natural Gas", color: "#10b981" },
+  nuclear: { name: "Nuclear", color: "#06b6d4" },
+  oil: { name: "Oil / Petroleum", color: "#f43f5e" },
+  hydro: { name: "Hydro", color: "#3b82f6" },
+  renewable: { name: "Solar / Wind", color: "#84cc16" },
+  other: { name: "Other / Mixed", color: "#a1a1aa" },
+};
 
-const FUEL_PATTERNS: [FuelIconKind, RegExp][] = [
+const FUEL_PATTERNS: [FuelKind, RegExp][] = [
   ["gas", /gas|methane/],
   ["nuclear", /nuclear/],
   ["solar", /solar/],
@@ -47,7 +43,7 @@ const FUEL_PATTERNS: [FuelIconKind, RegExp][] = [
   ["fossil", /coal|lignite|oil|petroleum|diesel/],
 ];
 
-function classifyFuel(fuel: string | null | undefined): FuelIconKind {
+function classifyFuel(fuel: string | null | undefined): FuelKind {
   const f = (fuel ?? "").toLowerCase();
   return FUEL_PATTERNS.find(([, re]) => re.test(f))?.[0] ?? "other";
 }
@@ -56,21 +52,39 @@ export const isZeroCarbonFuel = (fuel: string) =>
   ["nuclear", "solar", "wind", "hydro"].includes(classifyFuel(fuel));
 
 export function getFuelTheme(fuel: string | null | undefined) {
-  const icon = classifyFuel(fuel);
+  const kind = classifyFuel(fuel);
   const style =
-    icon === "fossil"
+    kind === "fossil"
       ? /coal|lignite/i.test(fuel ?? "")
         ? FUEL_STYLES.coal
         : FUEL_STYLES.oil
-      : icon === "solar" || icon === "wind"
+      : kind === "solar" || kind === "wind"
         ? FUEL_STYLES.renewable
-        : FUEL_STYLES[icon];
+        : FUEL_STYLES[kind];
   return {
     ...style,
-    name: icon === "other" && fuel && fuel !== "Unknown" ? fuel : style.name,
+    name: kind === "other" && fuel && fuel !== "Unknown" ? fuel : style.name,
     glow: `${style.color}73`,
-    icon,
   };
+}
+
+/** The theme tokens from globals.css, read at draw time so canvas and Leaflet layers match the page. */
+export function readThemeColors() {
+  const css = getComputedStyle(document.documentElement);
+  const token = (name: string) => css.getPropertyValue(`--${name}`).trim();
+  return {
+    canvas: token("canvas"),
+    surface: token("surface"),
+    surface2: token("surface-2"),
+    edge: token("edge"),
+    fg: token("fg"),
+  };
+}
+
+/** "#rrggbb" at the given opacity, for canvas strokes and fills. */
+export function withAlpha(hex: string, alpha: number) {
+  const n = Number.parseInt(hex.replace("#", ""), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 export function getMarkerRadius(
@@ -103,15 +117,7 @@ export function getMarkerRadius(
   return Math.max(min, Math.min(max, raw)) + zoomBonus;
 }
 
-export const FUEL_CATEGORIES = (
-  [
-    ["gas", "Pipeline Natural Gas"],
-    ["coal", "Coal"],
-    ["nuclear", "Nuclear"],
-    ["oil", "Residual Oil"],
-  ] as const
-).map(([key, query]) => ({
-  label: FUEL_STYLES[key].name,
-  color: FUEL_STYLES[key].color,
-  query,
-}));
+/** The map's fuel chips (by `getFuelTheme` class); CAMPD covers combustion units only, so no nuclear chip. */
+export const FUEL_CATEGORIES = (["gas", "coal", "oil"] as const).map(
+  (key) => FUEL_STYLES[key],
+);

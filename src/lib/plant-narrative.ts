@@ -1,16 +1,11 @@
 import type { BadgeVariant } from "~/components/ui/badge";
 import { isZeroCarbonFuel } from "~/lib/map-utils";
 
-/**
- * Plant Narrative & Real-World Impact Engine: translates technical EPA CEMS
- * data into plain-English stories and tangible real-world equivalents.
- */
+/** Plain-English plant summaries: grid role, carbon-intensity tier, and EPA equivalencies. */
 
-export interface PlantRoleInfo {
+interface PlantRoleInfo {
   role: string;
   badgeLabel: string;
-  variant: BadgeVariant;
-  icon: "zap" | "clock" | "activity" | "factory" | "power";
   description: string;
 }
 
@@ -18,48 +13,36 @@ const PLANT_ROLES = {
   cogen: {
     role: "Industrial Cogenerator",
     badgeLabel: "Industrial Cogen",
-    variant: "purple",
-    icon: "factory",
     description:
       "Generates electricity while capturing waste heat to power on-site manufacturing, refining, or heating.",
   },
   zeroCarbon: {
     role: "Zero-Carbon Generator",
     badgeLabel: "Zero-Carbon",
-    variant: "success",
-    icon: "zap",
     description:
       "Generates clean, carbon-free electricity without direct fossil combustion.",
   },
   baseload: {
     role: "Baseload Workhorse",
     badgeLabel: "Baseload Plant",
-    variant: "sky",
-    icon: "zap",
     description:
       "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
   },
   peaker: {
     role: "On-Demand Peaker",
     badgeLabel: "On-Demand Peaker",
-    variant: "warning",
-    icon: "clock",
     description:
       "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
   },
   standby: {
     role: "Standby / Reserve",
     badgeLabel: "Standby Reserve",
-    variant: "secondary",
-    icon: "power",
     description:
       "Held in operational reserve or pending seasonal activation with minimal reported generation.",
   },
   loadFollowing: {
     role: "Load-Following Plant",
     badgeLabel: "Load-Following",
-    variant: "success",
-    icon: "activity",
     description:
       "Ramps power output up and down throughout the day to match fluctuating consumer demand and balance solar/wind.",
   },
@@ -143,11 +126,10 @@ export function getCarbonIntensityTier(intensity: number) {
  * EPA Greenhouse Gas Equivalencies: 1 ton CO₂ ≈ 0.217 passenger vehicles/yr,
  * 1 MW capacity ≈ 750 average American homes.
  */
-export function getHumanEquivalents(capacityMW: number, co2Tons: number) {
+function getHumanEquivalents(capacityMW: number, co2Tons: number) {
   const homes = Math.round(capacityMW * 750);
   const cars = Math.round(co2Tons * 0.217);
   return {
-    homesPoweredRaw: homes,
     homesPoweredFormatted: formatLargeNumber(homes, " homes"),
     carsDrivenRaw: cars,
     carsDrivenFormatted: formatLargeNumber(cars, " cars/yr"),
@@ -228,7 +210,7 @@ export function generatePlantStory(params: {
       params.grossGenerationMWh > 0
         ? `${(params.grossGenerationMWh / 1_000_000).toFixed(2)} million MWh`
         : "energy";
-    gridStory += `${params.year ? `In ${params.year},` : "In recent reporting,"} it was actively generating power for ${params.operatingHours.toLocaleString()} hours (about ${pctYear}% of the year), producing ${output} into the ${grid} electric grid.`;
+    gridStory += `${params.year ? `In ${params.year},` : "In recent reporting,"} it was actively generating power for ${Math.round(params.operatingHours).toLocaleString()} hours (about ${pctYear}% of the year), producing ${output} into the ${grid} electric grid.`;
   } else {
     gridStory += `It operates as part of the ${grid} electric reliability network, managed by ${
       params.ownerOperator
@@ -239,7 +221,7 @@ export function generatePlantStory(params: {
 
   let environmentalStory: string;
   if (params.co2Tons > 0) {
-    environmentalStory = `The plant emitted ${params.co2Tons.toLocaleString()} tons of carbon dioxide (CO₂), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
+    environmentalStory = `The plant emitted ${Math.round(params.co2Tons).toLocaleString()} tons of carbon dioxide (CO₂), which is roughly equivalent to the annual greenhouse emissions of ${equivalents.carsDrivenFormatted}. `;
     if (params.carbonIntensity) {
       environmentalStory += `Its emissions intensity is ${params.carbonIntensity.toLocaleString()} lbs CO₂/MWh, ${getCarbonIntensityTier(params.carbonIntensity).typicalOf}. `;
     }
@@ -247,8 +229,8 @@ export function generatePlantStory(params: {
     environmentalStory = `No direct annual carbon emissions were reported for ${params.year ?? "this period"}. `;
   }
   environmentalStory += params.hasControls
-    ? "Its smokestacks are equipped with environmental control scrubbers to capture sulfur dioxide (SO₂) and catalytic converters to neutralize smog-forming nitrogen oxides (NOₓ)."
-    : "It operates with standard emissions controls configured for its generator units.";
+    ? "At least one of its units reports SO₂, NOₓ, particulate, or mercury controls (see the Units tab)."
+    : "None of its units reports SO₂, NOₓ, particulate, or mercury controls.";
 
   return { roleInfo, equivalents, headline, gridStory, environmentalStory };
 }

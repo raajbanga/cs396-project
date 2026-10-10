@@ -159,6 +159,27 @@ function rankWindow(
   };
 }
 
+/** A ranked view's rows in rank order and its row count, for paging (`pageOf`) or a full CSV. */
+function rankedView<
+  T extends Parameters<ReturnType<typeof Database.select>["from"]>[0] & {
+    rank: SQL.Aliased<number>;
+    stateCode: SQLiteColumn;
+  },
+>(database: typeof Database, ranked: T, input: FilterInput) {
+  const { where, orderBy } = rankWindow(ranked, input);
+  return {
+    ranked,
+    where,
+    rows: () =>
+      database
+        .select()
+        .from(ranked)
+        .where(where)
+        .orderBy(...orderBy),
+    total: () => database.select({ total: count() }).from(ranked).where(where),
+  };
+}
+
 /**
  * An API sync whose records were all taken over by a later sync of the same year. Kept as
  * retrieval history. Uploads are never marked: facility files own no annual records by design,
@@ -346,6 +367,11 @@ export function rankedFacilities(
       totalOperatingHours: sql<number>`(
         SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
       )`.as("total_operating_hours"),
+      // The busiest unit's hours in the latest year in scope: the dispatch measure behind the plant role (same as the detail dialog).
+      peakUnitHours: sql<number | null>`(
+        SELECT "annual_records"."operating_hours" FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
+        ORDER BY "annual_records"."year" DESC, "annual_records"."operating_hours" DESC LIMIT 1
+      )`.as("peak_unit_hours"),
       rank: rankOver(
         facilitySortColumns(year)[sortBy],
         sortDir,
@@ -356,7 +382,7 @@ export function rankedFacilities(
     .from(facilities)
     .where(and(...filterConditions(input)))
     .as("ranked");
-  return { ranked, ...rankWindow(ranked, input) };
+  return rankedView(database, ranked, input);
 }
 
 /**
@@ -426,7 +452,7 @@ export function rankedUnitYears(
       ),
     )
     .as("ranked");
-  return { ranked, ...rankWindow(ranked, input) };
+  return rankedView(database, ranked, input);
 }
 
 /** Datasets newest first with their parameters, counts, and superseded status (§5 history, §10 provenance). */
@@ -532,16 +558,31 @@ async function percentileOf(
   return row?.value != null ? Number(row.value.toPrecision(3)) : undefined;
 }
 
+/** Runs `task` for each year in order, stopping at the first error: the years done so far plus "year: message". */
+async function eachYear<T>(
+  fromYear: number,
+  toYear: number,
+  task: (year: number) => Promise<T>,
+) {
+  const results: T[] = [];
+  for (let year = fromYear; year <= toYear; year++) {
+    try {
+      results.push(await task(year));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { results, error: `${year}: ${message}` };
+    }
+  }
+  return { results, error: null };
+}
+
 export const facilitiesRouter = createTRPCRouter({
   getStats: publicProcedure.query(async ({ ctx }) => {
     const [stats] = await ctx.db
       .select({
         totalFacilities: count(),
-        totalStates: sql<number>`COUNT(DISTINCT ${facilities.stateCode})`,
-        totalNercRegions: sql<number>`COUNT(DISTINCT NULLIF(${facilities.nercRegion}, ''))`,
         totalUnits: sql<number>`(SELECT COUNT(*) FROM ${units})`,
         totalCapacityMW: sql<number>`(SELECT ROUND(COALESCE(SUM(${units.nameplateCapacityMW}), 0)) FROM ${units})`,
-        totalCo2Tons: sql<number>`(SELECT ROUND(COALESCE(SUM(${annualRecords.co2MassTons}), 0)) FROM ${annualRecords})`,
         totalAnomalies: sql<number>`(SELECT COUNT(*) FROM ${dataAuditLogs})`,
       })
       .from(facilities);
@@ -622,16 +663,8 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { ranked, where, orderBy } = rankedFacilities(ctx.db, input);
-      const { items, ...page } = await pageOf(
-        ctx.db
-          .select()
-          .from(ranked)
-          .where(where)
-          .orderBy(...orderBy),
-        ctx.db.select({ total: count() }).from(ranked).where(where),
-        input,
-      );
+      const view = rankedFacilities(ctx.db, input);
+      const { items, ...page } = await pageOf(view.rows(), view.total(), input);
       return {
         ...page,
         items: items.map(({ primaryFuelsRaw, ...row }) => ({
@@ -651,16 +684,8 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(({ ctx, input }) => {
-      const { ranked, where, orderBy } = rankedUnitYears(ctx.db, input);
-      return pageOf(
-        ctx.db
-          .select()
-          .from(ranked)
-          .where(where)
-          .orderBy(...orderBy),
-        ctx.db.select({ total: count() }).from(ranked).where(where),
-        input,
-      );
+      const view = rankedUnitYears(ctx.db, input);
+      return pageOf(view.rows(), view.total(), input);
     }),
 
   getMapFacilities: publicProcedure
@@ -807,7 +832,6 @@ export const facilitiesRouter = createTRPCRouter({
           key: plant.key,
           unitInternalId: plant.unitInternalId,
           name: plant.name,
-          reportingYear: latestYear,
           stateCode: plant.stateCode,
           county: plant.county,
           nercRegion: plant.nercRegion ?? "Unassigned",
@@ -957,16 +981,10 @@ export const facilitiesRouter = createTRPCRouter({
   previewCampd: publicProcedure
     .input(campdRetrievalSchema)
     .query(async ({ input: { fromYear, toYear, ...filters } }) => {
-      const years: Awaited<ReturnType<typeof previewCampdAnnual>>[] = [];
-      for (let year = fromYear; year <= toYear; year++) {
-        try {
-          years.push(await previewCampdAnnual(year, filters));
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return { years, error: `${year}: ${message}` };
-        }
-      }
-      return { years, error: null };
+      const { results, error } = await eachYear(fromYear, toYear, (year) =>
+        previewCampdAnnual(year, filters),
+      );
+      return { years: results, error };
     }),
 
   /**
@@ -1022,19 +1040,11 @@ export const facilitiesRouter = createTRPCRouter({
   /** Pulls CAMPD annual emissions for each year in the range, one dataset per year; stops at the first error. */
   retrieveCampd: publicProcedure
     .input(campdRetrievalSchema)
-    .mutation(async ({ input: { fromYear, toYear, ...filters } }) => {
-      const results: Awaited<ReturnType<typeof syncCampdAnnualEmissions>>[] =
-        [];
-      for (let year = fromYear; year <= toYear; year++) {
-        try {
-          results.push(await syncCampdAnnualEmissions({ year, filters }));
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return { results, error: `${year}: ${message}` };
-        }
-      }
-      return { results, error: null };
-    }),
+    .mutation(({ input: { fromYear, toYear, ...filters } }) =>
+      eachYear(fromYear, toYear, (year) =>
+        syncCampdAnnualEmissions({ year, filters }),
+      ),
+    ),
 
   getCampdPublishedThrough: publicProcedure
     .input(z.object({ facilityId: z.number().optional() }).optional())

@@ -15,9 +15,8 @@ import {
 import type { SortDirection } from "~/lib/facility-filters";
 import { cn, isNumericValue, sortRows, type SortValue } from "~/lib/utils";
 
-/** Small uppercase caption above a form control or group of controls. */
-export const FIELD_LABEL =
-  "text-fg-muted text-[11px] font-medium tracking-wider uppercase";
+/** Caption above a form control or group of controls. */
+export const FIELD_LABEL = "text-fg-2 text-xs font-medium";
 
 /** A form control with its caption. */
 export function Field({
@@ -37,7 +36,7 @@ export function Field({
   );
 }
 
-/** Titled block inside a dialog, with an optional one-line note. */
+/** Titled block on a page or in a dialog, with an optional one-line note. */
 export function Section({
   title,
   note,
@@ -48,13 +47,13 @@ export function Section({
   children?: ReactNode;
 }) {
   return (
-    <div className="space-y-2">
-      <h4 className="text-fg text-xs font-semibold tracking-wider uppercase">
-        {title}
-      </h4>
-      {note && <p className="text-fg-muted text-xs">{note}</p>}
+    <section className="space-y-2.5">
+      <div className="space-y-0.5">
+        <h2 className="text-fg text-base font-semibold">{title}</h2>
+        {note && <p className="text-fg-muted max-w-3xl text-xs">{note}</p>}
+      </div>
       {children}
-    </div>
+    </section>
   );
 }
 
@@ -124,7 +123,7 @@ export function ReportTable({
           {order.map((i) => (
             <TableRow key={i}>
               {rows[i]!.map((cell, j) => (
-                <TableCell key={j} className="max-w-56 truncate font-mono">
+                <TableCell key={j} className="max-w-64 truncate tabular-nums">
                   {cell}
                 </TableCell>
               ))}
@@ -139,8 +138,38 @@ export function ReportTable({
 /** Red banner for a failed request or invalid input. */
 export function ErrorBanner({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-400 sm:text-sm">
+    <div className="border-danger/40 bg-danger/5 text-danger rounded-md border px-3 py-2 text-sm">
       {children}
     </div>
+  );
+}
+
+/** Label–value pairs for the detail dialog (identification, fuel and controls), one hairline per row. */
+export function DetailList({
+  items,
+  className,
+}: {
+  items: [string, ReactNode][];
+  className?: string;
+}) {
+  return (
+    <dl
+      className={cn(
+        "grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2",
+        className,
+      )}
+    >
+      {items.map(([term, value]) => (
+        <div
+          key={term}
+          className="border-edge/70 flex justify-between gap-4 border-b pb-2"
+        >
+          <dt className="text-fg-muted shrink-0">{term}</dt>
+          <dd className="text-fg min-w-0 text-right break-words">
+            {value ?? "—"}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }

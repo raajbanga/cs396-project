@@ -4,10 +4,14 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans:
+    var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
   --text-xs: 0.8125rem;
   --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
 }
 
 /* Expose semantic tokens as Tailwind utility classes */
@@ -19,60 +23,119 @@
   --color-fg: var(--fg);
   --color-fg-2: var(--fg-2);
   --color-fg-muted: var(--fg-muted);
+  --color-primary: var(--primary);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
 }
 
-/* ─── Light Theme ─────────────────────────────────────────── */
+/* ─── Light: latte (light coffee stone), espresso ink, blue accent ── */
 :root {
-  --canvas: #f4f4f5;      /* zinc-100 — page background */
-  --surface: #ffffff;     /* white — card/panel background */
-  --surface-2: #e4e4e7;   /* zinc-200 — hover/elevated surfaces */
-  --edge: #d4d4d8;        /* zinc-300 — borders */
-  --fg: #18181b;          /* zinc-900 — primary text */
-  --fg-2: #3f3f46;        /* zinc-700 — secondary text */
-  --fg-muted: #52525b;    /* zinc-600 — muted/placeholder text with higher contrast */
+  --canvas: #efe6da; /* page */
+  --surface: #faf6f0; /* tables, inputs, panels */
+  --surface-2: #e5d9c9; /* hover, selected segment */
+  --edge: #d3c2ad; /* hairlines */
+  --fg: #2a1f16; /* text */
+  --fg-2: #4a3a2c; /* secondary text */
+  --fg-muted: #6b5948; /* captions, placeholders */
+  --primary: #1d4ed8; /* accent: links, focus, active sort, selection */
+  --success: #15803d;
+  --warn: #b45309;
+  --danger: #b91c1c;
+  --info: #0369a1;
+  color-scheme: light;
 }
 
-/* ─── Dark Theme ──────────────────────────────────────────── */
+/* ─── Dark: the same coffee, lights off ──────────────────── */
 .dark {
-  --canvas: #09090b;      /* zinc-950 */
-  --surface: #18181b;     /* zinc-900 */
-  --surface-2: #27272a;   /* zinc-800 */
-  --edge: #27272a;        /* zinc-800 */
-  --fg: #f4f4f5;          /* zinc-100 */
-  --fg-2: #d4d4d8;        /* zinc-300 */
-  --fg-muted: #a1a1aa;    /* zinc-400 — clearly legible muted text */
+  --canvas: #1d1813;
+  --surface: #27201a;
+  --surface-2: #352c24;
+  --edge: #483c31;
+  --fg: #f4ede4;
+  --fg-2: #dccfc0;
+  --fg-muted: #ab9a88;
+  --primary: #7ea6ff;
+  --success: #4ade80;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --info: #38bdf8;
+  color-scheme: dark;
 }
 
-/* ─── Leaflet Map (adapts to theme variables) ─────────────── */
-.leaflet-dark-tooltip {
-  background-color: var(--surface) !important;
-  border: 1px solid var(--edge) !important;
-  color: var(--fg) !important;
-  border-radius: 6px !important;
-  padding: 6px 10px !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2) !important;
+/* In the base layer so utilities such as outline-none can still override it. */
+@layer base {
+  body {
+    background-color: var(--canvas);
+    color: var(--fg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
 }
 
-.leaflet-dark-tooltip::before {
-  border-top-color: var(--edge) !important;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
+/* ─── Leaflet map (follows the theme tokens) ─────────────── */
 .leaflet-container {
   background-color: var(--canvas) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.leaflet-bar {
+  border: 1px solid var(--edge) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.leaflet-bar a {
+  background-color: var(--surface) !important;
+  border-bottom-color: var(--edge) !important;
+  color: var(--fg) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: var(--surface-2) !important;
+}
+
+.leaflet-control-attribution {
+  background-color: color-mix(
+    in srgb,
+    var(--canvas) 80%,
+    transparent
+  ) !important;
+  color: var(--fg-muted) !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--fg-2) !important;
 }
 
 /* ─── Scrollbar ───────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--edge);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--surface-2);
+  border-radius: 4px;
 }

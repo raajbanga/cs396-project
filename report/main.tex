@@ -167,111 +167,126 @@ demand from the API but not stored, and the application runs locally
 \section{Functions implemented}
 \label{sec:functions}
 
-epaData is a single-page application. The pages listed in the specification are realised as a
-home view, four explorer tabs (Facilities, Units, Map, Audits), the Retrieve, Upload, and
-Download dialogs opened from the header, and the facility, unit, and comparison dialogs opened
-from the tables. This section describes each function from the user's perspective;
-Section~\ref{sec:design} explains how the functions are built, and Section~\ref{sec:features}
-examines the most significant of them in detail.
+epaData is a web application with six pages, reached from a navigation bar that orders them by
+workflow: \emph{Home}, \emph{Explore}, and \emph{Map} for looking at the stored data, then
+\emph{Retrieve}, \emph{Upload}, and \emph{Download} for moving data in and out. Facility, unit, and
+comparison details open in a single near-full-screen dialog over whichever page is active; the
+open facility or unit is recorded in the URL (\code{?facility=3} or \code{?unit=\ldots}), so a
+detail view can be linked to and survives a reload. This section describes each function from
+the user's perspective; Section~\ref{sec:design} explains how the functions are built, and
+Section~\ref{sec:features} examines the most significant of them in detail.
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{home.jpg}
-  \caption{Home view: introduction, numbered links to the four main functions, data coverage
-  per reporting year and source, summary tiles, and the start of the Facilities explorer.}
+  \caption{Home page: introduction and summary figures, links to every function in workflow
+  order, unit-year coverage per reporting year, and the data sources.}
   \label{fig:home}
 \end{figure}
 
-\subsection{Home view}
+\subsection{Home page}
 
-The home view (Figure~\ref{fig:home}) introduces the project and presents four numbered
-buttons in workflow order: Retrieve, Upload, Search, and Download. A coverage strip gives the
-number of unit-year records per reporting year, summarises the datasets by source (for example,
-``EPA CAMPD API $\cdot$ 12 active (+18 superseded)''), and states which views read the local
-database and which call the EPA API live. Five tiles summarise facilities, installed capacity,
-reliability regions, total \COtwo{} over all years, and data-quality flags.
+The home page (Figure~\ref{fig:home}) introduces the project and summarises the database in
+five figures: facilities, generating units, unit-years, installed capacity, and data-quality
+flags. A list links to every function in the order in which data moves through the
+application. A column chart gives the number of unit-year records stored for each reporting
+year, and a data-sources list reports, for each source, its active and superseded datasets and
+the date of its last import (for example, ``EPA CAMPD API: 12 active datasets and 18
+superseded''), together with a statement of which views read the local database and which call
+the EPA API live. A collapsible glossary defines the domain terms used in the tables.
 
 \subsection{Data retrieval from the EPA API}
 
-The \textbf{Retrieve} dialog queries the CAM API's apportioned annual emissions with the
-filters the specification requires: a range of reporting years, state, facility IDs, fuel type,
-unit type, and control technology. The fuel, unit-type, and control options are loaded from
-CAMPD's master-data endpoints, so every choice is a value the API accepts. While the form is
-edited, a panel titled \emph{Already in the database} reports how many matching unit-years are
-stored and which dataset last wrote them. \textbf{Preview} fetches the data without saving and
-classifies every record as new, changed, unchanged, or dropped, showing the stored and incoming
-value of each differing field; \textbf{Approve \& save} stores each year as a new dataset. A
-history table lists every past retrieval with its parameters, date, status, and counts. The API
-key is held in a server-side environment variable and never reaches the browser.
-Section~\ref{sec:feat-retrieve} presents a worked example.
+The \textbf{Retrieve} page names its retrieval method, the CAM API's apportioned annual
+emissions endpoint, and queries it with the filters the specification requires: a range of
+reporting years, state, facility IDs, fuel type, unit type, and control technology. The fuel,
+unit-type, and control options are loaded from CAMPD's master-data endpoints, so every choice is
+a value the API accepts, and a row of sample retrievals fills the form in one click. While the
+form is edited, a section titled \emph{Already in the local database} reports how many matching
+unit-years are stored and which dataset last wrote them. \textbf{Preview} fetches the data
+without saving and classifies every record as new, changed, unchanged, or dropped, showing the
+stored and incoming value of each differing field; \textbf{Approve and save} stores each year as
+a new dataset. A history table lists every past retrieval with its parameters, date, status,
+and counts. The API key is held in a server-side environment variable and never reaches the
+browser. Section~\ref{sec:feat-retrieve} presents a worked example.
 
 \subsection{File upload and validation}
 
-The \textbf{Upload} dialog accepts a CSV or Excel file of up to 100\,MB by drag-and-drop or
-file picker; the extension and size are checked in the browser and again on the server. A
-Python script maps the file's headers to database columns, validates every row, and detects
-repeated facility-unit-year records. Before anything is written, the dialog reports the counts
-of valid, rejected, duplicate, and flagged rows; compares the valid records with the database;
-and lists each rejected row with its column, value, and reason, the repeats within the file,
-the records already in the database with the fields that would change, and the column mapping.
-A daily or hourly CAMPD file, whose metrics have no place in an annual schema, is recognised as
-such, and the dialog states that only its facility and unit attributes will be stored. On approval, the valid records, the rejected and duplicate
-rows, the upload metadata, and a copy of the original file are stored, and the rejected rows
-can be downloaded directly from the confirmation (Section~\ref{sec:feat-upload}).
+The \textbf{Upload} page accepts a CSV or Excel file of up to 100\,MB by drag-and-drop or file
+picker; the extension and size are checked in the browser and again on the server. A Python
+script maps the file's headers to database columns, validates every row, and detects repeated
+facility-unit-year records. Before anything is written, the page reports the counts of valid,
+rejected, duplicate, and flagged rows; compares the valid records with the database; and lists,
+on separate tabs, each rejected row with its column, value, and reason, the repeats within the
+file, the records already in the database with the fields that would change, and the column
+mapping. A daily or hourly CAMPD file, whose metrics have no place in an annual schema, is
+recognised as such, and the page states that only its facility and unit attributes will be
+stored. On approval, the valid records, the rejected and duplicate rows, the upload metadata,
+and a copy of the original file are stored, and the rejected rows can be downloaded directly
+from the confirmation. Below the drop zone, a history table lists every past upload with the
+same counts as the retrieval history (Section~\ref{sec:feat-upload}).
 
 \subsection{Search}
 
-The Facilities and Units tabs share one filter bar. The Facilities tab shows one row per plant
-with totals; the Units tab shows one row per unit and reporting year, the grain of the stored
-records.
+The \textbf{Explore} page has three tabs that share one search form: \emph{Facilities}, with one
+row per plant and its totals; \emph{Unit-years}, with one row per unit and reporting year, the
+grain of the stored records; and \emph{Audit flags}, described below.
 
-\paragraph{Basic search.} A text box matches facility names, owners and operators, counties,
-and facility IDs. Selects in the toolbar filter by state, NERC region, and primary fuel, and a
-\emph{More filters} panel adds facility ID, unit ID, reporting year, county, secondary fuel,
-unit type, \SOtwo/\NOx/PM control, operating status, audit flag and severity, and record origin
-(API or file upload).
+\paragraph{Basic search.} A single search box accepts either a description or a name. Below it,
+the basic fields of the specification are always visible: state, reporting year, primary fuel,
+unit type, facility ID, and unit ID. An \emph{Advanced} panel adds county, NERC region, secondary
+fuel, \SOtwo/\NOx/PM control, operating status, audit flag and severity, and record origin (API
+or file upload); it opens by itself whenever one of its filters is set, so no active filter is
+ever hidden.
 
 \paragraph{Multi-constraint and range search.} All filters combine conjunctively. Inclusive
 minimum and maximum bounds are available for reporting year, operating time, gross load, heat
 input, and \COtwo, \SOtwo, and \NOx{} mass, and every active filter appears as a removable chip
-above the table (Section~\ref{sec:feat-ranking}).
+above the results (Section~\ref{sec:feat-ranking}).
 
-\paragraph{Description-based search.} A \emph{Name\,|\,Describe} switch turns the search box
-into a sentence input. A description such as ``Find coal units in Kentucky with high CO2
-emissions'' is translated into the same filters, which appear as chips and in the filter
-controls for further refinement; words that could not be interpreted are listed rather than
-ignored (Section~\ref{sec:feat-describe}).
+\paragraph{Description-based search.} A sentence typed into the search box, such as ``coal units
+in Kentucky with high CO2'', is translated on submission into the same filters, which appear as
+chips labelled \emph{Interpreted as} and in the filter controls for further refinement; words
+that could not be interpreted are listed rather than ignored. Text in which nothing is
+recognised, such as a plant name, falls back to a name search, so the one box serves both
+purposes (Section~\ref{sec:feat-describe}).
 
 \paragraph{Ranking and comparison.} Any metric column can be sorted, and a \emph{Ranking}
-control retains the first $N$ rows of that order, overall or per state, which covers the
-specification's top-$N$, bottom-$N$, and group-and-rank searches. Two to four facilities or
-units can be selected for side-by-side comparison. Historical searches use the year range or
-the unit dialog, which lists every reporting year of a unit.
+control in the Advanced panel retains the first $N$ rows of that order, overall or per state,
+which covers the specification's top-$N$, bottom-$N$, and group-and-rank searches. Ticking two to
+four facilities or units opens a dock at the bottom of the window from which they are compared
+side by side. Historical searches use the year range or the unit details, which list every
+reporting year of a unit.
 
 \paragraph{Result handling.} Results are paginated (10 to 100 rows per page) and sortable on
-every column with a meaningful order, and each unit row opens the unit dialog. A \textbf{CSV}
-button downloads every matching row across all pages. The tab, filters, sort, and page are
-encoded in the URL query string, so any search can be bookmarked, shared, and reloaded.
+every column with a meaningful order, and clicking a row opens its details. A \textbf{Download
+CSV} button exports every matching row across all pages, and \emph{More options} carries the
+search to the Download page. The tab, filters, sort, and page are encoded in the URL query
+string, so any search can be bookmarked, shared, and reloaded.
 
 \subsection{Facility and unit details}
 
-The facility dialog shows the plant's identification (ID, county, state, EPA and NERC region,
-owner), its units with their fuels and controls, its year-by-year operation and emissions, and
-its audit flags. A granular view in the same dialog shows hourly, daily, weekly, or monthly data
-fetched live from the API, alongside yearly totals from the database. The unit dialog
-(Figure~\ref{fig:unit}) shows identification, fuel and controls, programs, every reporting year
-with the dataset that supplied it and the controls and programs reported for that year, and any
-sanity flags.
+The facility details show the plant's identification (ID, county, state, coordinates, EPA and
+NERC region, owner, operating role, fuels), its latest year of operation and emissions with a
+short generated summary, and four tabs: the year-by-year records, each expandable to its units
+and the dataset that supplied them; the units with their fuels and controls; a granular view of
+hourly, daily, weekly, or monthly data fetched live from the API, alongside yearly totals from the
+database; and the audit flags. The unit details (Figure~\ref{fig:unit}) show identification,
+fuel and controls, programs, every reporting year with the dataset that supplied it and the
+controls and programs reported for that year, and any sanity flags.
 
 \subsection{Comparison, map, and audits}
 
-The comparison dialog (Figure~\ref{fig:compare}) places two to four facilities or units side by
-side for the latest reporting year: capacity, generation, operating hours, capacity factor,
-carbon intensity, heat rate, fuels, and control coverage. The Map tab draws every facility with
-coordinates on a three-dimensional globe or a two-dimensional Leaflet map, sized by capacity or
-\COtwo{} and coloured by fuel (Figure~\ref{fig:map}); the 37 facilities for which CAMPD has no
-coordinates are listed beneath the map, rather than silently omitted. The Audits tab lists every
-physical-sanity flag with its rule, severity, and explanation, paginated and filterable.
+The comparison (Figure~\ref{fig:compare}) places two to four facilities or units side by side
+for the latest reporting year: capacity, generation, operating hours, capacity factor, carbon
+intensity, heat rate, fuels, and control coverage. The \textbf{Map} page draws every facility
+with coordinates on a three-dimensional globe or a two-dimensional Leaflet map, sized by
+capacity or \COtwo{} and coloured by fuel, with the Explore filters carried over in the URL
+(Figure~\ref{fig:map}); the fuel legend doubles as a filter, and the 37 facilities for which
+CAMPD has no coordinates are listed beneath the map rather than silently omitted. The Audit flags
+tab of the Explore page lists every physical-sanity flag with its rule, severity, the values
+that tripped it, and the dataset of the flagged record, paginated, sortable, and filtered by the
+same search form.
 
 \begin{figure}[H]
   \centering
@@ -284,18 +299,19 @@ physical-sanity flag with its rule, severity, and explanation, paginated and fil
   \begin{minipage}[t]{0.49\linewidth}
     \centering
     \includegraphics[width=\linewidth]{map.jpg}
-    \caption{Map tab: globe view, coloured by fuel.}
+    \caption{Map page: globe view, coloured by fuel.}
     \label{fig:map}
   \end{minipage}
 \end{figure}
 
 \subsection{Download}
 
-The \textbf{Download} dialog (Figure~\ref{fig:download}) provides the six CSV exports the
-specification requires: a complete dataset; its valid records; its invalid-record report
+The \textbf{Download} page (Figure~\ref{fig:download}) provides the six CSV exports the
+specification requires, chosen in three numbered steps (what to download, which dataset or
+filters, and the file format): a complete dataset; its valid records; its invalid-record report
 (rejected and duplicate rows with their original columns, and records flagged by a sanity
-rule); the current search results; a selection of facilities or units; and the provenance
-table (Section~\ref{sec:feat-provenance}).
+rule); the current search results; the comparison selection; and the provenance table
+(Section~\ref{sec:feat-provenance}).
 
 \subsection{Requirement traceability}
 
@@ -311,19 +327,19 @@ rubric's description-search item, to the function that satisfies it.
 \toprule
 \textbf{Requirement} & \textbf{Implementation} & \textbf{Status}\\
 \midrule\endhead
-\S5 Retrieval via CAM API, key on server & Retrieve dialog; \code{CAMPD\_API} read only on the server & Met\\
+\S5 Retrieval via CAM API, key on server & Retrieve page; \code{CAMPD\_API} read only on the server & Met\\
 \S5 Filters: year, state, facility, fuel, unit type, control & Retrieve parameters & Met\\
 \S5 Preserve source, date, parameters, counts, year & \code{datasets} row per year; history table & Met\\
-\S6 Steps 1--11 of the upload process & Upload dialog, \code{parse\_import.py}, approval step, archive & Met\\
+\S6 Steps 1--11 of the upload process & Upload page, \code{parse\_import.py}, approval step, archive & Met\\
 \S6 Never discard invalid records silently & \code{import\_issues}; invalid-record export & Met\\
 \S7 Dataset, facility, unit, annual-record tables & Six tables, keys and cascades; controls and programs per annual record (Section~\ref{sec:design}) & Met\\
-\S8.1 Basic search fields & Filter bar and \emph{More filters} & Met\\
+\S8.1 Basic search fields & Search form; \emph{Advanced} panel & Met\\
 \S8.2 Multi-criteria and range search & AND-combined filters, seven min/max ranges & Met\\
-\S8.3 Top-$N$, bottom-$N$, group-and-rank, comparison, history & Ranking control, compare dialog, unit dialog, year range & Met\\
-\S8.4 Readable, paginated, sortable, linked, downloadable, reproducible & Tables, pagination, unit dialog, CSV, URL state & Met\\
+\S8.3 Top-$N$, bottom-$N$, group-and-rank, comparison, history & Ranking control, comparison, unit details, year range & Met\\
+\S8.4 Readable, paginated, sortable, linked, downloadable, reproducible & Tables, pagination, detail dialog, CSV, URL state & Met\\
 \S8.4 Indexes on searched fields & Fourteen secondary and unique indexes & Met\\
-\S9 Six pages & Home view; Retrieve, Upload, detail, and Download dialogs; explorer tabs & Met\\
-\S10 Six download types, CSV & Download dialog, \code{/api/export} & Met\\
+\S9 Six pages & Home, Explore, Map, Retrieve, Upload, and Download pages; detail dialog & Met\\
+\S10 Six download types, CSV & Download page, \code{/api/export} & Met\\
 Rubric 6: description-based search & Rule-based parser, optional language-model fallback & Met\\
 \bottomrule
 \end{longtable}}
@@ -373,7 +389,7 @@ and, optionally, the OpenRouter language-model service.
 \begin{tikzpicture}[node distance=7mm and 9mm]
   % browser
   \node[box, minimum width=12.6cm] (ui) {\textbf{Browser} --- React 19 components\\[-1pt]
-    {\footnotesize explorer tabs $\cdot$ Retrieve / Upload / Download dialogs $\cdot$ detail and compare dialogs $\cdot$ TanStack Query cache}};
+    {\footnotesize Home / Explore / Map / Retrieve / Upload / Download pages $\cdot$ detail and compare dialog $\cdot$ TanStack Query cache}};
   % server layer
   \node[box, below=10mm of ui.south west, anchor=north west, minimum width=3.9cm, minimum height=1.25cm] (rsc)
     {\textbf{Server render}\\{\footnotesize \code{page.tsx}: URL $\to$ state,}\\{\footnotesize prefetched queries}};
@@ -428,14 +444,14 @@ same modules, so a command-line sync and an in-app retrieval execute identical c
 \subsection{Life cycle of a search}
 
 Tracing one search through the system illustrates how the components interact. Suppose a user
-opens the Units tab, selects Kentucky and Coal, sets the year to 2025, and enters a minimum
+opens the Unit-years tab of the Explore page, selects Kentucky and Coal, sets the year to 2025, and enters a minimum
 \COtwo{} of 500{,}000~tons.
 
 \begin{enumerate}
   \item Each change updates a filter object in React state, which the pure function
         \code{explorerSearchParams} mirrors into the URL, so the browser history and any shared
         link carry the full search:\\[2pt]
-        {\small\code{?tab=units\&stateCode=KY\&primaryFuel=Coal\&year=2025\&co2MassTonsMin=500000}}
+        {\small\code{/explore?tab=units\&stateCode=KY\&primaryFuel=Coal\&year=2025\&co2MassTonsMin=500000}}
   \item A deferred copy of the filters is passed to \code{api.facilities.getUnitYears.useQuery}.
         Deferral keeps typing responsive; TanStack Query keeps the previous page on screen
         until the new one arrives and caches each distinct query.
@@ -448,14 +464,14 @@ opens the Units tab, selects Kentucky and Coal, sets the year to 2025, and enter
   \item \code{pageOf} runs two queries over the same ranked subquery, one for the page of rows
         and one for the total count. SQLite answers in about 6\,ms using the
         \code{(year, co2\_mass\_tons)} index.
-  \item The table renders 25 rows across three pages. Its \textbf{CSV} button calls
+  \item The table renders 25 rows across three pages. Its \textbf{Download CSV} button calls
         \code{/api/export?type=search\&\ldots} with the same query string, which the handler
         parses with the same \code{parseExplorerParams} function before running
         \code{rankedUnitYears} without a page limit, so the file contains exactly the rows the
         table showed.
 \end{enumerate}
 
-On reload, \code{page.tsx} parses the URL on the server, prefetches the same query, and sends
+On reload, \code{explore/page.tsx} parses the URL on the server, prefetches the same query, and sends
 the rendered table with its data embedded, so a shared link opens directly on the results.
 
 \subsection{Database schema}
@@ -594,7 +610,7 @@ the unit's current ones.
 \subsection{Data flow and provenance}
 
 Figure~\ref{fig:dataflow} shows how data enter and leave the database. The three entry
-points, the Retrieve dialog, the Upload dialog, and the \code{sync:campd} script, converge on
+points, the Retrieve page, the Upload page, and the \code{sync:campd} script, converge on
 one write path in \code{src/server/ingest.ts}. Before writing, it loads the stored metrics and
 per-year attributes of every incoming facility-unit-year and classifies each record as new,
 changed, or unchanged. It then upserts facilities, units, and annual records, computes the two
@@ -618,7 +634,7 @@ original values and a reason.
   \node[box, fill=black!6, minimum height=1.5cm] (ok) at (10.7,-0.95) {User\\approves};
   \node[box, minimum width=2.8cm, minimum height=1.5cm] (write) at (13.9,-0.95) {Shared write path\\{\footnotesize upsert, derive rates,}\\{\footnotesize sanity audits}};
   \node[store, minimum width=2.8cm] (db) at (13.9,-3.8) {SQLite\\{\footnotesize + \code{datasets} row}};
-  \node[box, minimum width=2.8cm] (exp) at (10.9,-3.8) {Explorer, detail,\\compare, export};
+  \node[box, minimum width=2.8cm] (exp) at (10.9,-3.8) {Explore, Map,\\details, export};
   \node[store, minimum width=2.6cm] (iss) at (7.3,-3.8) {\code{import\_issues}\\{\footnotesize rejected, duplicate}};
   \draw[flow] (api) -- (prev);
   \draw[flow] (file) -- (parse);
@@ -686,7 +702,7 @@ Table~\ref{tab:stack} lists the frameworks and libraries and the role of each.
 \textbf{Component} & \textbf{Role in epaData}\\
 \midrule
 Next.js 16 (App Router) & Application framework: server rendering of the page, route handlers for upload and export, bundling, and the development and production servers.\\
-React 19 & User-interface components: tables, filter bar, dialogs.\\
+React 19 & User-interface components: pages, tables, the search form, the detail dialog.\\
 tRPC 11 & Typed remote procedure calls between browser and server; the 17 \code{facilities.*} procedures.\\
 TanStack Query 5 & Client-side caching, background refetching, and loading states for tRPC calls.\\
 Drizzle ORM and drizzle-kit & Schema definition in TypeScript, type-checked query building, and generated SQL migrations (seven so far, in \code{drizzle/}).\\
@@ -879,7 +895,7 @@ and one sanity flag on row~16, Robert Reid unit RT in 2014, which reported 38{,}
 heat input but left the \COtwo{} mass blank in unmodified EPA data. The blank is stored as
 \code{NULL} and raises the \code{CO2\_NOT\_REPORTED} warning (Section~\ref{sec:feat-audits}).
 Repeats within the file and records already in the database appear on separate tabs, so each
-tab's count matches its summary tile. After approval, the Units tab filtered to
+tab's count matches its summary tile. After approval, the Unit-years tab filtered to
 origin ``File upload'' lists exactly the 21 stored unit-years, and the invalid-record download
 contains the three rejected rows, the duplicate, and the flagged record, each with its original
 columns.
@@ -1017,7 +1033,7 @@ prefix, so that ``Retired'' does not also match ``Operating (Retired 04/15/2016)
   \centering
   \includegraphics[width=0.92\linewidth]{units-multi.jpg}
   \caption{Multi-constraint search: KY, Coal, 2025, \COtwo{} $\ge$ 500{,}000\,t. The chips, the
-  open \emph{More filters} panel with its range inputs, and the first rows of the 25 results.}
+  open \emph{Advanced} panel with its range inputs, and the first rows of the 25 results.}
   \label{fig:multi}
 \end{figure}
 
@@ -1087,8 +1103,8 @@ first rule reflects that burning fossil fuel always produces \COtwo, so a report
 implausible, whereas the second records a reporting gap; the third reflects that a unit cannot
 generate without operating; the fourth bounds the heat rate by the range of real
 fossil plants, from about 6.5\,MMBtu/MWh for modern combined-cycle units to 15--18\,MMBtu/MWh
-for old peaking units. Flagged records are retained and appear in the Audits tab, the unit and
-facility dialogs, and the invalid-record export. In the committed database the rules raise
+for old peaking units. Flagged records are retained and appear in the Audit flags tab, the unit
+and facility details, and the invalid-record export. In the committed database the rules raise
 6{,}909 flags on 6{,}432 records: 6{,}105 records with heat input but no reported \COtwo{} and
 804 extreme heat rates, all warnings. Most of the former are gas- and oil-fired units, and
 2{,}637 of them also report no gross load. No record reports a \COtwo{} mass of exactly zero
@@ -1098,10 +1114,10 @@ alongside significant heat input, so no ERROR is raised (Section~\ref{sec:challe
 \subsection{Provenance and export}
 \label{sec:feat-provenance}
 
-Every stored figure can be traced to its source. The unit dialog (Figure~\ref{fig:unit}) lists
-each reporting year with the dataset that wrote it; the Units table shows the same information
+Every stored figure can be traced to its source. The unit details (Figure~\ref{fig:unit}) list
+each reporting year with the dataset that wrote it; the Unit-years table shows the same information
 as an \emph{Origin} badge; and the \emph{Origin} filter restricts any search to API or uploaded
-records. The Download dialog (Figure~\ref{fig:download}) exports the provenance table itself,
+records. The Download page (Figure~\ref{fig:download}) exports the provenance table itself,
 one row per dataset with its source, date, query parameters as JSON, file name, and the
 received, stored, flagged, new, updated, unchanged, and dropped counts. Unit-year exports
 include \code{dataset\_id}, \code{origin}, and \code{dataset\_imported\_at} for every row. All
@@ -1112,13 +1128,13 @@ exports are written by one CSV function that quotes fields according to RFC~4180
   \begin{minipage}[t]{0.55\linewidth}
     \centering
     \includegraphics[width=\linewidth]{unit-detail.jpg}
-    \caption{Unit dialog: Ghent unit 1 after the sample upload, with 13 reporting years (2014 from the upload, 2015--2026 from the API).}
+    \caption{Unit details: Ghent unit 1 after the sample upload, with 13 reporting years (2014 from the upload, 2015--2026 from the API).}
     \label{fig:unit}
   \end{minipage}\hfill
   \begin{minipage}[t]{0.42\linewidth}
     \centering
     \includegraphics[width=\linewidth]{download.jpg}
-    \caption{Download dialog: data type, dataset, filters, and format.}
+    \caption{Download page: data type, dataset or filters, and format.}
     \label{fig:download}
   \end{minipage}
 \end{figure}
@@ -1260,9 +1276,15 @@ turned 6{,}105 unreported \COtwo{} values into zero-emission errors; they are no
 comparison dialog labelled gross load as ``Net Generation''; the upload report counted rows
 already in the database as duplicates; the map omitted facilities without coordinates without
 saying so; and the shared dialog component lacked dialog semantics. It now declares
-\code{role="dialog"}, moves focus into the dialog, keeps Tab within it, closes only the topmost
-of stacked dialogs on Escape, and restores focus on close. These behaviours were verified in a
-headless browser.
+\code{role="dialog"}, moves focus into the dialog, keeps Tab within it, closes on Escape,
+and restores focus on close. These behaviours were verified in a
+headless browser. A final review found three further defects. The facility table derived each
+plant's operating role from operating hours summed over every unit and every year, so a
+peaking station with a dozen years of records was labelled a baseload plant; the role now uses
+the busiest unit's hours in the latest year in scope, as the facility details do. The map's fuel
+legend counted plants by fuel class but filtered by a single fuel name, so the oil chip
+advertised 108 plants and showed 22; the legend now filters by the same class it counts. Finally,
+a one-pixel overflow gave every tab bar a spurious scrollbar.
 
 One issue remains: the language-model fallback was tested only on its failure paths (no key,
 invalid key, timeout), since no OpenRouter key was available during testing.
@@ -1331,8 +1353,8 @@ message rather than deep inside a query.
 
 \paragraph{Next.js, tRPC, and Drizzle instead of Flask, Jinja, and SQLAlchemy.} The course
 suggests Flask with Jinja templates and SQLAlchemy; the team's proposal specified a Next.js
-stack instead. The motivation was interactivity: the explorer updates results as filters
-change, keeps its state in the URL, and opens nested dialogs, all of which would require a
+stack instead. The motivation was interactivity: the Explore page updates results as filters
+change, keeps its state in the URL, and opens details in a dialog over any page, all of which would require a
 separate JavaScript layer on top of server-rendered Jinja pages. With one language and tRPC,
 the server's procedure signatures are the client's API, so a renamed filter or changed result
 field becomes a compile error rather than a runtime bug. The cost is a second language for file
@@ -1362,10 +1384,14 @@ written, and an interrupted fetch can no longer leave a partial dataset. Where p
 matters, this is the better default; the command-line sync still writes directly for scripted
 refreshes.
 
-\paragraph{One page with dialogs instead of separate pages.} Realising the specification's six
-pages as views and dialogs within one page keeps the user's search in place while they
-retrieve, upload, inspect, or download, and every search remains reproducible through its URL.
-The trade-off is that the dialogs themselves are not addressable by URL.
+\paragraph{Separate pages with one detail dialog.} An earlier version realised the
+specification's six pages as tabs and dialogs within a single page. They are now separate
+routes, so each page has its own address, appears in the browser history, and can be shared;
+Explore, Map, and Download read their filters from the URL, so a search moves between them
+intact. Facility, unit, and comparison details remain a dialog rather than a page, because a
+dialog is closed in one step and returns the user to the exact table row they came from; the
+open detail is nevertheless written to the URL (\code{?facility=}, \code{?unit=}), so it too is
+addressable.
 
 \paragraph{Storing annual data, fetching sub-annual data.} Storing hourly data for every unit
 would require tens of millions of rows per year. Since Phase~1 searches operate on annual
@@ -1381,7 +1407,7 @@ Pipeline Natural Gas'' or ``Wet Lime FGD|Wet Limestone'', so equality filters mi
 units. Combined values are therefore split into distinct dropdown options, and fuel, type, and
 control filters match by case-insensitive substring. For the same reason, the ``Already in the
 database'' panel can only approximate what an API request with a fuel or control filter will
-return, which the dialog states.
+return, which the page states.
 
 \paragraph{Superseded datasets.} Because records are keyed by facility, unit, and year,
 re-retrieving a year moves its records to the new dataset and leaves the old one owning
@@ -1517,15 +1543,15 @@ published-through quarter; the shared write path (diff, upsert, derived rates, p
 audits) and the provenance model (dataset counts, superseded datasets, record origin); the
 search back end, comprising the filter, range, and ranking queries, URL state, description
 search with its percentile thresholds and optional language-model fallback, and the CSV export
-service; the explorer interface, the map and globe, the detail, comparison, retrieval, and
-download dialogs, and the shared UI components; and the unit tests, the sample upload files,
+service; the Explore page, the map and globe, the detail and comparison dialog, the Retrieve and
+Download pages, and the shared UI components; and the unit tests, the sample upload files,
 the README, \code{DATABASE\_BREAKDOWN.md}, the demonstration script, and this report.
 
 \paragraph{Arnav Bawankule (front-end lead).} Responsible for the user-interface layout, filter
-forms, map and comparison views, upload dialogs, and export controls. Completed work comprises the
+forms, map and comparison views, the upload page, and export controls. Completed work comprises the
 CSV and Excel import feature: the Python parser that maps file columns to the schema and
 validates every row, the data-quality report of rejected and duplicate rows, the upload
-endpoint, and the upload dialog with its preview and approval step, together with its first
+endpoint, and the upload page with its preview and approval step, together with its first
 tests.
 
 The presentation and live demonstration are shared: Arnav presents the interface, upload,

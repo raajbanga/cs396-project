@@ -19,24 +19,22 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "rounded-lg border border-dashed p-8 text-center",
-        success ? "border-emerald-500/20 bg-emerald-500/5" : "border-edge",
+        "px-4 py-10 text-center",
+        success && "text-success",
         className,
       )}
     >
-      {success && (
-        <CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-400" />
-      )}
+      {success && <CheckCircle2 className="mx-auto mb-2 h-5 w-5" />}
       <p
         className={cn(
-          "text-sm font-semibold",
-          success ? "text-emerald-400" : "text-fg",
+          "text-sm font-medium",
+          success ? "text-success" : "text-fg",
         )}
       >
         {title}
       </p>
       {description && (
-        <p className="text-fg-muted mt-0.5 text-xs">{description}</p>
+        <p className="text-fg-muted mt-1 text-sm">{description}</p>
       )}
       {action && <div className="mt-3">{action}</div>}
     </div>
@@ -53,9 +51,9 @@ export function InlineLoading({
   className?: string;
 }) {
   return (
-    <div className={cn("text-fg-muted py-14 text-center", className)}>
-      <RefreshCw className="mx-auto mb-2 h-6 w-6 animate-spin text-emerald-400" />
-      <p className="text-fg text-xs font-medium sm:text-sm">{title}</p>
+    <div className={cn("text-fg-muted py-10 text-center", className)}>
+      <RefreshCw className="text-fg-muted mx-auto mb-2 h-4 w-4 animate-spin" />
+      <p className="text-fg-2 text-sm">{title}</p>
       {subtitle && <p className="text-fg-muted mt-1 text-xs">{subtitle}</p>}
     </div>
   );

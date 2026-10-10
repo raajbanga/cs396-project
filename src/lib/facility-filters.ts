@@ -100,12 +100,21 @@ export const DEFAULT_FILTERS = {
 };
 export type FacilityFilters = typeof DEFAULT_FILTERS;
 
-/** Filters beyond the toolbar's search + state/grid/fuel selects (shown under "More filters"). */
+/** §8.1 basic search fields, always visible in the explorer toolbar. */
+const BASIC_FILTER_KEYS = [
+  "search",
+  "stateCode",
+  "year",
+  "primaryFuel",
+  "unitType",
+  "facilityId",
+  "unitId",
+] as const satisfies readonly (keyof FacilityFilters)[];
+
+/** Everything else (grid, controls, ranges, ranking, …), shown under "Advanced". */
 export const ADVANCED_FILTER_KEYS = (
   Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
-).filter(
-  (k) => !["search", "stateCode", "primaryFuel", "nercRegion"].includes(k),
-);
+).filter((k) => !(BASIC_FILTER_KEYS as readonly string[]).includes(k));
 
 export const isFilterActive = (
   filters: FacilityFilters,
@@ -169,7 +178,7 @@ export type FilterChangeHandler = (
 ) => void;
 
 /** §5 CAMPD retrieval: a year range plus the annual endpoint's filters ("ALL"/empty = no filter). */
-export const campdFilterSchema = facilityFilterSchema
+const campdFilterSchema = facilityFilterSchema
   .pick({ stateCode: true })
   .extend({
     facilityId: z.array(z.number().int().positive()).max(50).optional(),
@@ -190,7 +199,7 @@ export const campdRetrievalSchema = campdFilterSchema
 export type CampdRetrieval = z.infer<typeof campdRetrievalSchema>;
 
 const EXPLORER_TABS = ["explorer", "units", "map", "audit"] as const;
-export type ExplorerTab = (typeof EXPLORER_TABS)[number];
+type ExplorerTab = (typeof EXPLORER_TABS)[number];
 
 export interface ExplorerState {
   tab: ExplorerTab;
@@ -261,15 +270,24 @@ export function parseExplorerParams(params: Params): ExplorerState {
   return state;
 }
 
+/** The active (non-default) filters as URL params; the map's whole query. */
+export function filterSearchParams(
+  filters: FacilityFilters,
+  params = new URLSearchParams(),
+) {
+  for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
+    if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
+  }
+  return params;
+}
+
 /** Query string for the explorer state, keeping only non-default values (the inverse of parseExplorerParams). */
 export function explorerSearchParams(state: ExplorerState) {
   const { tab, q, filters } = state;
   const params = new URLSearchParams();
   if (tab !== "explorer") params.set("tab", tab);
   if (q.trim()) params.set("q", q.trim());
-  for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
-    if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
-  }
+  filterSearchParams(filters, params);
   if (tab !== "map") {
     const { key, defaults } = TAB_TABLES[tab];
     const current = state[key];

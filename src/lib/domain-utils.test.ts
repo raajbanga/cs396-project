@@ -96,7 +96,13 @@ void test("not reported (null) is kept apart from 0 in rates, totals, and sanity
 void test("fuel metadata stays consistent and filters remain distinct", () => {
   assert.equal(getFuelTheme("Pipeline Natural Gas").name, "Natural Gas");
   assert.equal(getFuelTheme("Coal").color, "#f59e0b");
-  assert.ok(FUEL_CATEGORIES.every(({ query }) => String(query) !== "ALL"));
+  // Each chip is a fuel class getFuelTheme assigns, so its count equals what it filters to.
+  assert.deepEqual(
+    FUEL_CATEGORIES.map((c) => c.name),
+    ["Pipeline Natural Gas", "Coal", "Residual Oil"].map(
+      (f) => getFuelTheme(f).name,
+    ),
+  );
   assert.ok(
     getMarkerRadius({ totalCapacityMW: 1000, totalCo2Tons: 100 }, "capacity") >
       3,

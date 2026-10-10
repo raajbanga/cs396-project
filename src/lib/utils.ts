@@ -24,7 +24,7 @@ const sortable = (v: SortValue) =>
 export const isNumericValue = (v: SortValue) => typeof sortable(v) === "number";
 
 /** Ascending order for table cells: numbers and dates numerically, text naturally ("Unit 2" < "Unit 10"). */
-export function compareValues(a: SortValue, b: SortValue) {
+function compareValues(a: SortValue, b: SortValue) {
   const x = sortable(a);
   const y = sortable(b);
   return typeof x === "number" && typeof y === "number"
@@ -72,6 +72,10 @@ export function formatQuantity(
 export const formatNumber = (value: number | null | undefined, digits = 0) =>
   formatQuantity(value, "", { digits, fallback: "0" });
 
+/** "1 unit", "3 units", "2 facilities": the count with its noun; `many` defaults to `one` + "s". */
+export const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
 /** Display names for `datasets.source`. */
 const DATASET_SOURCE_LABELS: Record<string, string> = {
   API: "EPA CAMPD API",
@@ -99,3 +103,22 @@ export const datasetStatus = (d: {
     : d.superseded
       ? ("Superseded" as const)
       : ("Active" as const);
+
+/** URL params of the inspect dialog (?facility=3, ?unit=…), kept when a page rewrites its own query. */
+export const DETAIL_PARAMS = ["facility", "unit"] as const;
+
+/** Mirror a page's state into the URL without navigating, keeping any open detail dialog's param. */
+export function replaceUrlQuery(query: string) {
+  const current = new URLSearchParams(window.location.search);
+  const next = new URLSearchParams(query);
+  for (const key of DETAIL_PARAMS) {
+    const value = current.get(key);
+    if (value) next.set(key, value);
+  }
+  const search = next.toString();
+  window.history.replaceState(
+    null,
+    "",
+    search ? `?${search}` : window.location.pathname,
+  );
+}

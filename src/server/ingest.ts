@@ -21,6 +21,7 @@ import {
   annualRecords,
   dataAuditLogs,
   facilities,
+  importIssues,
   units,
 } from "~/server/db/schema";
 
@@ -31,12 +32,33 @@ export type Executor =
   typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Runs `insert` over 50-row chunks to respect SQLite's bound-parameter limit. */
-export async function insertInChunks<T>(
+async function insertInChunks<T>(
   rows: T[],
   insert: (chunk: T[]) => Promise<unknown>,
 ) {
   for (let i = 0; i < rows.length; i += 50) await insert(rows.slice(i, i + 50));
 }
+
+/** Logs a dataset's rejected and duplicate source rows (with their original columns) to `import_issues`. */
+export const insertImportIssues = (
+  tx: Executor,
+  datasetId: string,
+  rows: {
+    rowNumber: number;
+    kind: "REJECTED" | "DUPLICATE";
+    reason: string;
+    data: Record<string, string>;
+  }[],
+) =>
+  insertInChunks(rows, (chunk) =>
+    tx.insert(importIssues).values(
+      chunk.map(({ data, ...issue }) => ({
+        ...issue,
+        datasetId,
+        rawRow: data,
+      })),
+    ),
+  );
 
 /** ON CONFLICT updates for every column but `keys`: incoming values win, or with `keepExisting` only non-null ones do. */
 function conflictSet(

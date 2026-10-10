@@ -6,9 +6,9 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const TRIGGER_SIZES = {
-  sm: "bg-canvas h-7 px-2.5 py-1 text-xs",
-  toolbar: "bg-surface/60 h-9 shrink-0 px-2.5 text-xs sm:text-sm",
-  drawer: "bg-surface/80 h-9 w-full px-2.5 text-xs sm:text-sm",
+  sm: "h-8 px-2.5 text-sm",
+  toolbar: "h-9 shrink-0 px-3 text-sm",
+  drawer: "h-9 w-full px-3 text-sm",
 };
 
 const SCROLL_BUTTON =
@@ -43,7 +43,7 @@ export function Select({
     <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger
         className={cn(
-          "border-edge text-fg hover:border-edge/70 flex w-full items-center justify-between rounded-lg border transition-colors focus:ring-1 focus:ring-emerald-500/50 focus:outline-none focus:ring-inset disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+          "border-edge bg-surface text-fg hover:bg-surface-2 focus-visible:border-primary flex w-full cursor-pointer items-center justify-between rounded-md border text-left transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
           TRIGGER_SIZES[size],
           className,
         )}
@@ -56,7 +56,7 @@ export function Select({
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
           position="popper"
-          className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 border-edge bg-surface text-fg relative z-[10001] max-h-72 min-w-[8rem] overflow-hidden rounded-lg border shadow-2xl backdrop-blur-md data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1"
+          className="border-edge bg-surface text-fg relative z-[10001] max-h-72 min-w-[8rem] overflow-hidden rounded-md border shadow-lg shadow-black/10 data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1"
         >
           <SelectPrimitive.ScrollUpButton className={SCROLL_BUTTON}>
             <ChevronUp className="h-4 w-4" />
@@ -66,11 +66,11 @@ export function Select({
               <SelectPrimitive.Item
                 key={option.value}
                 value={option.value}
-                className="text-fg focus:bg-surface-2 relative flex w-full cursor-pointer items-center rounded-md py-1.5 pr-8 pl-2 text-sm transition-colors outline-none select-none"
+                className="text-fg focus:bg-surface-2 relative flex w-full cursor-pointer items-center rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none"
               >
                 <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
                   <SelectPrimitive.ItemIndicator>
-                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    <Check className="text-primary h-3.5 w-3.5" />
                   </SelectPrimitive.ItemIndicator>
                 </span>
                 <SelectPrimitive.ItemText>

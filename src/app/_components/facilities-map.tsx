@@ -1,31 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import {
-  FilterX,
-  Flame,
-  Globe,
-  Map as MapIcon,
-  Sparkles,
-  Zap,
-} from "lucide-react";
-import { Badge, SourceBadge } from "~/components/ui/badge";
+import Link from "next/link";
+import { X } from "lucide-react";
+import { SourceBadge } from "~/components/ui/badge";
+import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
-import { StatTile } from "~/components/ui/stat-tile";
-import type {
-  FacilityFilters,
-  FilterChangeHandler,
+import {
+  DEFAULT_FILTERS,
+  filterSearchParams,
+  isFilterActive,
+  type ExplorerState,
+  type FacilityFilters,
+  type FilterChangeHandler,
 } from "~/lib/facility-filters";
 import {
   FUEL_CATEGORIES,
   getFuelTheme,
   MAP_FRAME,
-  type MapFacility,
   type MetricMode,
 } from "~/lib/map-utils";
-import { cn } from "~/lib/utils";
+import { cn, formatQuantity, plural, replaceUrlQuery } from "~/lib/utils";
+import { api } from "~/trpc/react";
 import { D3Globe, MapSpinner } from "./d3-globe";
+import { DetailLink } from "./detail-link";
+import { SelectionContext } from "./selection-context";
 
 // Leaflet touches `window` on import, so it can only load client-side.
 const LeafletMap = dynamic(
@@ -33,168 +33,159 @@ const LeafletMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div
-        className={cn(
-          MAP_FRAME,
-          "bg-surface/30 flex items-center justify-center",
-        )}
-      >
-        <MapSpinner label="Loading 2D Leaflet Map..." />
+      <div className={cn(MAP_FRAME, "flex items-center justify-center")}>
+        <MapSpinner label="Loading map…" />
       </div>
     ),
   },
 );
 
 const CHIP =
-  "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors";
-const CHIP_IDLE = "border-edge bg-surface/60 text-fg-muted hover:text-fg";
+  "flex shrink-0 cursor-pointer items-center gap-1.5 rounded-sm border px-2 py-1 text-sm";
+const CHIP_IDLE = "border-transparent text-fg-2 hover:bg-surface-2";
 
-export function FacilitiesMap({
-  facilities = [],
-  unlocated = [],
-  isLoading,
-  onInspectFacility,
-  filters,
-  onFilterChange,
-}: {
-  facilities?: MapFacility[];
-  /** Facilities matching the filters that have no coordinates, so can't be drawn. */
-  unlocated?: { id: number; name: string; stateCode: string }[];
-  isLoading: boolean;
-  onInspectFacility: (id: number) => void;
-  filters: FacilityFilters;
-  onFilterChange: FilterChangeHandler;
-}) {
+/**
+ * Map page: the explorer's filters (from the URL) drawn on a globe or a flat map, with a fuel
+ * legend that doubles as a filter on the dots' color class, so a chip's count is what it shows.
+ * A dot opens its facility in the detail dialog.
+ */
+export function MapPage({ initialState }: { initialState: ExplorerState }) {
+  const { inspect } = use(SelectionContext);
+  const [filters, setFilters] = useState(initialState.filters);
   const [viewMode, setViewMode] = useState<"globe" | "leaflet">("globe");
   const [metricMode, setMetricMode] = useState<MetricMode>("capacity");
-  const isGlobe = viewMode === "globe";
+  const [fuelClass, setFuelClass] = useState<string | null>(null);
+  const query = filterSearchParams(filters).toString();
+  useEffect(() => replaceUrlQuery(query), [query]);
 
-  const summary = useMemo(() => {
-    const fuelCounts: Record<string, number> = {};
-    let totalCapacity = 0;
-    let totalEmissions = 0;
-    for (const f of facilities) {
+  const mapQuery = api.facilities.getMapFacilities.useQuery(filters, {
+    placeholderData: (prev) => prev,
+  });
+  const allFacilities = useMemo(
+    () => mapQuery.data?.facilities ?? [],
+    [mapQuery.data],
+  );
+  const facilities = useMemo(
+    () =>
+      fuelClass
+        ? allFacilities.filter(
+            (f) => getFuelTheme(f.primaryFuel).name === fuelClass,
+          )
+        : allFacilities,
+    [allFacilities, fuelClass],
+  );
+  const unlocated = mapQuery.data?.unlocated ?? [];
+  const setFilter: FilterChangeHandler = (key, value) =>
+    setFilters((f) => ({ ...f, [key]: value }));
+  const onInspectFacility = useCallback(
+    (id: number) => inspect({ kind: "facility", id }),
+    [inspect],
+  );
+  // Filters the map has no control for, carried over from Explore.
+  const otherFilters = (
+    Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
+  ).filter((k) => k !== "stateCode" && isFilterActive(filters, k)).length;
+
+  const fuelCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const f of allFacilities) {
       const { name } = getFuelTheme(f.primaryFuel);
-      fuelCounts[name] = (fuelCounts[name] ?? 0) + 1;
-      totalCapacity += f.totalCapacityMW;
-      totalEmissions += f.totalCo2Tons;
+      counts[name] = (counts[name] ?? 0) + 1;
     }
-    return { fuelCounts, totalCapacity, totalEmissions };
-  }, [facilities]);
+    return counts;
+  }, [allFacilities]);
+  const totalCapacity = facilities.reduce((n, f) => n + f.totalCapacityMW, 0);
+  const totalEmissions = facilities.reduce((n, f) => n + f.totalCo2Tons, 0);
 
-  const MapView = isGlobe ? D3Globe : LeafletMap;
+  const MapView = viewMode === "globe" ? D3Globe : LeafletMap;
 
   return (
-    <div className="space-y-4">
-      <div className="border-edge/80 bg-surface/60 flex flex-col gap-2.5 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-        <div className="flex items-center gap-2.5">
-          <div className="border-edge bg-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-md border shadow-xs">
-            {isGlobe ? (
-              <Globe className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-            ) : (
-              <MapIcon className="h-4 w-4 text-sky-500 dark:text-cyan-400" />
+    <div className="space-y-5">
+      <PageTitle
+        lead={
+          <>
+            Every facility with coordinates, colored by primary fuel and sized
+            by capacity or CO₂. Hover a dot for a summary; click it for details.
+            {otherFilters > 0 && (
+              <>
+                {" "}
+                Also filtered by {plural(otherFilters, "setting")} from{" "}
+                <Link
+                  href={`/explore?${query}`}
+                  className="text-primary hover:underline"
+                >
+                  Explore
+                </Link>
+                .
+              </>
             )}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-fg text-sm font-semibold tracking-tight sm:text-base">
-                {isGlobe ? "3D Globe" : "2D Map"}
-              </h2>
-              <Badge variant="success" className="font-mono">
-                {isLoading
-                  ? "..."
-                  : `${facilities.length.toLocaleString()} facilities`}
-              </Badge>
-              <SourceBadge kind="db" className="hidden sm:inline-flex" />
-            </div>
-            <p className="text-fg-muted hidden text-xs sm:block">
-              {isGlobe
-                ? "Interactive spherical orthographic globe"
-                : "Cartographic Mercator map with facility coordinates"}
-            </p>
-          </div>
-        </div>
+          </>
+        }
+      >
+        Map
+      </PageTitle>
 
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SegmentedControl
             value={viewMode}
             onChange={setViewMode}
             options={[
-              {
-                value: "globe",
-                label: "3D Globe",
-                icon: <Globe className="h-3 w-3 text-emerald-500" />,
-              },
-              {
-                value: "leaflet",
-                label: "2D Leaflet",
-                icon: <MapIcon className="h-3 w-3 text-sky-500" />,
-              },
+              { value: "globe", label: "Globe" },
+              { value: "leaflet", label: "Flat map" },
             ]}
           />
-          <SegmentedControl
-            value={metricMode}
-            onChange={setMetricMode}
-            options={[
-              {
-                value: "capacity",
-                label: (
-                  <>
-                    <span className="hidden sm:inline">Capacity</span>
-                    <span className="sm:hidden">MW</span>
-                  </>
-                ),
-                icon: <Zap className="h-3 w-3 text-amber-500" />,
-                title: "Scale dots by capacity",
-              },
-              {
-                value: "co2",
-                label: "CO₂",
-                icon: <Flame className="h-3 w-3 text-rose-500" />,
-                title: "Scale dots by CO₂",
-              },
-              { value: "uniform", label: "Fixed", title: "Uniform dot size" },
-            ]}
-          />
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-fg-muted">Dot size</span>
+            <SegmentedControl
+              value={metricMode}
+              onChange={setMetricMode}
+              options={[
+                { value: "capacity", label: "Capacity" },
+                { value: "co2", label: "CO₂" },
+                { value: "uniform", label: "Same" },
+              ]}
+            />
+          </div>
         </div>
+        <SourceBadge kind="db" />
       </div>
 
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         <button
           type="button"
-          onClick={() => onFilterChange("primaryFuel", "ALL")}
+          onClick={() => setFuelClass(null)}
           className={cn(
             CHIP,
-            filters.primaryFuel === "ALL"
-              ? "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
-              : CHIP_IDLE,
+            fuelClass === null ? "border-edge bg-surface text-fg" : CHIP_IDLE,
           )}
+          aria-pressed={fuelClass === null}
         >
-          All Fuels ({facilities.length})
+          All fuels
+          <span className="text-fg-muted tabular-nums">
+            {mapQuery.isLoading ? "…" : allFacilities.length.toLocaleString()}
+          </span>
         </button>
         {FUEL_CATEGORIES.map((cat) => {
-          const isSelected = filters.primaryFuel === cat.query;
+          const isSelected = fuelClass === cat.name;
           return (
             <button
-              key={cat.label}
+              key={cat.name}
               type="button"
-              onClick={() =>
-                onFilterChange("primaryFuel", isSelected ? "ALL" : cat.query)
-              }
+              onClick={() => setFuelClass(isSelected ? null : cat.name)}
               className={cn(
                 CHIP,
-                isSelected
-                  ? "border-edge bg-surface-2 text-fg shadow-xs"
-                  : CHIP_IDLE,
+                isSelected ? "border-edge bg-surface text-fg" : CHIP_IDLE,
               )}
+              aria-pressed={isSelected}
             >
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: cat.color }}
               />
-              {cat.label}
-              <span className="text-fg-muted font-mono">
-                ({summary.fuelCounts[cat.label] ?? 0})
+              {cat.name}
+              <span className="text-fg-muted tabular-nums">
+                {fuelCounts[cat.name] ?? 0}
               </span>
             </button>
           );
@@ -202,11 +193,12 @@ export function FacilitiesMap({
         {filters.stateCode !== "ALL" && (
           <button
             type="button"
-            onClick={() => onFilterChange("stateCode", "ALL")}
-            className={cn(CHIP, "border-edge bg-surface-2 text-fg")}
+            onClick={() => setFilter("stateCode", "ALL")}
+            className={cn(CHIP, "border-edge bg-surface text-fg")}
+            aria-label={`Remove state filter ${filters.stateCode}`}
           >
-            State: {filters.stateCode}
-            <FilterX className="text-fg-muted h-3 w-3" />
+            State {filters.stateCode}
+            <X className="text-fg-muted h-3 w-3" />
           </button>
         )}
       </div>
@@ -217,66 +209,47 @@ export function FacilitiesMap({
         metricMode={metricMode}
       />
 
+      <p className="text-fg-2 text-sm">
+        <strong className="text-fg font-medium tabular-nums">
+          {facilities.length.toLocaleString()}
+        </strong>{" "}
+        facilities on the map,{" "}
+        <strong className="text-fg font-medium tabular-nums">
+          {formatQuantity(totalCapacity / 1000, "GW", { digits: 1 })}
+        </strong>{" "}
+        of capacity,{" "}
+        <strong className="text-fg font-medium tabular-nums">
+          {formatQuantity(totalEmissions / 1_000_000, "million t", {
+            digits: 1,
+          })}
+        </strong>{" "}
+        of CO₂{" "}
+        {filters.year === "ALL"
+          ? "across all stored years"
+          : `in ${filters.year}`}
+        .
+      </p>
+
       {unlocated.length > 0 && (
-        <details className="border-edge bg-surface/40 text-fg-2 rounded-lg border p-3 text-xs">
+        <details className="text-fg-2 text-sm">
           <summary className="cursor-pointer">
-            <strong className="text-fg">
-              {unlocated.length.toLocaleString()} matching{" "}
-              {unlocated.length === 1 ? "facility has" : "facilities have"} no
-              coordinates
-            </strong>{" "}
-            in CAMPD and {unlocated.length === 1 ? "is" : "are"} not drawn on
-            the map. They appear in every other view; select one to inspect it.
+            {plural(
+              unlocated.length,
+              "matching facility",
+              "matching facilities",
+            )}{" "}
+            without coordinates in CAMPD {unlocated.length === 1 ? "is" : "are"}{" "}
+            not drawn. Open one:
           </summary>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {unlocated.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => onInspectFacility(f.id)}
-                className="border-edge hover:bg-surface-2 cursor-pointer rounded-md border px-2 py-0.5"
-              >
+              <DetailLink key={f.id} view={{ kind: "facility", id: f.id }}>
                 {f.name} ({f.stateCode})
-              </button>
+              </DetailLink>
             ))}
           </div>
         </details>
       )}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          {
-            label: "Visible Facilities",
-            value: facilities.length.toLocaleString(),
-          },
-          {
-            label: "Tracked Capacity",
-            value: `${Math.round(summary.totalCapacity).toLocaleString()} MW`,
-            valueClassName: "text-emerald-600 dark:text-emerald-400",
-          },
-          {
-            label: "Tracked Annual CO₂",
-            value: `${Math.round(summary.totalEmissions).toLocaleString()} tons`,
-            valueClassName: "text-rose-600 dark:text-rose-400",
-          },
-          {
-            label: "Projection Engine",
-            value: (
-              <span className="flex items-center gap-1.5 text-sm">
-                <Sparkles className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
-                {isGlobe ? "D3 Orthographic (3D)" : "Leaflet Mercator (2D)"}
-              </span>
-            ),
-          },
-        ].map((tile) => (
-          <StatTile
-            key={tile.label}
-            variant="card"
-            className="p-3.5 sm:p-3.5"
-            {...tile}
-          />
-        ))}
-      </div>
     </div>
   );
 }

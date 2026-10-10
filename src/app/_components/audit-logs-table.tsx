@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AuditSeverityBadge, Badge, OriginBadge } from "~/components/ui/badge";
+import { AuditSeverityBadge, OriginBadge } from "~/components/ui/badge";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
 import {
@@ -19,6 +19,7 @@ import { AUDIT_RULES, AUDIT_THRESHOLDS } from "~/lib/emissions-metrics";
 import type { AuditSortField, SortDirection } from "~/lib/facility-filters";
 import { cn, formatNumber, sortRows, type SortValue } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
+import { DetailLink } from "./detail-link";
 
 /**
  * A physical-sanity flag. Context fields are optional: the Audits tab has all of them, detail
@@ -31,6 +32,7 @@ interface AuditLog {
   details: string;
   year?: number;
   unitId?: string;
+  unitInternalId?: string;
   facilityId?: number;
   facilityName?: string;
   heatInputMMBtu?: number | null;
@@ -151,35 +153,39 @@ export function AuditTable({
               <AuditSeverityBadge severity={log.severity} />
             </TableCell>
             <TableCell>
-              <div className="text-fg font-mono text-xs font-semibold">
+              <div className="text-fg">{RULE_LABELS[log.flagType]}</div>
+              <div className="text-fg-muted font-mono text-xs">
                 {log.flagType}
-              </div>
-              <div className="text-fg-muted text-xs">
-                {RULE_LABELS[log.flagType]}
               </div>
             </TableCell>
             {(has("facilityName") || has("unitId")) && (
               <TableCell>
-                {log.facilityName && (
-                  <div className="text-fg text-sm font-semibold">
-                    {log.facilityName}
-                  </div>
-                )}
-                <div className="text-fg-muted font-mono text-xs">
-                  {log.facilityId !== undefined && `#${log.facilityId} • `}
-                  Unit {log.unitId ?? "—"}
+                {log.facilityName &&
+                  (log.unitInternalId ? (
+                    <DetailLink
+                      view={{ kind: "unit", id: log.unitInternalId }}
+                      className="text-fg block"
+                    >
+                      {log.facilityName}
+                    </DetailLink>
+                  ) : (
+                    <div className="text-fg">{log.facilityName}</div>
+                  ))}
+                <div className="text-fg-muted text-xs">
+                  {log.facilityId !== undefined && `${log.facilityId}, `}
+                  unit {log.unitId ?? "—"}
                 </div>
               </TableCell>
             )}
             {has("year") && (
-              <TableCell className="text-fg-2 font-mono text-xs">
+              <TableCell className="text-fg-2 tabular-nums">
                 {log.year}
               </TableCell>
             )}
             <TableCell
               className={cn(
-                "max-w-md text-xs",
-                showValue ? "text-fg font-mono" : "text-fg-muted sm:text-sm",
+                "max-w-md",
+                showValue ? "text-fg-2 tabular-nums" : "text-fg-muted",
               )}
               title={showValue ? log.details : undefined}
             >
@@ -227,88 +233,75 @@ export function AuditLogsTable({
 }) {
   const logs = data?.items ?? [];
   return (
-    <DataPanel className="border-edge/80 bg-surface/30 shadow-xs">
-      <div className="border-edge/60 space-y-2 border-b p-4">
-        <h3 className="text-fg text-base font-semibold tracking-tight sm:text-lg">
-          Data-Quality Audit Flags
-        </h3>
-        <p className="text-fg-muted text-xs leading-relaxed sm:text-sm">
-          Unit-years that broke a physical-sanity rule when they were stored.
-          The values shown are the ones that tripped the rule; hover for the
-          full explanation.
-        </p>
+    <div className="space-y-3">
+      <p className="text-fg-2 max-w-[75ch] text-sm">
+        Unit-years that broke a physical-sanity rule when they were stored. The
+        values shown are the ones that tripped the rule; hover a row for the
+        full explanation.
         {data && data.summary.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
-            {data.summary.map((s) => (
-              <Badge
-                key={`${s.flagType}:${s.severity}`}
-                variant="outline"
-                className="gap-1.5"
-                title={RULE_LABELS[s.flagType]}
-              >
-                <AuditSeverityBadge severity={s.severity} />
-                <span className="font-mono">{s.flagType}</span>
-                <span className="text-fg font-semibold">
+          <>
+            {" "}
+            In total:{" "}
+            {data.summary.map((s, i) => (
+              <span key={`${s.flagType}:${s.severity}`}>
+                {i > 0 && ", "}
+                <strong className="text-fg font-medium tabular-nums">
                   {formatNumber(s.count)}
-                </span>
-              </Badge>
+                </strong>{" "}
+                {RULE_LABELS[s.flagType] ?? s.flagType} ({s.severity})
+              </span>
             ))}
-          </div>
+            .
+          </>
         )}
-      </div>
-
-      {isLoading ? (
-        <InlineLoading title="Loading audit records..." className="py-12" />
-      ) : logs.length === 0 ? (
-        <EmptyState
-          title="No flags match these filters"
-          description="Clear filters, or retrieve or upload data to run the checks."
-          className="border-0 py-12"
-        />
-      ) : (
-        <>
-          <div className="hidden sm:block">
-            <AuditTable logs={logs} sort={{ sortBy, sortDir, onSortChange }} />
-          </div>
-          <div className="divide-edge/60 divide-y sm:hidden">
-            {logs.map((log) => (
-              <div key={log.id} className="space-y-2 p-3.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <AuditSeverityBadge severity={log.severity} />
-                  <OriginBadge {...log} />
+      </p>
+      <DataPanel>
+        {isLoading ? (
+          <InlineLoading title="Loading flags…" />
+        ) : logs.length === 0 ? (
+          <EmptyState
+            title="No flags match these filters"
+            description="Clear filters, or retrieve or upload data to run the checks."
+          />
+        ) : (
+          <>
+            <div className="hidden sm:block">
+              <AuditTable
+                logs={logs}
+                sort={{ sortBy, sortDir, onSortChange }}
+              />
+            </div>
+            <div className="divide-edge/70 divide-y sm:hidden">
+              {logs.map((log) => (
+                <div key={log.id} className="space-y-1 px-3 py-3 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-fg truncate">{log.facilityName}</span>
+                    <AuditSeverityBadge severity={log.severity} />
+                  </div>
+                  <div className="text-fg-muted text-xs">
+                    Unit {log.unitId}, {log.year} · {RULE_LABELS[log.flagType]}
+                  </div>
+                  <p className="text-fg-2 tabular-nums">{flaggedValue(log)}</p>
                 </div>
-                <div>
-                  <span className="text-fg text-sm font-semibold">
-                    {log.facilityName}
-                  </span>
-                  <span className="text-fg-muted ml-1.5 font-mono">
-                    Unit {log.unitId} ({log.year})
-                  </span>
-                </div>
-                <p className="border-edge/80 bg-canvas/80 text-fg rounded border px-2.5 py-1 font-mono">
-                  {log.flagType}
-                </p>
-                <p className="text-fg font-mono">{flaggedValue(log)}</p>
-                <p className="text-fg-muted leading-relaxed">{log.details}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+              ))}
+            </div>
+          </>
+        )}
 
-      {data && data.totalCount > 0 && (
-        <TablePagination
-          page={page}
-          pageSize={pageSize}
-          totalCount={data.totalCount}
-          totalPages={Math.max(data.totalPages, 1)}
-          itemLabel="flags"
-          isPlaceholderData={isPlaceholderData}
-          onPageChange={onPageChange}
-          onPageSizeChange={onPageSizeChange}
-        />
-      )}
-    </DataPanel>
+        {data && data.totalCount > 0 && (
+          <TablePagination
+            page={page}
+            pageSize={pageSize}
+            totalCount={data.totalCount}
+            totalPages={Math.max(data.totalPages, 1)}
+            itemLabel="flags"
+            isPlaceholderData={isPlaceholderData}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+          />
+        )}
+      </DataPanel>
+    </div>
   );
 }
 
@@ -344,8 +337,8 @@ export function AuditPanel({ logs }: { logs: AuditLog[] }) {
   return logs.length === 0 ? (
     <EmptyState
       variant="success"
-      title="All Physical Sanity Checks Clean"
-      description="No data-quality flags for this facility."
+      title="No data-quality flags"
+      description="Every stored record passed the physical-sanity checks."
     />
   ) : (
     <DataPanel>

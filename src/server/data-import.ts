@@ -12,9 +12,9 @@ import {
 } from "~/lib/data-import";
 import { PYTHON } from "~/lib/python";
 import { db } from "~/server/db";
-import { datasets, type facilities, importIssues } from "~/server/db/schema";
+import { datasets, type facilities } from "~/server/db/schema";
 import {
-  insertInChunks,
+  insertImportIssues,
   insertMissingFacilities,
   upsertAnnualRecords,
   upsertFacilities,
@@ -91,15 +91,7 @@ export async function importUpload(
       archivedPath: archivedFile,
       notes: `${summary.invalidCount} rejected, ${summary.duplicateCount} duplicate rows`,
     });
-    await insertInChunks(rejectedRows, (chunk) =>
-      tx.insert(importIssues).values(
-        chunk.map(({ data, ...issue }) => ({
-          ...issue,
-          datasetId,
-          rawRow: data,
-        })),
-      ),
-    );
+    await insertImportIssues(tx, datasetId, rejectedRows);
 
     // Rows without a name and state may only create placeholder facilities, never overwrite real ones.
     const named = records.facilities.filter((f) => f.name && f.stateCode);
