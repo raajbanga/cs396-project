@@ -54,20 +54,21 @@ export function sortRows<T>(
 export const uniqueStrings = (values: (string | null | undefined)[]) =>
   [...new Set(values)].filter((v): v is string => Boolean(v));
 
-/** Locale-formatted quantity with an optional unit; zero/missing renders `fallback`. */
+/** Locale-formatted quantity with an optional unit; zero renders `fallback`, null (not reported) "—". */
 export function formatQuantity(
   value: number | null | undefined,
   unit = "",
   { fallback = "—", digits = 0 } = {},
 ) {
-  if (!value) return fallback;
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (value === 0) return fallback;
   const num = value.toLocaleString(undefined, {
     maximumFractionDigits: digits,
   });
   return unit ? `${num} ${unit}` : num;
 }
 
-/** Plain number for tables and counts; zero/missing renders "0". */
+/** Plain number for tables and counts; zero renders "0", null "—". */
 export const formatNumber = (value: number | null | undefined, digits = 0) =>
   formatQuantity(value, "", { digits, fallback: "0" });
 

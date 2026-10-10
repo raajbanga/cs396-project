@@ -51,12 +51,15 @@ const CHIP_IDLE = "border-edge bg-surface/60 text-fg-muted hover:text-fg";
 
 export function FacilitiesMap({
   facilities = [],
+  unlocated = [],
   isLoading,
   onInspectFacility,
   filters,
   onFilterChange,
 }: {
   facilities?: MapFacility[];
+  /** Facilities matching the filters that have no coordinates, so can't be drawn. */
+  unlocated?: { id: number; name: string; stateCode: string }[];
   isLoading: boolean;
   onInspectFacility: (id: number) => void;
   filters: FacilityFilters;
@@ -213,6 +216,32 @@ export function FacilitiesMap({
         onInspectFacility={onInspectFacility}
         metricMode={metricMode}
       />
+
+      {unlocated.length > 0 && (
+        <details className="border-edge bg-surface/40 text-fg-2 rounded-lg border p-3 text-xs">
+          <summary className="cursor-pointer">
+            <strong className="text-fg">
+              {unlocated.length.toLocaleString()} matching{" "}
+              {unlocated.length === 1 ? "facility has" : "facilities have"} no
+              coordinates
+            </strong>{" "}
+            in CAMPD and {unlocated.length === 1 ? "is" : "are"} not drawn on
+            the map. They appear in every other view; select one to inspect it.
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {unlocated.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => onInspectFacility(f.id)}
+                className="border-edge hover:bg-surface-2 cursor-pointer rounded-md border px-2 py-0.5"
+              >
+                {f.name} ({f.stateCode})
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[

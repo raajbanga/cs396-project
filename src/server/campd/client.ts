@@ -21,6 +21,7 @@ import {
   sumTotals,
   TOTAL_KEYS,
   type EmissionTotals,
+  type ReportedTotals,
 } from "~/lib/emissions-metrics";
 import {
   activeCampdFilters,
@@ -32,8 +33,10 @@ import {
   diffRecord,
   emptyDiffCounts,
   recordKey,
+  RECORD_ATTRIBUTE_KEYS,
   type DiffStatus,
   type FieldChange,
+  type RecordAttributes,
 } from "~/lib/record-diff";
 import { uniqueStrings } from "~/lib/utils";
 import { db } from "~/server/db";
@@ -50,6 +53,7 @@ import {
   storedRecords,
   upsertAnnualRecords,
   upsertUnits,
+  type Executor,
 } from "~/server/ingest";
 
 const CAMPD_BASE_URL =
@@ -145,13 +149,19 @@ const UNIT_ALIASES = {
   ],
 };
 
-function readMetrics(row: CampdRow, missingHours = 0): EmissionTotals {
-  const totals = emptyTotals();
+/** A row's metrics; null where CAMPD left the value out (`missingHours` stands in for absent hours). */
+function readMetrics(
+  row: CampdRow,
+  missingHours: number | null = null,
+): ReportedTotals {
+  const totals: ReportedTotals = { ...emptyTotals() };
   for (const key of TOTAL_KEYS) {
-    totals[key] = parseNum(
-      pick(row, ...METRIC_ALIASES[key]),
-      key === "operatingHours" ? missingHours : 0,
-    );
+    const n = parseNum(pick(row, ...METRIC_ALIASES[key]), Number.NaN);
+    totals[key] = Number.isNaN(n)
+      ? key === "operatingHours"
+        ? missingHours
+        : null
+      : n;
   }
   return totals;
 }
@@ -348,8 +358,8 @@ export interface CampdPreviewRow {
   facilityId: number;
   facilityName: string;
   unitId: string;
-  grossGenerationMWh: number;
-  co2MassTons: number;
+  grossGenerationMWh: number | null;
+  co2MassTons: number | null;
   changes: FieldChange[];
 }
 
@@ -368,7 +378,7 @@ export async function previewCampdAnnual(year: number, filters: CampdFilters) {
   };
   for (const r of fetched.records) {
     const { status, changes } = diffRecord(
-      r.metrics,
+      { ...r.metrics, ...recordAttributes(r.unit) },
       stored.get(recordKey(r.facilityId, r.unitId, year)),
     );
     countDiff(counts, status);
@@ -394,14 +404,21 @@ export async function previewCampdAnnual(year: number, filters: CampdFilters) {
   };
 }
 
+/** The year's control and program information, as stored on each annual record (§7). */
+const recordAttributes = (unit: Record<string, string | null>) =>
+  Object.fromEntries(
+    RECORD_ATTRIBUTE_KEYS.map((k) => [k, unit[k] ?? null]),
+  ) as RecordAttributes;
+
 /** Writes one fetched year into `datasetId`: dropped rows to import_issues, records via the shared upsert. */
 async function storeCampdAnnual(
+  tx: Executor,
   datasetId: string,
   year: number,
   { records, dropped }: FetchedCampdYear,
 ) {
   await insertInChunks(dropped, (chunk) =>
-    db.insert(importIssues).values(
+    tx.insert(importIssues).values(
       chunk.map(({ data, ...issue }) => ({
         ...issue,
         datasetId,
@@ -415,6 +432,7 @@ async function storeCampdAnnual(
       name: r.facilityName,
       stateCode: r.stateCode,
     })),
+    tx,
   );
   const unitIds = await upsertUnits(
     records.map(({ facilityId, unitId, unit }) => ({
@@ -422,15 +440,18 @@ async function storeCampdAnnual(
       unitId,
       ...unit,
     })),
+    tx,
   );
   return upsertAnnualRecords(
     datasetId,
     records.map((r) => ({
       ...r.metrics,
+      ...recordAttributes(r.unit),
       facilityId: r.facilityId,
       unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
       year,
     })),
+    tx,
   );
 }
 
@@ -438,8 +459,9 @@ async function storeCampdAnnual(
  * Ingestion engine: fetches and validates one year of CAMPD annual records, then stores them as a new
  * dataset with physical-sanity flags and derived rates. `filters` narrow the request (CAMPD matches
  * them against unit attributes) and are stored with the year in `datasets.query_params`; the dataset
- * also records how its records compared with the database and how many rows were dropped. A failure
- * is saved to `notes`.
+ * also records how its records compared with the database and how many rows were dropped. The year
+ * is fetched completely, then written in one transaction; a failed attempt is kept in the history as
+ * a dataset with no records and the error in `notes`.
  */
 export async function syncCampdAnnualEmissions({
   year,
@@ -450,9 +472,8 @@ export async function syncCampdAnnualEmissions({
 }) {
   const active = activeCampdFilters(filters);
   const label = describeCampdFilters(active);
-  const datasetId = crypto.randomUUID();
-  await db.insert(datasets).values({
-    id: datasetId,
+  const dataset = {
+    id: crypto.randomUUID(),
     name: `CAMPD API ${year}${label ? ` [${label}]` : ""} Ingestion Batch`,
     source: "API",
     reportingYear: year,
@@ -462,46 +483,49 @@ export async function syncCampdAnnualEmissions({
       perPage: CAMPD_PAGE_SIZE,
       ...active,
     },
-  });
+  };
 
-  let counts: Partial<typeof datasets.$inferInsert> = {};
-  let anomalyCount = 0;
   try {
     const fetched = await fetchCampdAnnual(year, active);
-    const stored = await storeCampdAnnual(datasetId, year, fetched);
-    anomalyCount = stored.anomalyCount;
-    counts = {
+    const stored = await db.transaction(async (tx) => {
+      await tx.insert(datasets).values(dataset);
+      const stored = await storeCampdAnnual(tx, dataset.id, year, fetched);
+      await tx
+        .update(datasets)
+        .set({
+          rawRecordCount: fetched.received,
+          validRecords: fetched.records.length,
+          flaggedRecords: stored.flaggedRecords,
+          insertedRecords: stored.inserted,
+          updatedRecords: stored.updated,
+          unchangedRecords: stored.unchanged,
+          droppedRecords: fetched.dropped.length,
+          notes: fetched.dropped.length
+            ? `${fetched.dropped.length} CAMPD rows dropped (see the invalid-records report)`
+            : null,
+        })
+        .where(eq(datasets.id, dataset.id));
+      return stored;
+    });
+    return {
+      datasetId: dataset.id,
+      year,
       rawRecordCount: fetched.received,
       validRecords: fetched.records.length,
       flaggedRecords: stored.flaggedRecords,
-      insertedRecords: stored.inserted,
-      updatedRecords: stored.updated,
-      unchangedRecords: stored.unchanged,
-      droppedRecords: fetched.dropped.length,
-      notes: fetched.dropped.length
-        ? `${fetched.dropped.length} CAMPD rows dropped (see the invalid-records report)`
-        : null,
+      inserted: stored.inserted,
+      updated: stored.updated,
+      unchanged: stored.unchanged,
+      dropped: fetched.dropped.length,
+      anomalyCount: stored.anomalyCount,
     };
   } catch (err) {
     const message = `CAMPD API error: ${err instanceof Error ? err.message : String(err)}`;
-    counts = { notes: `Error: ${message}` };
+    await db
+      .insert(datasets)
+      .values({ ...dataset, notes: `Error: ${message}` });
     throw new Error(message);
-  } finally {
-    await db.update(datasets).set(counts).where(eq(datasets.id, datasetId));
   }
-
-  return {
-    datasetId,
-    year,
-    rawRecordCount: counts.rawRecordCount ?? 0,
-    validRecords: counts.validRecords ?? 0,
-    flaggedRecords: counts.flaggedRecords ?? 0,
-    inserted: counts.insertedRecords ?? 0,
-    updated: counts.updatedRecords ?? 0,
-    unchanged: counts.unchangedRecords ?? 0,
-    dropped: counts.droppedRecords ?? 0,
-    anomalyCount,
-  };
 }
 
 async function fetchMasterDataList(path: string, field: string) {

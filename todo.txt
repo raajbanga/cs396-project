@@ -701,6 +701,104 @@ F3 [x] Proofread pass:
      help with this project." sits at the bottom of the last page.
 
 ================================================================================
+STAGE F2 — REPORT EDIT + REPORT ↔ CODE AUDIT  (2026-10-10)
+================================================================================
+F2.1 [x] Report trimmed for redundancy (35 → 32 pages): each fact stated once
+       with cross-references; bullet lists → prose; all figures, tables,
+       listings, equations, citations, and numbers kept.
+F2.2 [x] Every report figure re-derived against the COMMITTED db (git show
+       HEAD:db.sqlite): 1,619/5,204/50,947; 25/8; 51; 11; 31 unit-years;
+       416 → P75 2,656,019 → 103; 3,989/420; 4,374; 670; 11; 42; 2,637;
+       14 indexes; 17 tRPC procedures; 12 active + 6 superseded API datasets;
+       sample README rows. All match except the fix below.
+F2.3 [x] Report corrections: audits raise 6,960 flags on 6,483 records (was
+       "flag 6,960 records"); percentile threshold is rounded AFTER picking
+       an observed value (was "always a value in the data"); failed retrieval
+       writes no records but leaves an errored history row (was "no partial
+       dataset"); DATABASE_AUTH_TOKEN mentioned; 39 → 40 tests.
+F2.4 [x] BUG FIXED — daily/hourly uploads: parse_import.py keyed rows by
+       (facility, unit, year) and these files have no year column, so every
+       day after the first was a "duplicate". A 359,723-row daily file made
+       355,770 import_issues rows (working db.sqlite grew to 400 MB). Rows of
+       sub-annual files are now keyed by unit + Date/Hour, the reporting year
+       comes from the dates, and the reason reads "facility-unit-period".
+       New test in data-import.test.ts (40 tests). Report §6/§8 updated.
+F2.5 [x] FIXED known issue — compare dialog labelled gross load "Net
+       Generation" → "Gross Load".
+F2.6 [x] FIXED known issue — shared Dialog: role="dialog", aria-modal,
+       aria-labelledby (header), focus moves in on open and returns on close,
+       Tab trapped; with stacked dialogs (compare → facility) only the topmost
+       handles Escape/Tab. onOpenChange held in a ref so inline callbacks
+       don't re-run the effect. Report known issues/future work updated.
+F2.7 [x] Working db.sqlite held the daily-file test upload (1 BULK_CSV
+       dataset, 355,770 issue rows, 400 MB) plus its archive in uploads/.
+       → restored with `git restore db.sqlite`; the archived daily CSV deleted.
+       The committed DB is clean.
+F2.8 [x] Transactions: ingest helpers take an Executor (db or tx). importUpload
+       and each sync year run in one db.transaction(); the upload archive is
+       written after commit; a failed sync still leaves an errored history row.
+       Verified: an import sabotaged after its first writes leaves dataset/
+       issue/record/facility counts unchanged.
+F2.9 [x] Upload dialog, attributes-only files: parser reports periodColumns;
+       dialog says "This is daily data …: only facility and unit attributes
+       are saved. N rows → F facilities, U units; no annual records", the Valid
+       tile reads "Attributes kept", the button "Approve & Import U Units".
+F2.10[x] (LLM success path still untested — skipped by request)
+       a) Missing ≠ zero: migration 0006 makes metrics nullable; CAMPD/upload
+          blanks → NULL; new CO2_NOT_REPORTED (WARN) rule; ZERO_EMISSIONS only
+          on a reported 0; rates/rules skip NULL; totals treat NULL as 0;
+          percentile thresholds skip NULL; formatQuantity shows "—" for NULL.
+          Re-synced 2015–2026 (28 s): all 6,105 former ERRORs were unreported
+          CO₂ → WARN; EXTREME_HEAT_RATE 855 → 804 (51 came from missing heat
+          input); 0 ERROR flags now. 6,909 flags on 6,432 records.
+       b) Spec §7 controls per annual record: annual_records gains so2/nox/pm/
+          hg_controls + program_code (backfilled from units in 0006, then
+          replaced by each year's CAMPD values on re-sync; 16,233 unit-years
+          differ from the unit's current values). Control filters, local
+          coverage, unit-year exports, and the diff use the per-year columns;
+          uploads without control columns keep the year's stored
+          values (new years take the unit's). Unit dialog year
+          table gains "Controls & programs".
+       c) Upload report: "Duplicates in file (n)" (= tile) and "Already in
+          database (n)" tabs.
+       d) Map lists the 37 facilities without coordinates (click → details).
+F2.11[x] Browser check (puppeteer-core + Chrome on a prod build, DB copy): 13/13
+       pass — role/aria-modal/labelledby, focus in on open, Tab/Shift+Tab
+       trapped, Escape closes only the top of stacked dialogs (compare →
+       facility), focus returns to opener, map notice. Also fixed: closing a
+       stacked dialog no longer unlocks page scroll under the remaining one.
+F2.12[x] Re-derived every changed report number through the app (tRPC caller)
+       and hand SQL: high CO₂ = P75 of 385 reported = 2,721,500 → 2,720,000,
+       97 rows (CSV 97); TX gas SO₂ ≤ 50 → 3,857; low NOₓ 9.37 → 660; 2025 =
+       3,989/415; 12 active + 18 superseded; sample upload 19/1/1, 3 rejected,
+       1 duplicate, 1 WARN; retrieve 6071/2023 = 8 / 1 changed / 7. Report,
+       README, DATABASE_BREAKDOWN, samples/README, demo script updated; 9
+       screenshots retaken (light theme, same framing). 42 tests.
+F2.15[x] Verification pass (2026-10-10):
+       - Diff review fixes: per-year controls of a stored year were replaced by
+         the unit's current ones when a file without control columns re-wrote
+         it → attributes now resolved before the upsert (stored year's values,
+         else the unit's); verified on a DB copy (136/1/2022 kept "Wet
+         Limestone"; new 2013 took the unit's). formatQuantity guards NaN.
+         Retrieval preview keeps nulls ("—", not 0). Control-filter options
+         now come from annual_records (76 SO₂ combos vs 43 on units).
+       - Migrations 0000–0006 on an empty DB give a schema structurally
+         identical to db.sqlite (columns, types, nullability, FKs, indexes).
+       - db.sqlite: integrity + FK checks ok; flags = rules recomputed in SQL
+         (6,105 / 0 / 0 / 804); stored rates = formulas; dataset counts =
+         owned records; no orphans; record ids = unit_year.
+       - Report counts re-checked vs code (17 procedures, 14 indexes, 7
+         migrations, 42 tests, 4 rules — fixed "Three physical-sanity rules");
+         performance table re-measured (prod build, median of 3).
+       - Cleanup: 8 internal-only exports made private.
+ db.sqlite is now migrated (0006) and re-synced — commit it with
+       the code, or `npm run db:migrate && npm run sync:campd -- --from 2015
+       --to 2026` reproduces it.
+F2.14[ ] Optional rubric polish, not done: range filters are inclusive (≥/≤);
+       rubric 5 says "greater-than/less-than" — fine in practice, could add
+       strict operators. Pages are dialogs, not routes (argued in report §7).
+
+================================================================================
 STAGE G — PRESENTATION OUTLINE (rubric §10, 5 pts)
 ================================================================================
 G1 [ ] presentation/slides-outline.md, ~12 slides with speaker notes:
@@ -738,8 +836,7 @@ H2 [ ] Clean-machine check: unzip into a temp dir and follow README step by
 ================================================================================
 OPEN QUESTIONS
 ================================================================================
-  - Confirm the contribution split (proposal roles vs git history: Arnav = the
-    upload/import feature) with both team members before report §9.
+  - [resolved 2026-10-10] Contribution split in report §9 confirmed by the team.
   - OpenRouter key: user adds it later. Slots OPENROUTER_API_KEY /
     OPENROUTER_MODEL are already in .env, .env.example, and src/env.js.
   - Course generative-AI policy wording for report §10 (what exactly must be

@@ -28,7 +28,19 @@ import {
 import { cn, formatNumber, formatQuantity } from "~/lib/utils";
 import { AuditTable } from "./audit-logs-table";
 
-type Tab = "preview" | "quality" | "duplicates" | "columns";
+type Tab = "preview" | "quality" | "duplicates" | "existing" | "columns";
+
+/** Daily/hourly and facility files store no annual records: only facility and unit attributes. */
+const attributesOnly = (report: ImportReport) =>
+  report.targetSchema === "FACILITIES_AND_UNITS";
+
+/** "hourly" / "daily" from a sub-annual file's period columns; null for other files. */
+const periodKind = (report: ImportReport) =>
+  report.periodColumns.some((c) => /hour/i.test(c))
+    ? "hourly"
+    : report.periodColumns.length
+      ? "daily"
+      : null;
 
 const STATUS_BADGES: Record<RowStatus, [BadgeVariant, string]> = {
   valid: ["success", "Valid"],
@@ -160,7 +172,9 @@ export function DataUploadDialog({
               ) : (
                 <CheckCircle2 className="h-3.5 w-3.5" />
               )}
-              Approve & Import {formatNumber(report.summary.validCount)} Records
+              {attributesOnly(report)
+                ? `Approve & Import ${formatNumber(report.recordCounts.units)} Units`
+                : `Approve & Import ${formatNumber(report.summary.validCount)} Records`}
             </Button>
           </>
         ) : null
@@ -246,7 +260,9 @@ function ReportView({
           label="Valid"
           value={formatNumber(summary.validCount)}
           valueClassName="text-emerald-400"
-          subtext="Will be imported"
+          subtext={
+            attributesOnly(report) ? "Attributes kept" : "Will be imported"
+          }
         />
         <StatTile
           variant="card"
@@ -260,7 +276,11 @@ function ReportView({
           label="Duplicates"
           value={formatNumber(summary.duplicateCount)}
           valueClassName={summary.duplicateCount ? "text-amber-400" : undefined}
-          subtext="Facility-unit-year, skipped"
+          subtext={
+            report.periodColumns.length
+              ? "Same unit and period, skipped"
+              : "Facility-unit-year, skipped"
+          }
         />
         <StatTile
           variant="card"
@@ -290,6 +310,20 @@ function ReportView({
                 {table}
               </Badge>
             ))}
+            {attributesOnly(report) && (
+              <span className="text-fg-2 w-full">
+                {periodKind(report)
+                  ? `This is ${periodKind(report)} data, which the database does not store: `
+                  : "This file has no annual emissions: "}
+                only facility and unit attributes are saved.{" "}
+                <strong className="text-fg">
+                  {formatNumber(summary.validCount)} rows →{" "}
+                  {formatNumber(report.recordCounts.facilities)} facilities,{" "}
+                  {formatNumber(report.recordCounts.units)} units; no annual
+                  records.
+                </strong>
+              </span>
+            )}
             {report.destinationTables.includes("annual_records") && (
               <span className="text-fg-2 flex flex-wrap items-center gap-1.5 sm:ml-auto">
                 <SourceBadge kind="db" />
@@ -319,8 +353,16 @@ function ReportView({
           },
           {
             value: "duplicates",
-            label: `Duplicates (${formatNumber(report.duplicates.length)})`,
+            label: `Duplicates in file (${formatNumber(summary.duplicateCount)})`,
           },
+          ...(report.destinationTables.includes("annual_records")
+            ? [
+                {
+                  value: "existing" as const,
+                  label: `Already in database (${formatNumber(report.existing.length)})`,
+                },
+              ]
+            : []),
           { value: "columns", label: `Columns (${columns.length})` },
         ]}
       />
@@ -394,16 +436,16 @@ function ReportView({
         ))}
 
       {tab === "duplicates" &&
-        (report.duplicates.length === 0 ? (
+        (summary.duplicateCount === 0 ? (
           <EmptyState
             variant="success"
-            title="No duplicate facility-unit-year records"
-            description="Every row is unique in the file and new to the database."
+            title="No duplicates in the file"
+            description={`Every row is a distinct ${report.periodColumns.length ? "unit and period" : "facility-unit-year"}.`}
           />
         ) : (
           <Section
-            title="Duplicate facility-unit-year records"
-            note="Repeats within the file keep the first row; records already in the database are updated."
+            title={`Repeated rows (${formatNumber(summary.duplicateCount)})`}
+            note={`The first row is kept; repeats are skipped and listed in the data-quality report.${summary.duplicateCount > report.duplicates.length ? ` Showing the first ${formatNumber(report.duplicates.length)}.` : ""}`}
           >
             <ReportTable
               sortable
@@ -414,6 +456,37 @@ function ReportView({
                 d.unitId,
                 d.year ?? "—",
                 d.reason,
+              ])}
+            />
+          </Section>
+        ))}
+
+      {tab === "existing" &&
+        (report.existing.length === 0 ? (
+          <EmptyState
+            variant="success"
+            title="All records are new"
+            description="None of the file's facility-unit-years is in the database yet."
+          />
+        ) : (
+          <Section
+            title={`Already in the database (${formatNumber(report.existing.length)})`}
+            note="On import, changed records are updated and attributed to this upload; unchanged ones keep their values."
+          >
+            <ReportTable
+              sortable
+              head={["Row", "Facility", "Unit", "Year", "Comparison"]}
+              rows={report.existing.map((e) => [
+                e.rowNumber,
+                e.facilityId,
+                e.unitId,
+                e.year,
+                <Badge
+                  key="status"
+                  variant={e.status === "changed" ? "warning" : "secondary"}
+                >
+                  {e.reason}
+                </Badge>,
               ])}
             />
           </Section>

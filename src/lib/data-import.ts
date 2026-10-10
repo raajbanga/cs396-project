@@ -1,14 +1,16 @@
 import {
   deriveRates,
   evaluatePhysicalSanityRules,
-  type EmissionTotals,
+  type ReportedTotals,
 } from "./emissions-metrics";
 import {
   countDiff,
   diffRecord,
   emptyDiffCounts,
   recordKey,
+  type ComparableRecord,
   type DiffCounts,
+  type RecordAttributes,
 } from "./record-diff";
 
 /** Upload contract shared by the import dialog, `/api/upload`, and `scripts/parse_import.py`. */
@@ -39,7 +41,9 @@ export function checkUploadFile({
 export type RowStatus = "valid" | "flagged" | "duplicate" | "invalid";
 type Cell = string | number | null;
 
-export interface ParsedAnnualRecord extends EmissionTotals {
+/** An annual row: metrics null when blank; control/program keys present only when the file has those columns. */
+export interface ParsedAnnualRecord
+  extends ReportedTotals, Partial<RecordAttributes> {
   rowNumber: number;
   facilityId: number;
   unitId: string;
@@ -57,6 +61,8 @@ export interface ParsedUpload {
     targetColumn: string;
     required: boolean;
   }[];
+  /** Date/Hour columns of a daily or hourly file (attributes only are stored); empty otherwise. */
+  periodColumns: string[];
   missingRequired: { table: string; column: string }[];
   unmappedColumns: string[];
   missingValueCounts: Record<string, number>;
@@ -109,6 +115,17 @@ export interface ParsedUpload {
 /** What the dialog previews: the parse report, the sanity flags the import will log, and how its records compare with the database. */
 export type ImportReport = Omit<ParsedUpload, "records" | "rejectedRows"> & {
   diff: DiffCounts;
+  /** What the import writes: distinct facilities and units, and annual records. */
+  recordCounts: { facilities: number; units: number; annual: number };
+  /** Valid annual records already in the database (`duplicates` holds only repeats within the file). */
+  existing: {
+    rowNumber: number;
+    facilityId: number;
+    unitId: string;
+    year: number;
+    status: "changed" | "unchanged";
+    reason: string;
+  }[];
   anomalies: (ReturnType<typeof evaluatePhysicalSanityRules>[number] & {
     id: string;
     rowNumber: number;
@@ -138,7 +155,7 @@ export const canImport = (
  */
 export function buildImportReport(
   { records, rejectedRows: _rejected, ...report }: ParsedUpload,
-  stored: Map<string, EmissionTotals>,
+  stored: Map<string, ComparableRecord>,
 ): ImportReport {
   const diffs = records.annual.map((r) => ({
     r,
@@ -157,26 +174,33 @@ export function buildImportReport(
   return {
     ...report,
     diff: diffs.reduce((c, d) => countDiff(c, d.status), emptyDiffCounts()),
+    recordCounts: {
+      facilities: records.facilities.length,
+      units: records.units.length,
+      annual: records.annual.length,
+    },
     anomalies,
     previewRows: report.previewRows.map((row) =>
       row.status === "valid" && flaggedRows.has(row.rowNumber)
         ? { ...row, status: "flagged" }
         : row,
     ),
-    duplicates: [
-      ...report.duplicates,
-      ...diffs
-        .filter((d) => d.status !== "new")
-        .map(({ r, status, changes }) => ({
-          rowNumber: r.rowNumber,
-          facilityId: r.facilityId,
-          unitId: r.unitId,
-          year: r.year,
-          reason:
-            status === "unchanged"
-              ? "Already in the database with the same values (unchanged)"
-              : `Already in the database; the import will update ${changes.map((c) => c.field).join(", ")}`,
-        })),
-    ],
+    existing: diffs.flatMap(({ r, status, changes }) =>
+      status === "new"
+        ? []
+        : [
+            {
+              rowNumber: r.rowNumber,
+              facilityId: r.facilityId,
+              unitId: r.unitId,
+              year: r.year,
+              status,
+              reason:
+                status === "unchanged"
+                  ? "Same values as stored; nothing changes"
+                  : `Will update ${changes.map((c) => c.field).join(", ")}`,
+            },
+          ],
+    ),
   };
 }

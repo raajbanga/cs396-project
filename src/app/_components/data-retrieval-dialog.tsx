@@ -46,13 +46,21 @@ const METRIC_LABELS: Record<FieldChange["field"], string> = {
     string
   >),
   steamLoadKlb: "Steam load",
+  so2Controls: "SO₂ controls",
+  noxControls: "NOₓ controls",
+  pmControls: "PM controls",
+  hgControls: "Hg controls",
+  programCode: "Programs",
 };
+
+const changeValue = (v: FieldChange["database"]) =>
+  typeof v === "string" ? v : formatNumber(v, 2);
 
 const changeText = (changes: FieldChange[]) =>
   changes
     .map(
       (c) =>
-        `${METRIC_LABELS[c.field]}: ${formatNumber(c.database, 2)} → ${formatNumber(c.incoming, 2)}`,
+        `${METRIC_LABELS[c.field]}: ${changeValue(c.database)} → ${changeValue(c.incoming)}`,
     )
     .join(" · ");
 

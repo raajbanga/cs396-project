@@ -146,6 +146,11 @@ erDiagram
         real co2_mass_tons "Mass of CO₂ emitted"
         real so2_mass_tons "Mass of SO₂ emitted"
         real nox_mass_tons "Mass of NOₓ emitted"
+        text so2_controls "SO₂ controls reported that year"
+        text nox_controls "NOₓ controls reported that year"
+        text pm_controls "PM controls reported that year"
+        text hg_controls "Hg controls reported that year"
+        text program_code "Programs reported that year"
         real co2_intensity_lbs_mwh "Stored derived intensity"
         real heat_rate_mmbtu_mwh "Stored derived heat rate"
     }
@@ -162,7 +167,7 @@ erDiagram
     DATA_AUDIT_LOGS {
         text id PK "UUID flag ID"
         text annual_record_id FK "References annual_records.id"
-        text flag_type "ZERO_EMISSIONS_HIGH_HEAT | PHANTOM_GENERATION | EXTREME_HEAT_RATE"
+        text flag_type "ZERO_EMISSIONS_HIGH_HEAT | CO2_NOT_REPORTED | PHANTOM_GENERATION | EXTREME_HEAT_RATE"
         text severity "WARN | ERROR"
         text details "Plain-English diagnostic description"
         integer created_at "Unix epoch timestamp"
@@ -217,24 +222,28 @@ Represents individual generating machines (boilers, combustion turbines, generat
 
 ### Table 3: `annual_records`
 
-Stores the annual operational metrics and pollution mass for one unit for one calendar year.
+Stores the annual operational metrics and pollution mass for one unit for one calendar year, and the
+controls and programs the unit reported that year. Metric columns are `NULL` when the source did not
+report the value (distinct from a reported 0): totals count them as 0, range filters and percentile
+thresholds skip them, and CSV exports leave them blank.
 
-| Column               | Type               | What It Means                                                                                                     | Where and How It Is Used                                                                                                               |
-| :------------------- | :----------------- | :---------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                 | `TEXT PRIMARY KEY` | Set at ingestion to `${unitInternalId}_${year}` (schema default is UUID, but sync always supplies the composite). | **Unique Ledger ID**: Upsert target is `(unitInternalId, year)` so re-syncing the same year updates rather than duplicates.            |
-| `datasetId`          | `TEXT`             | Foreign key referencing `datasets.id`.                                                                            | **Provenance**: Links each row to the ingestion batch that last wrote it.                                                              |
-| `facilityId`         | `INTEGER`          | Foreign key referencing `facilities.id`.                                                                          | **Plant Rollups**: Indexed with `year` (`annual_record_facility_year_idx`) for per-facility totals, overall or within one year.        |
-| `unitInternalId`     | `TEXT`             | Foreign key referencing `units.id`.                                                                               | **Unit Ledger**: Links this yearly row to the specific physical turbine/boiler.                                                        |
-| `year`               | `INTEGER`          | Calendar reporting year (e.g. 2022).                                                                              | **Time Slicing**: Filtering records by reporting year; displayed in timeline cards.                                                    |
-| `operatingHours`     | `REAL`             | Number of hours the machine ran during the year.                                                                  | **Utilization & Sanity**: Aggregated to total plant run time; audited against generation (`PHANTOM_GENERATION` check).                 |
-| `grossGenerationMWh` | `REAL`             | Total electricity produced (Megawatt-hours).                                                                      | **Productivity & Intensity**: Summed for total generation KPI; serves as the denominator for carbon intensity and heat rate.           |
-| `heatInputMMBtu`     | `REAL`             | Total fuel thermal energy consumed.                                                                               | **Efficiency**: Summed to determine fuel volume; numerator for heat rate calculation.                                                  |
-| `steamLoadKlb`       | `REAL`             | Steam delivered for non-electric use (1000 lb); 0 for units without steam output.                                 | **History & exports**: Unit dialog year table, retrieval preview, CSV exports; summed in yearly rollups.                               |
-| `co2MassTons`        | `REAL`             | Weight of carbon dioxide released (short tons).                                                                   | **Emissions Impact**: Summed for plant-level CO₂ rank, map bubble scaling, KPI totals, and carbon intensity numerator.                 |
-| `so2MassTons`        | `REAL`             | Weight of sulfur dioxide released (short tons).                                                                   | **Acid Rain Tracking**: Displayed in annual unit history and plant comparison benchmark.                                               |
-| `noxMassTons`        | `REAL`             | Weight of nitrogen oxides released (short tons).                                                                  | **Smog Tracking**: Displayed in annual unit history and plant comparison benchmark.                                                    |
-| `co2IntensityLbsMWh` | `REAL`             | Stored carbon intensity ($(\text{CO}_2 \times 2000) / \text{Generation}$).                                        | **Precomputed Metric**: Unit-level clean energy scoring. Note: The app also dynamically recomputes this at the facility level via SQL. |
-| `heatRateMMBtuMWh`   | `REAL`             | Stored heat rate ($\text{Heat Input} / \text{Generation}$).                                                       | **Thermal Sanity & Efficiency**: Evaluated by anomaly engine (`EXTREME_HEAT_RATE`); displayed in comparison modal.                     |
+| Column                                      | Type               | What It Means                                                                                                                                                                | Where and How It Is Used                                                                                                               |
+| :------------------------------------------ | :----------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                        | `TEXT PRIMARY KEY` | Set at ingestion to `${unitInternalId}_${year}` (schema default is UUID, but sync always supplies the composite).                                                            | **Unique Ledger ID**: Upsert target is `(unitInternalId, year)` so re-syncing the same year updates rather than duplicates.            |
+| `datasetId`                                 | `TEXT`             | Foreign key referencing `datasets.id`.                                                                                                                                       | **Provenance**: Links each row to the ingestion batch that last wrote it.                                                              |
+| `facilityId`                                | `INTEGER`          | Foreign key referencing `facilities.id`.                                                                                                                                     | **Plant Rollups**: Indexed with `year` (`annual_record_facility_year_idx`) for per-facility totals, overall or within one year.        |
+| `unitInternalId`                            | `TEXT`             | Foreign key referencing `units.id`.                                                                                                                                          | **Unit Ledger**: Links this yearly row to the specific physical turbine/boiler.                                                        |
+| `year`                                      | `INTEGER`          | Calendar reporting year (e.g. 2022).                                                                                                                                         | **Time Slicing**: Filtering records by reporting year; displayed in timeline cards.                                                    |
+| `operatingHours`                            | `REAL`             | Number of hours the machine ran during the year.                                                                                                                             | **Utilization & Sanity**: Aggregated to total plant run time; audited against generation (`PHANTOM_GENERATION` check).                 |
+| `grossGenerationMWh`                        | `REAL`             | Total electricity produced (Megawatt-hours).                                                                                                                                 | **Productivity & Intensity**: Summed for total generation KPI; serves as the denominator for carbon intensity and heat rate.           |
+| `heatInputMMBtu`                            | `REAL`             | Total fuel thermal energy consumed.                                                                                                                                          | **Efficiency**: Summed to determine fuel volume; numerator for heat rate calculation.                                                  |
+| `steamLoadKlb`                              | `REAL`             | Steam delivered for non-electric use (1000 lb); `NULL` when not reported (most units).                                                                                       | **History & exports**: Unit dialog year table, retrieval preview, CSV exports; summed in yearly rollups.                               |
+| `co2MassTons`                               | `REAL`             | Weight of carbon dioxide released (short tons).                                                                                                                              | **Emissions Impact**: Summed for plant-level CO₂ rank, map bubble scaling, KPI totals, and carbon intensity numerator.                 |
+| `so2MassTons`                               | `REAL`             | Weight of sulfur dioxide released (short tons).                                                                                                                              | **Acid Rain Tracking**: Displayed in annual unit history and plant comparison benchmark.                                               |
+| `noxMassTons`                               | `REAL`             | Weight of nitrogen oxides released (short tons).                                                                                                                             | **Smog Tracking**: Displayed in annual unit history and plant comparison benchmark.                                                    |
+| `co2IntensityLbsMWh`                        | `REAL`             | Stored carbon intensity ($(\text{CO}_2 \times 2000) / \text{Generation}$).                                                                                                   | **Precomputed Metric**: Unit-level clean energy scoring. Note: The app also dynamically recomputes this at the facility level via SQL. |
+| `heatRateMMBtuMWh`                          | `REAL`             | Stored heat rate ($\text{Heat Input} / \text{Generation}$).                                                                                                                  | **Thermal Sanity & Efficiency**: Evaluated by anomaly engine (`EXTREME_HEAT_RATE`); displayed in comparison modal.                     |
+| `so2Controls` … `hgControls`, `programCode` | `TEXT`             | Controls and program codes as reported for this year (spec §7). Uploads without these columns keep the year's stored values, or take the unit's current ones for a new year. | **Search & history**: SO₂/NOₓ/PM control filters match these; unit dialog year table; unit-year CSV exports.                           |
 
 ### Table 4: `data_audit_logs`
 
@@ -434,8 +443,9 @@ flowchart LR
   - Extracts the facility name, unit ID, reporting year, violation flag type, severity (`ERROR` / `WARN`), and plain-English diagnostic description.
 - **The Physics Rules We Check** (enforced via `AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts` for both the CAMPD sync and file uploads):
   1. **`ZERO_EMISSIONS_HIGH_HEAT`** (`severity: "ERROR"`): A fossil fuel generator consumed heat energy above the threshold (`heatInputMMBtu > 1,000 MMBtu`), but reported 0.0 tons of CO₂ emissions (`co2MassTons === 0`), which is physically impossible when combusting hydrocarbon fuels.
-  2. **`PHANTOM_GENERATION`** (`severity: "ERROR"`): A generator produced electricity (`grossGenerationMWh > 0 MWh`), but recorded 0.0 hours of operating time (`operatingHours === 0`).
-  3. **`EXTREME_HEAT_RATE`** (`severity: "WARN"`): The calculated heat rate falls outside standard thermodynamic limits (< 5.0 or > 25.0 MMBtu/MWh: `heatRateMMBtuMWh < 5.0 || heatRateMMBtuMWh > 25.0`), indicating faulty generation or fuel telemetry.
+  2. **`CO2_NOT_REPORTED`** (`severity: "WARN"`): Heat input above the same threshold, but no CO₂ value at all (`co2MassTons === null`): a reporting gap rather than an implausible measurement. All 6,105 such records in the committed database are of this kind.
+  3. **`PHANTOM_GENERATION`** (`severity: "ERROR"`): A generator produced electricity (`grossGenerationMWh > 0 MWh`), but recorded 0.0 hours of operating time (`operatingHours === 0`).
+  4. **`EXTREME_HEAT_RATE`** (`severity: "WARN"`): The calculated heat rate falls outside standard thermodynamic limits (< 5.0 or > 25.0 MMBtu/MWh: `heatRateMMBtuMWh < 5.0 || heatRateMMBtuMWh > 25.0`), indicating faulty generation or fuel telemetry.
 - **Why It’s Built This Way**: Isolates suspicious or corrupt data points into a dedicated review screen with human-friendly descriptions rather than silently corrupting fleet-wide averages.
 
 ---
@@ -559,7 +569,7 @@ The commit fetches again rather than reusing the preview, as the upload re-posts
 1. **Multi-year aggregation**: KPI cards, the explorer table, and the map sum `annual_records` across every year loaded — only the comparison modal scopes to the latest year per plant.
 2. **Column naming**: Drizzle uses camelCase (`stateCode`); SQLite stores snake_case (`state_code`). This doc uses Drizzle names in tables and SQL column names in query descriptions.
 3. **Seed vs sync**: CSV seeding populates plant/unit metadata; API retrieval populates emissions. Both are required for a fully enriched database.
-4. **Controls and program codes are per unit**: The specification lists SO₂/NOₓ/PM controls and program code with the annual record. CAMPD reports them per unit, so they live on `units`, and the latest import's values win.
+4. **Controls and program codes are per unit-year**: As the specification asks, they are stored on each `annual_records` row as reported that year; `units` keeps the latest values for display. Fuel and unit type remain per unit (latest import wins).
 5. **Last writer wins**: `annual_records.dataset_id` is the dataset that last wrote the record, and values are overwritten rather than versioned. Re-importing a year leaves the older dataset in the history as superseded.
 6. **Origin per unit-year only**: Facilities and units have no dataset link, so "Origin" (API or upload) is known for annual records only.
 7. **Granular data path**: Hourly–monthly slices hit the EPA API at request time; yearly slices aggregate local `annual_records`.

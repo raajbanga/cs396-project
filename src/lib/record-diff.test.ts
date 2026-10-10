@@ -47,3 +47,28 @@ void test("countDiff tallies statuses; recordKey is the natural key", () => {
   assert.deepEqual(counts, { inserted: 2, updated: 1, unchanged: 1 });
   assert.equal(recordKey(3, "1", 2025), "3:1:2025");
 });
+
+void test("diffRecord: null (not reported) differs from 0; per-year controls compare when present", () => {
+  assert.deepEqual(
+    diffRecord({ ...stored, steamLoadKlb: null }, stored).changes,
+    [{ field: "steamLoadKlb", database: 0, incoming: null }],
+  );
+  assert.equal(
+    diffRecord(
+      { ...stored, steamLoadKlb: null },
+      { ...stored, steamLoadKlb: null },
+    ).status,
+    "unchanged",
+  );
+  const withControls = {
+    ...stored,
+    so2Controls: "Wet Limestone",
+    programCode: "ARP",
+  };
+  assert.deepEqual(
+    diffRecord({ ...withControls, so2Controls: null }, withControls).changes,
+    [{ field: "so2Controls", database: "Wet Limestone", incoming: null }],
+  );
+  // A file without control columns (keys absent) doesn't compare them.
+  assert.equal(diffRecord(stored, withControls).status, "unchanged");
+});
