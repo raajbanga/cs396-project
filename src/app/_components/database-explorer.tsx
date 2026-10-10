@@ -18,7 +18,7 @@ import {
   Upload,
   Zap,
 } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { Badge, SourceBadge } from "~/components/ui/badge";
 import { Button, buttonClass } from "~/components/ui/button";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
@@ -33,7 +33,7 @@ import {
   type SortField,
   type UnitSortField,
 } from "~/lib/facility-filters";
-import { formatQuantity } from "~/lib/utils";
+import { formatNumber, formatQuantity } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { AuditLogsTable } from "./audit-logs-table";
 import { DataCoverage } from "./data-coverage";
@@ -175,7 +175,35 @@ export function DatabaseExplorer({
     { enabled: activeTab === "audit", staleTime: 0, refetchOnMount: "always" },
   );
 
+  const headerActions = [
+    {
+      label: "Retrieve",
+      title: "Retrieve data from the EPA CAMPD API",
+      icon: CloudDownload,
+      open: setIsRetrieveOpen,
+    },
+    {
+      label: "Download",
+      title: "Download data as CSV",
+      icon: FileDown,
+      open: setIsDownloadOpen,
+    },
+    {
+      label: "Upload",
+      title: "Upload a CSV or Excel file",
+      icon: Upload,
+      open: setIsUploadOpen,
+    },
+  ];
+
   const anomalyCount = stats?.totalAnomalies ?? 0;
+  const lastImportedAt = Math.max(
+    0,
+    ...(stats?.sources ?? []).map((s) => new Date(s.lastImportedAt).getTime()),
+  );
+  const lastImport = lastImportedAt
+    ? new Date(lastImportedAt).toLocaleDateString()
+    : undefined;
   const loadingValue = (value: string | number) => (stats ? value : "...");
 
   return (
@@ -183,56 +211,29 @@ export function DatabaseExplorer({
       <header className="border-edge/80 bg-canvas/85 sticky top-0 z-30 border-b backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="border-edge bg-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-xs">
+            <div className="border-edge bg-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
               <Zap className="h-4 w-4 text-emerald-400" />
             </div>
             <span className="text-fg truncate text-base font-semibold tracking-tight">
-              GridPulse
-            </span>
-            <Badge
-              variant="outline"
-              className="text-fg-muted hidden px-1.5 py-0 font-mono sm:inline-flex"
-            >
-              v1.0
-            </Badge>
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              epaData
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsRetrieveOpen(true)}
-              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
-              aria-label="Retrieve data from EPA CAMPD"
-            >
-              <CloudDownload className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Retrieve</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsDownloadOpen(true)}
-              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
-              aria-label="Download data as CSV"
-            >
-              <FileDown className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Download</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsUploadOpen(true)}
-              className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
-              aria-label="Upload data file"
-            >
-              <Upload className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Upload Data</span>
-              <span className="sm:hidden">Upload</span>
-            </Button>
+            {headerActions.map(({ label, title, icon: Icon, open }) => (
+              <Button
+                key={label}
+                variant="outline"
+                size="sm"
+                onClick={() => open(true)}
+                className="h-8 gap-1.5 px-2.5 text-xs font-medium sm:px-3 sm:text-sm"
+                aria-label={title}
+                title={title}
+              >
+                <Icon className="text-fg-muted h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{label}</span>
+              </Button>
+            ))}
             <SegmentedControl
               value={activeTab}
               onChange={setActiveTab}
@@ -271,11 +272,11 @@ export function DatabaseExplorer({
       <main className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-6 lg:px-8">
         <div>
           <h1 className="text-fg text-3xl font-bold tracking-tight sm:text-4xl">
-            US Power & Emissions Intelligence
+            EPA Power-Sector Emissions Data
           </h1>
           <p className="text-fg-muted mt-1 text-sm sm:text-base">
-            Continuous stack monitoring, regional grid reliability, and
-            automated physical sanity audits.
+            Retrieve, upload, validate, search, and download annual operating
+            and emissions data for U.S. power plants.
           </p>
         </div>
 
@@ -288,9 +289,7 @@ export function DatabaseExplorer({
             variant="card"
             label="Total Facilities"
             icon={<Building2 className="text-fg-muted h-4 w-4" />}
-            value={loadingValue(
-              formatQuantity(stats?.totalFacilities, "", { fallback: "0" }),
-            )}
+            value={loadingValue(formatNumber(stats?.totalFacilities))}
             subtext={`${stats?.totalStates ?? 52} states & territories`}
           />
           <StatTile
@@ -313,7 +312,7 @@ export function DatabaseExplorer({
           />
           <StatTile
             variant="card"
-            label="Annual CO₂"
+            label="CO₂, all years"
             icon={<Activity className="h-4 w-4 text-emerald-400" />}
             value={loadingValue(
               stats?.totalCo2Tons
@@ -321,7 +320,7 @@ export function DatabaseExplorer({
                 : "—",
             )}
             valueClassName="font-mono text-emerald-400"
-            subtext="Monitored stack mass"
+            subtext="Sum of every reporting year"
           />
           <StatTile
             variant="card"
@@ -329,7 +328,7 @@ export function DatabaseExplorer({
             icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
             value={loadingValue(anomalyCount)}
             valueClassName="font-mono text-amber-400"
-            subtext="Sanity violations"
+            subtext="Data-quality flags"
             className="col-span-2 sm:col-span-1"
           />
         </KpiStrip>
@@ -342,19 +341,26 @@ export function DatabaseExplorer({
               onResetFilters={resetFilters}
               filterOptions={filterOptions}
               actions={
-                <a
-                  href={exportUrl("search", {}, explorerQuery)}
-                  download
-                  className={buttonClass({
-                    variant: "outline",
-                    size: "sm",
-                    className: "bg-surface/60 h-8",
-                  })}
-                  title="Download every matching row as CSV"
-                >
-                  <FileDown className="text-fg-muted h-3.5 w-3.5" />
-                  CSV
-                </a>
+                <>
+                  <SourceBadge
+                    kind="db"
+                    detail={lastImport && `last import ${lastImport}`}
+                    className="hidden md:inline-flex"
+                  />
+                  <a
+                    href={exportUrl("search", {}, explorerQuery)}
+                    download
+                    className={buttonClass({
+                      variant: "outline",
+                      size: "sm",
+                      className: "bg-surface/60 h-8",
+                    })}
+                    title="Download every matching row as CSV"
+                  >
+                    <FileDown className="text-fg-muted h-3.5 w-3.5" />
+                    CSV
+                  </a>
+                </>
               }
               {...(activeTab === "units"
                 ? {

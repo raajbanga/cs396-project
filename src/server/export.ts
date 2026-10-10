@@ -8,7 +8,7 @@ import {
   type FilterInput,
   type UnitSortField,
 } from "~/lib/facility-filters";
-import { datasetStatus } from "~/lib/utils";
+import { datasetStatus, sourceLabel } from "~/lib/utils";
 import {
   datasetHistory,
   rankedFacilities,
@@ -82,6 +82,8 @@ const UNIT_YEAR_COLUMNS: CsvColumn<UnitYearRow & { auditFlags: string }>[] = [
   ["heat_rate_mmbtu_mwh", (r) => r.heatRateMMBtuMWh],
   ["audit_flags", (r) => r.auditFlags],
   ["dataset_id", (r) => r.datasetId],
+  ["origin", (r) => (r.origin ? sourceLabel(r.origin) : null)],
+  ["dataset_imported_at", (r) => r.datasetImportedAt],
 ];
 
 const FACILITY_COLUMNS: CsvColumn<FacilityRow>[] = [
@@ -112,6 +114,10 @@ const PROVENANCE_COLUMNS: CsvColumn<DatasetRow & { currentRecords: number }>[] =
     ["raw_record_count", (r) => r.rawRecordCount],
     ["valid_records", (r) => r.validRecords],
     ["flagged_records", (r) => r.flaggedRecords],
+    ["inserted_records", (r) => r.insertedRecords],
+    ["updated_records", (r) => r.updatedRecords],
+    ["unchanged_records", (r) => r.unchangedRecords],
+    ["dropped_records", (r) => r.droppedRecords],
     ["current_records", (r) => r.currentRecords],
     ["original_filename", (r) => r.originalFilename],
     ["archived_path", (r) => r.archivedPath],
@@ -194,7 +200,7 @@ export async function buildExport(params: URLSearchParams) {
       const scope = [eq(annualRecords.datasetId, dataset.id)];
       if (type === "valid") scope.push(unflagged);
       return {
-        filename: `gridpulse_${type}_${datasetLabel(dataset)}_${today()}.csv`,
+        filename: `epadata_${type}_${datasetLabel(dataset)}_${today()}.csv`,
         csv: await unitYearCsv(
           await selectUnitYears(NATURAL_ORDER, scope, true),
         ),
@@ -261,7 +267,7 @@ export async function buildExport(params: URLSearchParams) {
         ...new Set(issues.flatMap((i) => Object.keys(i.rawRow))),
       ];
       return {
-        filename: `gridpulse_invalid_${datasetLabel(dataset)}_${today()}.csv`,
+        filename: `epadata_invalid_${datasetLabel(dataset)}_${today()}.csv`,
         csv: toCsv(rows, [
           ["issue", (r) => r.issue],
           ["severity", (r) => r.severity],
@@ -287,7 +293,7 @@ export async function buildExport(params: URLSearchParams) {
       const ranked = filters.topN !== "ALL";
       if (tab === "units") {
         return {
-          filename: `gridpulse_search_units_${today()}.csv`,
+          filename: `epadata_search_units_${today()}.csv`,
           csv: await unitYearCsv(
             await selectUnitYears({ ...filters, ...unitTable }, [], false),
             ranked,
@@ -296,7 +302,7 @@ export async function buildExport(params: URLSearchParams) {
       }
       const rows = await selectFacilities({ ...filters, ...table });
       return {
-        filename: `gridpulse_search_facilities_${today()}.csv`,
+        filename: `epadata_search_facilities_${today()}.csv`,
         csv: toCsv(
           rows,
           ranked ? [rankColumn, ...FACILITY_COLUMNS] : FACILITY_COLUMNS,
@@ -324,7 +330,7 @@ export async function buildExport(params: URLSearchParams) {
           : undefined,
       )!;
       return {
-        filename: `gridpulse_selection_${today()}.csv`,
+        filename: `epadata_selection_${today()}.csv`,
         csv: await unitYearCsv(
           await selectUnitYears(NATURAL_ORDER, [scope], true),
         ),
@@ -339,7 +345,7 @@ export async function buildExport(params: URLSearchParams) {
         .groupBy(annualRecords.datasetId);
       const ownedById = new Map(owned.map((o) => [o.id, o.records]));
       return {
-        filename: `gridpulse_provenance${id ? `_${datasetLabel(rows[0]!)}` : ""}_${today()}.csv`,
+        filename: `epadata_provenance${id ? `_${datasetLabel(rows[0]!)}` : ""}_${today()}.csv`,
         csv: toCsv(
           rows.map((r) => ({ ...r, currentRecords: ownedById.get(r.id) ?? 0 })),
           PROVENANCE_COLUMNS,

@@ -39,6 +39,7 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   fetchGranularEmissionsForFacility,
   getCampdRetrievalOptions,
+  previewCampdAnnual,
   resolveCampdPublishedThrough,
   syncCampdAnnualEmissions,
 } from "~/server/campd/client";
@@ -103,6 +104,17 @@ const UNIT_SORT_COLUMNS = {
   co2Intensity: annualRecords.co2IntensityLbsMWh,
   heatRate: annualRecords.heatRateMMBtuMWh,
 } satisfies Record<UnitSortField, SQLiteColumn>;
+
+/** One page of `rows` plus the total from `total` (both built over the same ranked subquery and filter). */
+async function pageOf<T>(
+  rows: { limit(n: number): { offset(n: number): PromiseLike<T[]> } },
+  total: PromiseLike<{ total: number }[]>,
+  { page, pageSize }: { page: number; pageSize: number },
+) {
+  const totalCount = (await total)[0]?.total ?? 0;
+  const items = await rows.limit(pageSize).offset((page - 1) * pageSize);
+  return { items, totalCount, totalPages: Math.ceil(totalCount / pageSize) };
+}
 
 const pagingSchema = {
   page: z.number().min(1).default(1),
@@ -221,11 +233,24 @@ function unitConditions(f: FilterInput): SQL[] {
   return conditions;
 }
 
-/** Conditions on the unit-year record: reporting year and §8.2 min/max ranges. */
+/** `datasets.source` values behind each Origin filter choice. */
+const ORIGIN_SOURCES: Record<string, string[]> = {
+  API: ["API"],
+  UPLOAD: ["BULK_CSV", "BULK_EXCEL"],
+};
+
+/** Conditions on the unit-year record: reporting year, origin, and §8.2 min/max ranges. */
 function recordConditions(f: FilterInput): SQL[] {
   const conditions: SQL[] = [];
   const year = filterYear(f);
   if (year !== undefined) conditions.push(eq(annualRecords.year, year));
+  const sources = active(f.origin) ? ORIGIN_SOURCES[f.origin] : undefined;
+  if (sources) {
+    // Hand-qualified: this also runs inside single-table selects, where "id" would bind to annual_records.
+    conditions.push(
+      sql`"annual_records"."dataset_id" IN (SELECT "datasets"."id" FROM "datasets" WHERE "datasets"."source" IN ${sources})`,
+    );
+  }
   for (const { key } of UNIT_METRICS) {
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
@@ -339,6 +364,10 @@ export function rankedUnitYears(
       nameplateCapacityMW: units.nameplateCapacityMW,
       year: annualRecords.year,
       datasetId: annualRecords.datasetId,
+      origin: datasets.source,
+      datasetImportedAt: datasets.importedAt,
+      // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
+      datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
       operatingHours: annualRecords.operatingHours,
       grossGenerationMWh: annualRecords.grossGenerationMWh,
       heatInputMMBtu: annualRecords.heatInputMMBtu,
@@ -358,6 +387,7 @@ export function rankedUnitYears(
     .from(annualRecords)
     .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
     .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
+    .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
     .where(
       and(
         ...facilityConditions(input),
@@ -382,6 +412,10 @@ export const datasetHistory = (database: typeof Database) =>
       rawRecordCount: datasets.rawRecordCount,
       validRecords: datasets.validRecords,
       flaggedRecords: datasets.flaggedRecords,
+      insertedRecords: datasets.insertedRecords,
+      updatedRecords: datasets.updatedRecords,
+      unchangedRecords: datasets.unchangedRecords,
+      droppedRecords: datasets.droppedRecords,
       originalFilename: datasets.originalFilename,
       archivedPath: datasets.archivedPath,
       queryParams: datasets.queryParams,
@@ -471,29 +505,22 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, pageSize } = input;
       const { ranked, where, orderBy } = rankedFacilities(ctx.db, input);
-
-      const [countResult] = await ctx.db
-        .select({ total: count() })
-        .from(ranked)
-        .where(where);
-      const totalCount = countResult?.total ?? 0;
-      const rows = await ctx.db
-        .select()
-        .from(ranked)
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
+      const { items, ...page } = await pageOf(
+        ctx.db
+          .select()
+          .from(ranked)
+          .where(where)
+          .orderBy(...orderBy),
+        ctx.db.select({ total: count() }).from(ranked).where(where),
+        input,
+      );
       return {
-        items: rows.map(({ primaryFuelsRaw, ...row }) => ({
+        ...page,
+        items: items.map(({ primaryFuelsRaw, ...row }) => ({
           ...row,
           primaryFuels: primaryFuelsRaw?.split(",").filter(Boolean) ?? [],
         })),
-        totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
       };
     }),
 
@@ -506,28 +533,17 @@ export const facilitiesRouter = createTRPCRouter({
         sortDir: z.enum(["asc", "desc"]).default("desc"),
       }),
     )
-    .query(async ({ ctx, input }) => {
-      const { page, pageSize } = input;
+    .query(({ ctx, input }) => {
       const { ranked, where, orderBy } = rankedUnitYears(ctx.db, input);
-
-      const [countResult] = await ctx.db
-        .select({ total: count() })
-        .from(ranked)
-        .where(where);
-      const totalCount = countResult?.total ?? 0;
-      const items = await ctx.db
-        .select()
-        .from(ranked)
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
-      return {
-        items,
-        totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
-      };
+      return pageOf(
+        ctx.db
+          .select()
+          .from(ranked)
+          .where(where)
+          .orderBy(...orderBy),
+        ctx.db.select({ total: count() }).from(ranked).where(where),
+        input,
+      );
     }),
 
   getMapFacilities: publicProcedure
@@ -738,6 +754,75 @@ export const facilitiesRouter = createTRPCRouter({
     .query(({ ctx, input }) => datasetHistory(ctx.db).limit(input.limit)),
 
   getRetrievalOptions: publicProcedure.query(() => getCampdRetrievalOptions()),
+
+  /**
+   * §5 DB vs API, before anything is saved: CAMPD's rows for each year compared with the stored
+   * unit-years (new / changed / unchanged / dropped). Writes nothing; stops at the first error.
+   */
+  previewCampd: publicProcedure
+    .input(campdRetrievalSchema)
+    .query(async ({ input: { fromYear, toYear, ...filters } }) => {
+      const years: Awaited<ReturnType<typeof previewCampdAnnual>>[] = [];
+      for (let year = fromYear; year <= toYear; year++) {
+        try {
+          years.push(await previewCampdAnnual(year, filters));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { years, error: `${year}: ${message}` };
+        }
+      }
+      return { years, error: null };
+    }),
+
+  /**
+   * What the database already holds for a retrieval's years and filters, per year and owning dataset.
+   * Fuel, unit type, and control match local values by "contains" (local values are combos such as
+   * "Coal, Natural Gas"), so this approximates what CAMPD will match.
+   */
+  getLocalCoverage: publicProcedure
+    .input(campdRetrievalSchema)
+    .query(({ ctx, input }) => {
+      const {
+        fromYear,
+        toYear,
+        stateCode,
+        facilityId,
+        unitFuelType,
+        unitType,
+      } = input;
+      const control = input.controlTechnologies;
+      return ctx.db
+        .select({
+          year: annualRecords.year,
+          records: count(),
+          source: datasets.source,
+          importedAt: datasets.importedAt,
+          datasetName: datasets.name,
+        })
+        .from(annualRecords)
+        .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
+        .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
+        .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
+        .where(
+          and(
+            gte(annualRecords.year, fromYear),
+            lte(annualRecords.year, toYear),
+            active(stateCode) ? eq(facilities.stateCode, stateCode) : undefined,
+            facilityId?.length
+              ? inArray(annualRecords.facilityId, facilityId)
+              : undefined,
+            active(unitFuelType)
+              ? contains(units.primaryFuel, unitFuelType)
+              : undefined,
+            active(unitType) ? contains(units.unitType, unitType) : undefined,
+            active(control)
+              ? sql`(${contains(units.so2Controls, control)} OR ${contains(units.noxControls, control)} OR ${contains(units.pmControls, control)} OR ${contains(units.hgControls, control)})`
+              : undefined,
+          ),
+        )
+        .groupBy(annualRecords.year, annualRecords.datasetId)
+        .orderBy(desc(annualRecords.year));
+    }),
 
   /** Pulls CAMPD annual emissions for each year in the range, one dataset per year; stops at the first error. */
   retrieveCampd: publicProcedure

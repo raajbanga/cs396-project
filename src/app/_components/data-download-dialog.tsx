@@ -2,9 +2,11 @@
 
 import { useDeferredValue, useState } from "react";
 import { FileDown } from "lucide-react";
+import { SourceBadge } from "~/components/ui/badge";
 import { Button, buttonClass } from "~/components/ui/button";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
+import { Section } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Select } from "~/components/ui/select";
 import { exportUrl, type ExportType } from "~/lib/csv";
@@ -13,14 +15,9 @@ import {
   type ExplorerState,
   type FilterChangeHandler,
 } from "~/lib/facility-filters";
-import {
-  DATASET_SOURCE_LABELS,
-  datasetStatus,
-  formatQuantity,
-} from "~/lib/utils";
+import { datasetStatus, formatQuantity, sourceLabel } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { datasetParams } from "./data-retrieval-dialog";
-import { Section } from "./data-upload-dialog";
 import { FacilityFilterBar } from "./facility-filters";
 
 type FilterOptions = RouterOutputs["facilities"]["getFilterOptions"];
@@ -73,7 +70,7 @@ const DATASET_TYPES: readonly ExportType[] = [
 ];
 
 const datasetLabel = (d: DatasetRow) =>
-  `${d.reportingYear} · ${DATASET_SOURCE_LABELS[d.source] ?? d.source} · ${datasetParams(d)} · ${datasetStatus(d)} · ${d.importedAt.toLocaleDateString()}`;
+  `${d.reportingYear} · ${sourceLabel(d.source)} · ${datasetParams(d)} · ${datasetStatus(d)} · ${d.importedAt.toLocaleDateString()}`;
 
 /** §10 download page: what to export, dataset or filters, and the file format. */
 export function DataDownloadDialog({
@@ -165,6 +162,7 @@ export function DataDownloadDialog({
             Data Download
           </span>
           <DialogTitle>Download Data</DialogTitle>
+          <SourceBadge kind="db" />
           <p className="text-fg-muted text-xs sm:text-sm">
             Export datasets, search results, your comparison selection,
             data-quality reports, or provenance as CSV.

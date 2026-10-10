@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { FIELD_LABEL } from "~/components/ui/report";
 import { Select, toOptions } from "~/components/ui/select";
 import {
   ADVANCED_FILTER_KEYS,
@@ -99,9 +100,6 @@ function FilterSelects({
   );
 }
 
-const FIELD_LABEL =
-  "text-fg-muted text-[11px] font-medium tracking-wider uppercase";
-
 /** §8.1 unit/year filters, §8.2 min–max ranges, and §8.3 Top-N ranking; all AND together. */
 function AdvancedFilters({
   filters,
@@ -148,6 +146,15 @@ function AdvancedFilters({
       "PM control",
       toOptions(filterOptions?.pmControls, "Any PM control"),
     ],
+    [
+      "origin",
+      "Origin",
+      [
+        { value: "ALL", label: "Any origin" },
+        { value: "API", label: "EPA CAMPD API" },
+        { value: "UPLOAD", label: "File upload" },
+      ],
+    ],
   ] as const;
   const inputs = [
     ["facilityId", "Facility ID", "e.g. 1378", "numeric"],
@@ -155,7 +162,7 @@ function AdvancedFilters({
   ] as const;
 
   return (
-    <div className="border-edge/80 bg-surface/30 animate-in fade-in slide-in-from-top-1 space-y-4 rounded-xl border p-3 duration-150 sm:p-4">
+    <div className="border-edge/80 bg-surface/30 space-y-4 rounded-xl border p-3 sm:p-4">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {inputs.map(([key, label, placeholder, inputMode]) => (
           <label key={key} className="space-y-1">
@@ -365,7 +372,7 @@ export function FacilityFilterBar({
       </div>
 
       {isMobileFiltersOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 grid grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
+        <div className="grid grid-cols-2 gap-2 pt-1 sm:hidden">
           <FilterSelects drawer {...selectProps} />
         </div>
       )}

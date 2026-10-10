@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Clock, Flame, Gauge, Leaf, RefreshCw, Zap } from "lucide-react";
-import { Badge, CarbonIntensityBadge } from "~/components/ui/badge";
+import { CarbonIntensityBadge, SourceBadge } from "~/components/ui/badge";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
 import {
@@ -32,7 +32,7 @@ import { getCarbonIntensityTier } from "~/lib/plant-narrative";
 import { cn } from "~/lib/utils";
 import { api } from "~/trpc/react";
 
-export interface GranularPlant {
+interface GranularPlant {
   id: number;
   name: string;
   units?: { unitId: string; primaryFuel?: string | null }[];
@@ -136,24 +136,19 @@ export function GranularEmissionsWindow({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-fg text-sm font-semibold">
-                Temporal Emissions Telemetry
+                Emissions Over Time
               </span>
-              {data?.source === "EPA_CAMPD_API" && !data.error && (
-                <Badge variant="success" className="px-1.5 py-0">
-                  Live EPA CAMPD
-                </Badge>
-              )}
-              {data?.source === "LOCAL_RECORDS" && (
-                <Badge variant="outline" className="px-1.5 py-0">
-                  CEMS Store
-                </Badge>
+              {data && data.source !== "UNAVAILABLE" && (
+                <SourceBadge
+                  kind={data.source === "LOCAL_RECORDS" ? "db" : "api"}
+                />
               )}
               {isFetching && (
                 <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
               )}
             </div>
             <p className="text-fg-muted text-xs">
-              Filtering stack sensors for {plant.name} across time resolutions
+              {plant.name} by hour, day, week, month, or year
               {livePublishedThrough &&
                 ` · EPA published through ${livePublishedThrough}`}
             </p>
@@ -263,19 +258,17 @@ export function GranularEmissionsWindow({
 
       <DataPanel>
         {isLoading ? (
-          <InlineLoading
-            title={`Retrieving ${granularity} continuous monitoring data...`}
-          />
+          <InlineLoading title={`Loading ${granularity} data from EPA...`} />
         ) : items.length === 0 ? (
           <EmptyState
             title={
               data?.error
                 ? "CAMPD window unavailable"
-                : "No telemetry for this window"
+                : "No data for this window"
             }
             description={
               data?.error ??
-              "No stack telemetry returned by EPA CAMPD for this specific facility and time window."
+              "EPA CAMPD returned no records for this facility and time window."
             }
             className="border-0"
           />

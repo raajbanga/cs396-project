@@ -23,6 +23,7 @@ import {
   CarbonIntensityBadge,
   FuelBadge,
   PlantRoleBadge,
+  SourceBadge,
 } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
@@ -48,7 +49,7 @@ import {
 } from "~/lib/plant-narrative";
 import {
   cn,
-  DATASET_SOURCE_LABELS,
+  datasetOriginLabel,
   formatQuantity,
   uniqueStrings,
 } from "~/lib/utils";
@@ -345,12 +346,7 @@ function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
                             className="text-fg-muted pt-0.5 font-sans text-[10px]"
                             title={rec.dataset.name}
                           >
-                            {DATASET_SOURCE_LABELS[rec.dataset.source] ??
-                              rec.dataset.source}{" "}
-                            ·{" "}
-                            {new Date(
-                              rec.dataset.importedAt,
-                            ).toLocaleDateString()}
+                            {datasetOriginLabel(rec.dataset)}
                           </div>
                         )}
                       </TableCell>
@@ -425,12 +421,7 @@ export function FacilityDetailDialog({
 
   const panel = () => {
     if (isLoading || !facility || !story) {
-      return (
-        <InlineLoading
-          title="Loading comprehensive plant records..."
-          className="py-20"
-        />
-      );
+      return <InlineLoading title="Loading facility..." className="py-20" />;
     }
     switch (activeTab) {
       case "overview":
@@ -462,7 +453,7 @@ export function FacilityDetailDialog({
       open={facilityId !== null}
       onOpenChange={(open) => !open && onClose()}
       size="inspect"
-      closeLabel="Close Facility Dossier"
+      closeLabel="Close facility details"
       header={
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -483,6 +474,7 @@ export function FacilityDetailDialog({
               {facility?.sourceCategory && (
                 <Badge variant="secondary">{facility.sourceCategory}</Badge>
               )}
+              <SourceBadge kind="db" />
             </div>
             {facility && (
               <Button
@@ -497,9 +489,7 @@ export function FacilityDetailDialog({
             )}
           </div>
 
-          <DialogTitle>
-            {facility?.name ?? "Loading Facility Dossier..."}
-          </DialogTitle>
+          <DialogTitle>{facility?.name ?? "Loading facility..."}</DialogTitle>
 
           <div className="text-fg-muted mt-1 flex flex-wrap items-center gap-2 text-xs">
             <span>Owner: {cleanOwnerOperator(facility?.ownerOperator)}</span>
@@ -571,7 +561,7 @@ export function FacilityDetailDialog({
             }
             value={flagged ? `${auditLogs.length} Flagged` : "Clean"}
             valueClassName={flagged ? "text-amber-400" : "text-emerald-400"}
-            subtext="Thermodynamic audit"
+            subtext="Data-quality checks"
             className="col-span-2 sm:col-span-1"
           />
         </KpiStrip>

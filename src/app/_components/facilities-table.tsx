@@ -124,7 +124,7 @@ function FacilityTableRow({
       <TableCell className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className="text-fg truncate text-base font-semibold transition-colors group-hover:text-emerald-400"
+            className="text-fg truncate text-base font-semibold"
             title={fac.name}
           >
             {fac.name}

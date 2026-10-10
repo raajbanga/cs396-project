@@ -1,25 +1,27 @@
 "use client";
 
 import { Activity, Building2, Flame, Gauge, Scale, Zap } from "lucide-react";
-import { Badge, CarbonIntensityBadge, FuelBadge } from "~/components/ui/badge";
+import {
+  Badge,
+  CarbonIntensityBadge,
+  FuelBadge,
+  SourceBadge,
+} from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
+import { ReportTable, Section } from "~/components/ui/report";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import {
   cleanOwnerOperator,
   formatCountyShort,
   isOperatingStatus,
 } from "~/lib/plant-narrative";
-import { DATASET_SOURCE_LABELS, formatQuantity } from "~/lib/utils";
+import { datasetOriginLabel, formatNumber, formatQuantity } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 import { AuditPanel } from "./audit-logs-table";
-import { ReportTable, Section } from "./data-upload-dialog";
 
 type UnitDetail = NonNullable<RouterOutputs["facilities"]["getUnit"]>;
-
-const num = (value: number | null | undefined, digits = 0) =>
-  formatQuantity(value, "", { digits, fallback: "0" });
 
 /** §8.4 unit page: identification, fuel + controls, and the unit's history across every reporting year. */
 export function UnitDetailDialog({
@@ -98,6 +100,7 @@ export function UnitDetailDialog({
                 ORISPL #{unit?.facilityId ?? "…"} · UNIT {unit?.unitId ?? "…"}
               </span>
               {unit?.primaryFuel && <FuelBadge fuel={unit.primaryFuel} />}
+              <SourceBadge kind="db" />
               {unit?.operatingStatus && (
                 <Badge
                   variant={
@@ -119,7 +122,7 @@ export function UnitDetailDialog({
                   className="h-6 gap-1 px-2.5"
                 >
                   <Building2 className="h-3 w-3 text-emerald-400" />
-                  Facility Dossier
+                  Facility Details
                 </Button>
                 <Button
                   variant={isInCompare ? "secondary" : "outline"}
@@ -236,13 +239,13 @@ export function UnitDetailDialog({
                       </Badge>
                     )}
                   </span>,
-                  num(r.operatingHours),
-                  num(r.grossGenerationMWh),
-                  num(r.heatInputMMBtu),
-                  num(r.steamLoadKlb),
-                  num(r.co2MassTons),
-                  num(r.so2MassTons, 1),
-                  num(r.noxMassTons, 1),
+                  formatNumber(r.operatingHours),
+                  formatNumber(r.grossGenerationMWh),
+                  formatNumber(r.heatInputMMBtu),
+                  formatNumber(r.steamLoadKlb),
+                  formatNumber(r.co2MassTons),
+                  formatNumber(r.so2MassTons, 1),
+                  formatNumber(r.noxMassTons, 1),
                   <CarbonIntensityBadge
                     key="i"
                     intensity={r.co2IntensityLbsMWh}
@@ -250,9 +253,7 @@ export function UnitDetailDialog({
                   />,
                   formatQuantity(r.heatRateMMBtuMWh, "", { digits: 2 }),
                   <span key="s" className="font-sans" title={r.dataset?.name}>
-                    {r.dataset
-                      ? `${DATASET_SOURCE_LABELS[r.dataset.source] ?? r.dataset.source} · ${new Date(r.dataset.importedAt).toLocaleDateString()}`
-                      : "—"}
+                    {r.dataset ? datasetOriginLabel(r.dataset) : "—"}
                   </span>,
                 ])}
               />

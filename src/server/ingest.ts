@@ -1,11 +1,18 @@
-import { getTableColumns, inArray, sql } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import {
   deriveRates,
   evaluatePhysicalSanityRules,
+  TOTAL_KEYS,
   type EmissionTotals,
 } from "~/lib/emissions-metrics";
+import {
+  countDiff,
+  diffRecord,
+  emptyDiffCounts,
+  recordKey,
+} from "~/lib/record-diff";
 import { db } from "~/server/db";
 import {
   annualRecords,
@@ -92,17 +99,79 @@ export async function upsertUnits(
   return ids;
 }
 
-export interface AnnualRecordInput extends EmissionTotals {
+interface AnnualRecordInput extends EmissionTotals {
   facilityId: number;
   unitInternalId: string;
   year: number;
 }
 
-/** Upserts annual records with derived rates and replaces each record's physical-sanity audit flags. */
+const metricColumns = Object.fromEntries(
+  TOTAL_KEYS.map((k) => [k, annualRecords[k]]),
+) as { [K in (typeof TOTAL_KEYS)[number]]: (typeof annualRecords)[K] };
+
+/**
+ * Stored metrics of the unit-years in `years` (optionally only `facilityId`), keyed by
+ * recordKey(facilityId, unitId, year): what an upload or CAMPD retrieval is compared against.
+ */
+export async function storedRecords(years: number[], facilityId?: number[]) {
+  if (years.length === 0) return new Map<string, EmissionTotals>();
+  const rows = await db
+    .select({
+      facilityId: annualRecords.facilityId,
+      unitId: units.unitId,
+      year: annualRecords.year,
+      ...metricColumns,
+    })
+    .from(annualRecords)
+    .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
+    .where(
+      and(
+        inArray(annualRecords.year, years),
+        facilityId?.length
+          ? inArray(annualRecords.facilityId, facilityId)
+          : undefined,
+      ),
+    );
+  return new Map(
+    rows.map((r) => [recordKey(r.facilityId, r.unitId, r.year), r]),
+  );
+}
+
+/** Stored metrics by `${unitInternalId}_${year}` for the records about to be written. */
+async function storedByUnitYear(records: AnnualRecordInput[]) {
+  const stored = new Map<string, EmissionTotals>();
+  const ids = [...new Set(records.map((r) => r.unitInternalId))];
+  for (let i = 0; i < ids.length; i += 500) {
+    const rows = await db
+      .select({
+        unitInternalId: annualRecords.unitInternalId,
+        year: annualRecords.year,
+        ...metricColumns,
+      })
+      .from(annualRecords)
+      .where(inArray(annualRecords.unitInternalId, ids.slice(i, i + 500)));
+    for (const r of rows) stored.set(`${r.unitInternalId}_${r.year}`, r);
+  }
+  return stored;
+}
+
+/**
+ * Upserts annual records with derived rates and replaces each record's physical-sanity audit flags.
+ * Returns how the records compared with what was stored before (inserted / updated / unchanged).
+ */
 export async function upsertAnnualRecords(
   datasetId: string,
   records: AnnualRecordInput[],
 ) {
+  const stored = await storedByUnitYear(records);
+  const diff = records.reduce(
+    (counts, r) =>
+      countDiff(
+        counts,
+        diffRecord(r, stored.get(`${r.unitInternalId}_${r.year}`)).status,
+      ),
+    emptyDiffCounts(),
+  );
   const rows = records.map((r) => ({
     ...r,
     ...deriveRates(r),
@@ -142,6 +211,7 @@ export async function upsertAnnualRecords(
   );
 
   return {
+    ...diff,
     flaggedRecords: new Set(flags.map((f) => f.annualRecordId)).size,
     anomalyCount: flags.length,
   };

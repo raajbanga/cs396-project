@@ -86,7 +86,18 @@ void test("parser rejects invalid rows, skips duplicates, and reports audit flag
   assert.equal(parsed.rejectedRows[1]?.data["Facility ID"], "BAD_ID");
   assert.ok(canImport(parsed));
 
-  const report = buildImportReport(parsed, new Set(["12:U1:2025"]));
+  const stored = parsed.records.annual.find((r) => r.facilityId === 12)!;
+  const report = buildImportReport(
+    parsed,
+    new Map([
+      ["12:U1:2025", { ...stored, co2MassTons: stored.co2MassTons + 1 }],
+    ]),
+  );
+  assert.deepEqual(report.diff, { inserted: 1, updated: 1, unchanged: 0 });
+  assert.match(
+    report.duplicates.find((d) => d.rowNumber === 6)!.reason,
+    /update co2MassTons/,
+  );
   assert.deepEqual(
     report.anomalies.map((a) => a.flagType),
     ["ZERO_EMISSIONS_HIGH_HEAT", "EXTREME_HEAT_RATE"],

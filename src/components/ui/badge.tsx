@@ -3,6 +3,8 @@ import {
   Activity,
   Atom,
   Clock,
+  CloudDownload,
+  Database,
   Droplets,
   Factory,
   Flame,
@@ -49,6 +51,38 @@ export function Badge({
       )}
       {...props}
     />
+  );
+}
+
+/**
+ * Where the numbers on screen come from: the local SQLite database, or a live call to the EPA
+ * CAMPD API. `detail` adds context such as the last import date.
+ */
+export function SourceBadge({
+  kind,
+  detail,
+  className,
+}: {
+  kind: "db" | "api";
+  detail?: string;
+  className?: string;
+}) {
+  const db = kind === "db";
+  const Icon = db ? Database : CloudDownload;
+  return (
+    <Badge
+      variant={db ? "outline" : "sky"}
+      className={cn("font-normal", className)}
+      title={
+        db
+          ? "Read from the local SQLite database"
+          : "Fetched live from the EPA CAMPD API (not stored until saved)"
+      }
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {db ? "Local database" : "Live EPA API"}
+      {detail && <span className="opacity-75">· {detail}</span>}
+    </Badge>
   );
 }
 
