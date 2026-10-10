@@ -1,7 +1,11 @@
 "use client";
 
 import { Scale } from "lucide-react";
-import { CarbonIntensityBadge, FuelBadge } from "~/components/ui/badge";
+import {
+  CarbonIntensityBadge,
+  FuelBadge,
+  OriginBadge,
+} from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -18,7 +22,7 @@ import {
 } from "~/components/ui/table";
 import type { SortDirection, UnitSortField } from "~/lib/facility-filters";
 import { formatCountyShort } from "~/lib/plant-narrative";
-import { cn, formatQuantity } from "~/lib/utils";
+import { cn, formatNumber, formatQuantity } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 import { CompareCheckbox, RankBadge, SELECTED_ROW } from "./facilities-table";
 
@@ -41,34 +45,32 @@ const METRIC_COLUMNS: {
   {
     label: "Op. hrs",
     sort: "operatingHours",
-    render: (r) => formatQuantity(r.operatingHours, "", { fallback: "0" }),
+    render: (r) => formatNumber(r.operatingHours),
   },
   {
     label: "Gross MWh",
     sort: "grossGenerationMWh",
-    render: (r) => formatQuantity(r.grossGenerationMWh, "", { fallback: "0" }),
+    render: (r) => formatNumber(r.grossGenerationMWh),
   },
   {
     label: "Heat MMBtu",
     sort: "heatInputMMBtu",
-    render: (r) => formatQuantity(r.heatInputMMBtu, "", { fallback: "0" }),
+    render: (r) => formatNumber(r.heatInputMMBtu),
   },
   {
     label: "CO₂ t",
     sort: "co2MassTons",
-    render: (r) => formatQuantity(r.co2MassTons, "", { fallback: "0" }),
+    render: (r) => formatNumber(r.co2MassTons),
   },
   {
     label: "SO₂ t",
     sort: "so2MassTons",
-    render: (r) =>
-      formatQuantity(r.so2MassTons, "", { digits: 1, fallback: "0" }),
+    render: (r) => formatNumber(r.so2MassTons, 1),
   },
   {
     label: "NOₓ t",
     sort: "noxMassTons",
-    render: (r) =>
-      formatQuantity(r.noxMassTons, "", { digits: 1, fallback: "0" }),
+    render: (r) => formatNumber(r.noxMassTons, 1),
   },
 ];
 
@@ -134,6 +136,7 @@ export function UnitsTable({
               <SortableTableHead label="State" sort="state" {...head} />
               <SortableTableHead label="Unit" sort="unitId" {...head} />
               <SortableTableHead label="Year" sort="year" {...head} />
+              <TableHead>Origin</TableHead>
               {METRIC_COLUMNS.map((col) => (
                 <SortableTableHead
                   key={col.sort}
@@ -181,7 +184,7 @@ export function UnitsTable({
                     <div className="flex items-center">
                       {showRank && <RankBadge rank={r.rank} />}
                       <span
-                        className="text-fg truncate font-semibold transition-colors group-hover:text-emerald-400"
+                        className="text-fg truncate font-semibold"
                         title={r.facilityName}
                       >
                         {r.facilityName}
@@ -218,6 +221,9 @@ export function UnitsTable({
                   </TableCell>
                   <TableCell className="text-fg font-mono text-xs font-semibold">
                     {r.year}
+                  </TableCell>
+                  <TableCell>
+                    <OriginBadge {...r} />
                   </TableCell>
                   {METRIC_COLUMNS.map((col) => (
                     <TableCell

@@ -11,6 +11,7 @@ import {
   type ParsedUpload,
 } from "./data-import";
 import { PYTHON } from "./python";
+import { recordKey } from "./record-diff";
 
 const SCRIPT = path.resolve("scripts", "parse_import.py");
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "data-import-test-"));
@@ -86,7 +87,18 @@ void test("parser rejects invalid rows, skips duplicates, and reports audit flag
   assert.equal(parsed.rejectedRows[1]?.data["Facility ID"], "BAD_ID");
   assert.ok(canImport(parsed));
 
-  const report = buildImportReport(parsed, new Set(["12:U1:2025"]));
+  const stored = parsed.records.annual.find((r) => r.facilityId === 12)!;
+  const report = buildImportReport(
+    parsed,
+    new Map([
+      ["12:U1:2025", { ...stored, co2MassTons: stored.co2MassTons + 1 }],
+    ]),
+  );
+  assert.deepEqual(report.diff, { inserted: 1, updated: 1, unchanged: 0 });
+  assert.match(
+    report.duplicates.find((d) => d.rowNumber === 6)!.reason,
+    /update co2MassTons/,
+  );
   assert.deepEqual(
     report.anomalies.map((a) => a.flagType),
     ["ZERO_EMISSIONS_HIGH_HEAT", "EXTREME_HEAT_RATE"],
@@ -175,3 +187,45 @@ void test(
     assert.equal(parsed.records.units[0]?.nameplateCapacityMW, 153.1);
   },
 );
+
+void test("samples/ upload files give the report documented in samples/README.md", () => {
+  for (const file of ["csv", "xlsx"]) {
+    const parsed = parse(
+      path.resolve("samples", `annual-emissions-sample.${file}`),
+    );
+    assert.equal(parsed.targetSchema, "ANNUAL_EMISSIONS");
+    assert.equal(parsed.reportingYear, 2014);
+    assert.deepEqual(parsed.summary, {
+      totalRows: 25,
+      validCount: 21,
+      invalidCount: 3,
+      duplicateCount: 1,
+    });
+    assert.deepEqual(
+      parsed.rejectedRows.map((r) => [r.rowNumber, r.kind]),
+      [
+        [12, "REJECTED"],
+        [18, "REJECTED"],
+        [19, "REJECTED"],
+        [25, "DUPLICATE"],
+      ],
+    );
+
+    // Store rows 22 and 23 (Trimble County 2023) as the database has them: row 23's CO2 is 1,000 t lower in the file.
+    const annual = parsed.records.annual;
+    const stored = new Map(
+      annual
+        .filter((r) => r.year === 2023)
+        .map((r) => [
+          recordKey(r.facilityId, r.unitId, r.year),
+          r.rowNumber === 23 ? { ...r, co2MassTons: r.co2MassTons + 1000 } : r,
+        ]),
+    );
+    const report = buildImportReport(parsed, stored);
+    assert.deepEqual(report.diff, { inserted: 19, updated: 1, unchanged: 1 });
+    assert.deepEqual(
+      report.anomalies.map((a) => [a.rowNumber, a.flagType]),
+      [[16, "ZERO_EMISSIONS_HIGH_HEAT"]],
+    );
+  }
+});

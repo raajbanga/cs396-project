@@ -11,7 +11,12 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { Badge, CarbonIntensityBadge, FuelBadge } from "~/components/ui/badge";
+import {
+  Badge,
+  CarbonIntensityBadge,
+  FuelBadge,
+  SourceBadge,
+} from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { Dialog, DialogTitle } from "~/components/ui/dialog";
@@ -175,7 +180,7 @@ function matrixSections(
           ],
         ],
         [
-          "2. Thermodynamic & Carbon Intensity",
+          "2. Efficiency & Carbon Intensity",
           [
             {
               label: labelWithIcon(
@@ -369,9 +374,9 @@ function CompareMatrix({
                       size="sm"
                       onClick={() => onInspectPlant(plant.id)}
                       className="h-6 gap-1 px-2"
-                      title={`View full dossier for ${plant.name}`}
+                      title={`Open facility details for ${plant.name}`}
                     >
-                      Dossier
+                      Details
                       <ExternalLink className="h-2.5 w-2.5" />
                     </Button>
                     <Button
@@ -474,6 +479,7 @@ export function PlantComparisonDialog({
             <Badge variant="outline" className="font-mono">
               {plants.length} Selected
             </Badge>
+            <SourceBadge kind="db" />
             {cleanest && (
               <Badge variant="success">
                 <Award className="h-3 w-3" />
@@ -482,11 +488,11 @@ export function PlantComparisonDialog({
             )}
           </div>
           <DialogTitle className="text-lg sm:text-xl">
-            Cross-Facility Comparative Benchmark
+            Compare Facilities and Units
           </DialogTitle>
           <p className="text-fg-muted mt-0.5 text-xs">
-            Side-by-side performance audit across grid reliability,
-            thermodynamic capacity, and emission rates.
+            Side-by-side capacity, generation, emissions, and efficiency for the
+            latest reporting year.
           </p>
         </>
       }

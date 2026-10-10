@@ -3,6 +3,13 @@ import {
   evaluatePhysicalSanityRules,
   type EmissionTotals,
 } from "./emissions-metrics";
+import {
+  countDiff,
+  diffRecord,
+  emptyDiffCounts,
+  recordKey,
+  type DiffCounts,
+} from "./record-diff";
 
 /** Upload contract shared by the import dialog, `/api/upload`, and `scripts/parse_import.py`. */
 
@@ -99,8 +106,9 @@ export interface ParsedUpload {
   };
 }
 
-/** What the dialog previews: the parse report plus the sanity flags the import will log. */
+/** What the dialog previews: the parse report, the sanity flags the import will log, and how its records compare with the database. */
 export type ImportReport = Omit<ParsedUpload, "records" | "rejectedRows"> & {
+  diff: DiffCounts;
   anomalies: (ReturnType<typeof evaluatePhysicalSanityRules>[number] & {
     id: string;
     rowNumber: number;
@@ -117,6 +125,7 @@ export interface ImportResult {
   anomalies: number;
   issues: number;
   archivedFile: string | null;
+  diff: DiffCounts;
 }
 
 export const canImport = (
@@ -124,13 +133,17 @@ export const canImport = (
 ) => r.missingRequired.length === 0 && r.summary.validCount > 0;
 
 /**
- * Adds physical-sanity flags (the rules the import will log to `data_audit_logs`) and
- * facility-unit-year records that already exist in the database (`existingKeys`).
+ * Adds physical-sanity flags (the rules the import will log to `data_audit_logs`) and compares each
+ * annual record with the stored facility-unit-year (`stored`, keyed by recordKey): new, changed, or unchanged.
  */
 export function buildImportReport(
   { records, rejectedRows: _rejected, ...report }: ParsedUpload,
-  existingKeys: Set<string>,
+  stored: Map<string, EmissionTotals>,
 ): ImportReport {
+  const diffs = records.annual.map((r) => ({
+    r,
+    ...diffRecord(r, stored.get(recordKey(r.facilityId, r.unitId, r.year))),
+  }));
   const anomalies = records.annual.flatMap((r) =>
     evaluatePhysicalSanityRules({ ...r, ...deriveRates(r) }).map((flag) => ({
       ...flag,
@@ -143,6 +156,7 @@ export function buildImportReport(
 
   return {
     ...report,
+    diff: diffs.reduce((c, d) => countDiff(c, d.status), emptyDiffCounts()),
     anomalies,
     previewRows: report.previewRows.map((row) =>
       row.status === "valid" && flaggedRows.has(row.rowNumber)
@@ -151,16 +165,17 @@ export function buildImportReport(
     ),
     duplicates: [
       ...report.duplicates,
-      ...records.annual
-        .filter((r) =>
-          existingKeys.has(`${r.facilityId}:${r.unitId}:${r.year}`),
-        )
-        .map((r) => ({
+      ...diffs
+        .filter((d) => d.status !== "new")
+        .map(({ r, status, changes }) => ({
           rowNumber: r.rowNumber,
           facilityId: r.facilityId,
           unitId: r.unitId,
           year: r.year,
-          reason: "Already in the database; the import will update it",
+          reason:
+            status === "unchanged"
+              ? "Already in the database with the same values (unchanged)"
+              : `Already in the database; the import will update ${changes.map((c) => c.field).join(", ")}`,
         })),
     ],
   };

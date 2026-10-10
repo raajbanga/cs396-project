@@ -19,17 +19,21 @@ import {
 } from "~/lib/campd-reporting-period";
 import { deriveRates, sumTotals } from "~/lib/emissions-metrics";
 import {
+  AUDIT_SORT_FIELDS,
   campdRetrievalSchema,
+  DEFAULT_FILTERS,
   facilityFilterSchema,
   multiValueOptions,
   SORT_FIELDS,
-  UNIT_METRICS,
+  RANGE_FIELDS,
   UNIT_SORT_FIELDS,
+  type FacilityFilters,
   type FilterInput,
   type SortDirection,
   type SortField,
   type UnitSortField,
 } from "~/lib/facility-filters";
+import { parseDescription, type Metric } from "~/lib/describe-search";
 import {
   hasAirQualityControls,
   isOperatingStatus,
@@ -39,10 +43,12 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   fetchGranularEmissionsForFacility,
   getCampdRetrievalOptions,
+  previewCampdAnnual,
   resolveCampdPublishedThrough,
   syncCampdAnnualEmissions,
 } from "~/server/campd/client";
 import { type db as Database } from "~/server/db";
+import { llmFallback } from "~/server/llm-search";
 import {
   annualRecords,
   dataAuditLogs,
@@ -103,6 +109,17 @@ const UNIT_SORT_COLUMNS = {
   co2Intensity: annualRecords.co2IntensityLbsMWh,
   heatRate: annualRecords.heatRateMMBtuMWh,
 } satisfies Record<UnitSortField, SQLiteColumn>;
+
+/** One page of `rows` plus the total from `total` (both built over the same ranked subquery and filter). */
+async function pageOf<T>(
+  rows: { limit(n: number): { offset(n: number): PromiseLike<T[]> } },
+  total: PromiseLike<{ total: number }[]>,
+  { page, pageSize }: { page: number; pageSize: number },
+) {
+  const totalCount = (await total)[0]?.total ?? 0;
+  const items = await rows.limit(pageSize).offset((page - 1) * pageSize);
+  return { items, totalCount, totalPages: Math.ceil(totalCount / pageSize) };
+}
 
 const pagingSchema = {
   page: z.number().min(1).default(1),
@@ -218,15 +235,42 @@ function unitConditions(f: FilterInput): SQL[] {
   for (const [col, value] of containsFilters) {
     if (active(value)) conditions.push(contains(col, value));
   }
+  // Prefix match: "Retired" must not catch "Operating (Retired 04/15/2016)".
+  if (active(f.operatingStatus)) {
+    conditions.push(
+      sql`lower(${units.operatingStatus}) LIKE ${`${f.operatingStatus.trim().toLowerCase()}%`}`,
+    );
+  }
   return conditions;
 }
 
-/** Conditions on the unit-year record: reporting year and §8.2 min/max ranges. */
+/** `datasets.source` values behind each Origin filter choice. */
+const ORIGIN_SOURCES: Record<string, string[]> = {
+  API: ["API"],
+  UPLOAD: ["BULK_CSV", "BULK_EXCEL"],
+};
+
+/** Conditions on the unit-year record: reporting year, origin, and §8.2 min/max ranges. */
 function recordConditions(f: FilterInput): SQL[] {
   const conditions: SQL[] = [];
   const year = filterYear(f);
   if (year !== undefined) conditions.push(eq(annualRecords.year, year));
-  for (const { key } of UNIT_METRICS) {
+  const sources = active(f.origin) ? ORIGIN_SOURCES[f.origin] : undefined;
+  if (sources) {
+    // Hand-qualified: this also runs inside single-table selects, where "id" would bind to annual_records.
+    conditions.push(
+      sql`"annual_records"."dataset_id" IN (SELECT "datasets"."id" FROM "datasets" WHERE "datasets"."source" IN ${sources})`,
+    );
+  }
+  // Unit-years flagged with a given rule and/or severity (hand-qualified for the same reason).
+  const flag = active(f.auditFlag) ? f.auditFlag : undefined;
+  const severity = active(f.auditSeverity) ? f.auditSeverity : undefined;
+  if (flag ?? severity) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM "data_audit_logs" WHERE "data_audit_logs"."annual_record_id" = "annual_records"."id"${flag ? sql` AND "data_audit_logs"."flag_type" = ${flag}` : sql``}${severity ? sql` AND "data_audit_logs"."severity" = ${severity}` : sql``})`,
+    );
+  }
+  for (const { key } of RANGE_FIELDS) {
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
     if (min !== undefined) conditions.push(gte(annualRecords[key], min));
@@ -288,7 +332,7 @@ export function rankedFacilities(
         FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
       )`.as("carbon_intensity_lbs_mwh"),
       controlledUnitsCount: sql<number>`(
-        SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
+        SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND (TRIM(COALESCE("units"."so2_controls", '')) != '' OR TRIM(COALESCE("units"."nox_controls", '')) != '' OR TRIM(COALESCE("units"."pm_controls", '')) != '' OR TRIM(COALESCE("units"."hg_controls", '')) != '')
       )`.as("controlled_units_count"),
       totalOperatingHours: sql<number>`(
         SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
@@ -339,6 +383,10 @@ export function rankedUnitYears(
       nameplateCapacityMW: units.nameplateCapacityMW,
       year: annualRecords.year,
       datasetId: annualRecords.datasetId,
+      origin: datasets.source,
+      datasetImportedAt: datasets.importedAt,
+      // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
+      datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
       operatingHours: annualRecords.operatingHours,
       grossGenerationMWh: annualRecords.grossGenerationMWh,
       heatInputMMBtu: annualRecords.heatInputMMBtu,
@@ -358,6 +406,7 @@ export function rankedUnitYears(
     .from(annualRecords)
     .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
     .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
+    .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
     .where(
       and(
         ...facilityConditions(input),
@@ -382,6 +431,10 @@ export const datasetHistory = (database: typeof Database) =>
       rawRecordCount: datasets.rawRecordCount,
       validRecords: datasets.validRecords,
       flaggedRecords: datasets.flaggedRecords,
+      insertedRecords: datasets.insertedRecords,
+      updatedRecords: datasets.updatedRecords,
+      unchangedRecords: datasets.unchangedRecords,
+      droppedRecords: datasets.droppedRecords,
       originalFilename: datasets.originalFilename,
       archivedPath: datasets.archivedPath,
       queryParams: datasets.queryParams,
@@ -399,6 +452,67 @@ async function distinctValues(database: typeof Database, column: SQLiteColumn) {
     .where(notBlank(column))
     .orderBy(asc(column));
   return rows.map((r) => String(r.value));
+}
+
+/** Distinct values behind every explorer filter (also the description-search vocabulary). */
+async function filterOptions(database: typeof Database) {
+  const tokens = async (column: SQLiteColumn) =>
+    multiValueOptions(await distinctValues(database, column));
+  return {
+    states: await distinctValues(database, facilities.stateCode),
+    fuels: await tokens(units.primaryFuel),
+    nercRegions: await distinctValues(database, facilities.nercRegion),
+    counties: await database
+      .selectDistinct({
+        county: facilities.county,
+        stateCode: facilities.stateCode,
+      })
+      .from(facilities)
+      .where(notBlank(facilities.county))
+      .orderBy(asc(facilities.county), asc(facilities.stateCode))
+      .then((rows) =>
+        rows.map((r) => ({ county: r.county!, stateCode: r.stateCode })),
+      ),
+    years: (await distinctValues(database, annualRecords.year))
+      .map(Number)
+      .reverse(),
+    secondaryFuels: await tokens(units.secondaryFuel),
+    unitTypes: await tokens(units.unitType),
+    so2Controls: await tokens(units.so2Controls),
+    noxControls: await tokens(units.noxControls),
+    pmControls: await tokens(units.pmControls),
+    operatingStatuses: await tokens(units.operatingStatus),
+  };
+}
+
+/** "high"/"low": the 75th / 25th percentile of `metric` over unit-years matching the other filters (3 significant figures). */
+async function percentileOf(
+  database: typeof Database,
+  filters: FacilityFilters,
+  metric: Metric,
+  level: "high" | "low",
+) {
+  const base = {
+    ...filters,
+    [`${metric}Min`]: "",
+    [`${metric}Max`]: "",
+    topN: "ALL",
+    rankGroup: "ALL",
+  };
+  const { ranked } = rankedUnitYears(database, {
+    ...base,
+    sortBy: metric,
+    sortDir: "asc",
+  });
+  const [{ n } = { n: 0 }] = await database.select({ n: count() }).from(ranked);
+  if (n === 0) return undefined;
+  const [row] = await database
+    .select({ value: ranked[metric] })
+    .from(ranked)
+    .orderBy(asc(ranked[metric]))
+    .limit(1)
+    .offset(Math.floor((n - 1) * (level === "high" ? 0.75 : 0.25)));
+  return row ? Number(row.value.toPrecision(3)) : undefined;
 }
 
 export const facilitiesRouter = createTRPCRouter({
@@ -434,34 +548,54 @@ export const facilitiesRouter = createTRPCRouter({
     return { ...stats!, coverage, sources };
   }),
 
-  getFilterOptions: publicProcedure.query(async ({ ctx }) => {
-    const tokens = async (column: SQLiteColumn) =>
-      multiValueOptions(await distinctValues(ctx.db, column));
-    return {
-      states: await distinctValues(ctx.db, facilities.stateCode),
-      fuels: await tokens(units.primaryFuel),
-      nercRegions: await distinctValues(ctx.db, facilities.nercRegion),
-      counties: await ctx.db
-        .selectDistinct({
-          county: facilities.county,
-          stateCode: facilities.stateCode,
-        })
-        .from(facilities)
-        .where(notBlank(facilities.county))
-        .orderBy(asc(facilities.county), asc(facilities.stateCode))
-        .then((rows) =>
-          rows.map((r) => ({ county: r.county!, stateCode: r.stateCode })),
-        ),
-      years: (await distinctValues(ctx.db, annualRecords.year))
-        .map(Number)
-        .reverse(),
-      secondaryFuels: await tokens(units.secondaryFuel),
-      unitTypes: await tokens(units.unitType),
-      so2Controls: await tokens(units.so2Controls),
-      noxControls: await tokens(units.noxControls),
-      pmControls: await tokens(units.pmControls),
-    };
-  }),
+  getFilterOptions: publicProcedure.query(({ ctx }) => filterOptions(ctx.db)),
+
+  /**
+   * Rubric §6 description search: the rule-based parser, an optional LLM pass for leftover words,
+   * then "high"/"low" resolved to the 75th / 25th percentile of the metric within the other filters.
+   */
+  describeSearch: publicProcedure
+    .input(z.object({ text: z.string().trim().min(1).max(500) }))
+    .query(async ({ ctx, input }) => {
+      const vocab = await filterOptions(ctx.db);
+      const parsed = parseDescription(input.text, vocab);
+      const notes: string[] = [];
+      let via: "parser" | "parser + LLM" = "parser";
+      if (parsed.unrecognized.length) {
+        const llm = await llmFallback(input.text, parsed, vocab);
+        if (llm.ok && Object.keys(llm.filters).length) {
+          Object.assign(parsed.filters, llm.filters);
+          parsed.unrecognized = llm.unrecognized;
+          via = "parser + LLM";
+        } else if (!llm.ok) {
+          notes.push(llm.note);
+        }
+      }
+
+      const filters = { ...DEFAULT_FILTERS, ...parsed.filters };
+      let sort = parsed.sort;
+      for (const { metric, level } of parsed.qualitative) {
+        const threshold = await percentileOf(ctx.db, filters, metric, level);
+        if (threshold === undefined) {
+          notes.push(`No records to compare for "${level} ${metric}".`);
+          continue;
+        }
+        filters[`${metric}${level === "high" ? "Min" : "Max"}`] =
+          String(threshold);
+        sort ??= { by: metric, dir: level === "high" ? "desc" : "asc" };
+        notes.push(
+          `"${level}" = ${level === "high" ? "top" : "bottom"} 25% of unit-years matching the other filters.`,
+        );
+      }
+      return {
+        filters,
+        tab: parsed.tab,
+        sort,
+        unrecognized: parsed.unrecognized,
+        via,
+        notes,
+      };
+    }),
 
   getFacilities: publicProcedure
     .input(
@@ -471,29 +605,22 @@ export const facilitiesRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { page, pageSize } = input;
       const { ranked, where, orderBy } = rankedFacilities(ctx.db, input);
-
-      const [countResult] = await ctx.db
-        .select({ total: count() })
-        .from(ranked)
-        .where(where);
-      const totalCount = countResult?.total ?? 0;
-      const rows = await ctx.db
-        .select()
-        .from(ranked)
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
+      const { items, ...page } = await pageOf(
+        ctx.db
+          .select()
+          .from(ranked)
+          .where(where)
+          .orderBy(...orderBy),
+        ctx.db.select({ total: count() }).from(ranked).where(where),
+        input,
+      );
       return {
-        items: rows.map(({ primaryFuelsRaw, ...row }) => ({
+        ...page,
+        items: items.map(({ primaryFuelsRaw, ...row }) => ({
           ...row,
           primaryFuels: primaryFuelsRaw?.split(",").filter(Boolean) ?? [],
         })),
-        totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
       };
     }),
 
@@ -506,28 +633,17 @@ export const facilitiesRouter = createTRPCRouter({
         sortDir: z.enum(["asc", "desc"]).default("desc"),
       }),
     )
-    .query(async ({ ctx, input }) => {
-      const { page, pageSize } = input;
+    .query(({ ctx, input }) => {
       const { ranked, where, orderBy } = rankedUnitYears(ctx.db, input);
-
-      const [countResult] = await ctx.db
-        .select({ total: count() })
-        .from(ranked)
-        .where(where);
-      const totalCount = countResult?.total ?? 0;
-      const items = await ctx.db
-        .select()
-        .from(ranked)
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(pageSize)
-        .offset((page - 1) * pageSize);
-
-      return {
-        items,
-        totalCount,
-        totalPages: Math.ceil(totalCount / pageSize),
-      };
+      return pageOf(
+        ctx.db
+          .select()
+          .from(ranked)
+          .where(where)
+          .orderBy(...orderBy),
+        ctx.db.select({ total: count() }).from(ranked).where(where),
+        input,
+      );
     }),
 
   getMapFacilities: publicProcedure
@@ -706,20 +822,41 @@ export const facilitiesRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * Audits tab: physical-sanity flags matching the explorer filters (rule and severity apply to the
+   * flag itself), sorted and paged, with per-rule counts. Each row carries the values that tripped
+   * the rule and the dataset the flagged record came from.
+   */
   getAuditLogs: publicProcedure
-    .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
-    .query(({ ctx, input }) =>
-      ctx.db
+    .input(
+      facilityFilterSchema.extend({
+        ...pagingSchema,
+        sortBy: z.enum(AUDIT_SORT_FIELDS).default("year"),
+        sortDir: z.enum(["asc", "desc"]).default("desc"),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const flagged = ctx.db
         .select({
           id: dataAuditLogs.id,
           flagType: dataAuditLogs.flagType,
           severity: dataAuditLogs.severity,
           details: dataAuditLogs.details,
-          createdAt: dataAuditLogs.createdAt,
           year: annualRecords.year,
+          unitInternalId: annualRecords.unitInternalId,
           facilityId: annualRecords.facilityId,
           facilityName: facilities.name,
+          stateCode: facilities.stateCode,
           unitId: units.unitId,
+          heatInputMMBtu: annualRecords.heatInputMMBtu,
+          co2MassTons: annualRecords.co2MassTons,
+          grossGenerationMWh: annualRecords.grossGenerationMWh,
+          operatingHours: annualRecords.operatingHours,
+          heatRateMMBtuMWh: annualRecords.heatRateMMBtuMWh,
+          origin: datasets.source,
+          datasetImportedAt: datasets.importedAt,
+          // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
+          datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
         })
         .from(dataAuditLogs)
         .innerJoin(
@@ -728,9 +865,61 @@ export const facilitiesRouter = createTRPCRouter({
         )
         .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
         .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
-        .orderBy(desc(dataAuditLogs.createdAt))
-        .limit(input.limit),
-    ),
+        .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
+        .where(
+          and(
+            ...facilityConditions(input),
+            ...unitConditions(input),
+            // Rule/severity filter the flag rows directly, not "records with such a flag".
+            ...recordConditions({
+              ...input,
+              auditFlag: undefined,
+              auditSeverity: undefined,
+            }),
+            active(input.auditFlag)
+              ? eq(dataAuditLogs.flagType, input.auditFlag)
+              : undefined,
+            active(input.auditSeverity)
+              ? eq(dataAuditLogs.severity, input.auditSeverity)
+              : undefined,
+          ),
+        )
+        .as("flagged");
+
+      const summary = await ctx.db
+        .select({
+          flagType: flagged.flagType,
+          severity: flagged.severity,
+          count: count(),
+        })
+        .from(flagged)
+        .groupBy(flagged.flagType, flagged.severity)
+        .orderBy(desc(count()));
+      const total = summary.reduce((n, r) => n + r.count, 0);
+
+      const sortColumn = {
+        year: flagged.year,
+        severity: flagged.severity,
+        rule: flagged.flagType,
+        facility: flagged.facilityName,
+        source: flagged.datasetImportedAt,
+      }[input.sortBy];
+      const direction = input.sortDir === "asc" ? asc : desc;
+      const page = await pageOf(
+        ctx.db
+          .select()
+          .from(flagged)
+          .orderBy(
+            direction(sortColumn),
+            asc(flagged.facilityName),
+            asc(flagged.unitId),
+            asc(flagged.id),
+          ),
+        Promise.resolve([{ total }]),
+        input,
+      );
+      return { ...page, summary };
+    }),
 
   /** Retrieval history (§5): every dataset, newest first, with its parameters and counts. */
   getDatasets: publicProcedure
@@ -738,6 +927,75 @@ export const facilitiesRouter = createTRPCRouter({
     .query(({ ctx, input }) => datasetHistory(ctx.db).limit(input.limit)),
 
   getRetrievalOptions: publicProcedure.query(() => getCampdRetrievalOptions()),
+
+  /**
+   * §5 DB vs API, before anything is saved: CAMPD's rows for each year compared with the stored
+   * unit-years (new / changed / unchanged / dropped). Writes nothing; stops at the first error.
+   */
+  previewCampd: publicProcedure
+    .input(campdRetrievalSchema)
+    .query(async ({ input: { fromYear, toYear, ...filters } }) => {
+      const years: Awaited<ReturnType<typeof previewCampdAnnual>>[] = [];
+      for (let year = fromYear; year <= toYear; year++) {
+        try {
+          years.push(await previewCampdAnnual(year, filters));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { years, error: `${year}: ${message}` };
+        }
+      }
+      return { years, error: null };
+    }),
+
+  /**
+   * What the database already holds for a retrieval's years and filters, per year and owning dataset.
+   * Fuel, unit type, and control match local values by "contains" (local values are combos such as
+   * "Coal, Natural Gas"), so this approximates what CAMPD will match.
+   */
+  getLocalCoverage: publicProcedure
+    .input(campdRetrievalSchema)
+    .query(({ ctx, input }) => {
+      const {
+        fromYear,
+        toYear,
+        stateCode,
+        facilityId,
+        unitFuelType,
+        unitType,
+      } = input;
+      const control = input.controlTechnologies;
+      return ctx.db
+        .select({
+          year: annualRecords.year,
+          records: count(),
+          source: datasets.source,
+          importedAt: datasets.importedAt,
+          datasetName: datasets.name,
+        })
+        .from(annualRecords)
+        .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
+        .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
+        .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
+        .where(
+          and(
+            gte(annualRecords.year, fromYear),
+            lte(annualRecords.year, toYear),
+            active(stateCode) ? eq(facilities.stateCode, stateCode) : undefined,
+            facilityId?.length
+              ? inArray(annualRecords.facilityId, facilityId)
+              : undefined,
+            active(unitFuelType)
+              ? contains(units.primaryFuel, unitFuelType)
+              : undefined,
+            active(unitType) ? contains(units.unitType, unitType) : undefined,
+            active(control)
+              ? sql`(${contains(units.so2Controls, control)} OR ${contains(units.noxControls, control)} OR ${contains(units.pmControls, control)} OR ${contains(units.hgControls, control)})`
+              : undefined,
+          ),
+        )
+        .groupBy(annualRecords.year, annualRecords.datasetId)
+        .orderBy(desc(annualRecords.year));
+    }),
 
   /** Pulls CAMPD annual emissions for each year in the range, one dataset per year; stops at the first error. */
   retrieveCampd: publicProcedure

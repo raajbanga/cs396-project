@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import {
   buildImportReport,
@@ -12,18 +12,13 @@ import {
 } from "~/lib/data-import";
 import { PYTHON } from "~/lib/python";
 import { db } from "~/server/db";
-import {
-  annualRecords,
-  datasets,
-  type facilities,
-  importIssues,
-  units,
-} from "~/server/db/schema";
+import { datasets, type facilities, importIssues } from "~/server/db/schema";
 import {
   insertInChunks,
   insertMissingFacilities,
   upsertAnnualRecords,
   upsertFacilities,
+  storedRecords,
   upsertUnits,
 } from "~/server/ingest";
 
@@ -34,7 +29,7 @@ export async function parseUpload(
   fileName: string,
   bytes: Buffer,
 ): Promise<ParsedUpload> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gridpulse-upload-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "epadata-upload-"));
   const filePath = path.join(dir, `upload${path.extname(fileName)}`);
   try {
     await fs.writeFile(filePath, bytes);
@@ -58,21 +53,13 @@ export async function parseUpload(
 
 /** Validation report for the dialog, including annual records the import would overwrite. */
 export async function previewUpload(parsed: ParsedUpload) {
-  const years = [...new Set(parsed.records.annual.map((r) => r.year))];
-  const existing = years.length
-    ? await db
-        .select({
-          facilityId: annualRecords.facilityId,
-          unitId: units.unitId,
-          year: annualRecords.year,
-        })
-        .from(annualRecords)
-        .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
-        .where(inArray(annualRecords.year, years))
-    : [];
+  const { annual } = parsed.records;
   return buildImportReport(
     parsed,
-    new Set(existing.map((r) => `${r.facilityId}:${r.unitId}:${r.year}`)),
+    await storedRecords(
+      [...new Set(annual.map((r) => r.year))],
+      [...new Set(annual.map((r) => r.facilityId))],
+    ),
   );
 }
 
@@ -116,7 +103,7 @@ export async function importUpload(
     records.facilities.filter((f) => !f.name || !f.stateCode),
   );
   const unitIds = await upsertUnits(records.units);
-  const { flaggedRecords, anomalyCount } = await upsertAnnualRecords(
+  const { flaggedRecords, anomalyCount, ...diff } = await upsertAnnualRecords(
     datasetId,
     records.annual.map((r) => ({
       ...r,
@@ -125,7 +112,13 @@ export async function importUpload(
   );
   await db
     .update(datasets)
-    .set({ flaggedRecords })
+    .set({
+      flaggedRecords,
+      insertedRecords: diff.inserted,
+      updatedRecords: diff.updated,
+      unchangedRecords: diff.unchanged,
+      droppedRecords: rejectedRows.length,
+    })
     .where(eq(datasets.id, datasetId));
 
   if (original && archivedFile) {
@@ -143,5 +136,6 @@ export async function importUpload(
     anomalies: anomalyCount,
     issues: rejectedRows.length,
     archivedFile,
+    diff,
   };
 }

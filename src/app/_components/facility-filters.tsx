@@ -3,27 +3,176 @@
 import { useState, type ReactNode } from "react";
 import {
   ListFilter,
+  Loader2,
   RotateCcw,
   Search,
   SlidersHorizontal,
+  Sparkles,
   X,
 } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { FIELD_LABEL } from "~/components/ui/report";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Select, toOptions } from "~/components/ui/select";
 import {
   ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
   isFilterActive,
   TOP_N_OPTIONS,
-  UNIT_METRICS,
+  RANGE_FIELDS,
   type FacilityFilters,
   type FilterChangeHandler,
 } from "~/lib/facility-filters";
+import { AUDIT_RULES, AUDIT_SEVERITIES } from "~/lib/emissions-metrics";
 import { cn } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
 type FilterOptions = RouterOutputs["facilities"]["getFilterOptions"];
+type DescribeResult = Pick<
+  RouterOutputs["facilities"]["describeSearch"],
+  "unrecognized" | "via" | "notes"
+>;
+
+/** Description search (rubric §6) wiring for the search box; omitted where only name search applies. */
+export interface DescribeProps {
+  mode: "name" | "describe";
+  text: string;
+  onModeChange: (mode: "name" | "describe") => void;
+  onTextChange: (text: string) => void;
+  onSubmit: () => void;
+  isLoading: boolean;
+  result: DescribeResult | null;
+}
+
+const DESCRIBE_EXAMPLES = [
+  "coal units in Kentucky with high CO2",
+  "top 10 facilities by CO2 in 2024",
+  "gas units in TX under 50 tons SO2",
+  "top CO2-emitting facility in each state",
+];
+
+const CHIP_LABELS: Partial<Record<keyof FacilityFilters, string>> = {
+  stateCode: "State",
+  primaryFuel: "Fuel",
+  nercRegion: "Grid",
+  county: "County",
+  secondaryFuel: "Secondary fuel",
+  unitType: "Type",
+  so2Control: "SO₂ control",
+  noxControl: "NOₓ control",
+  pmControl: "PM control",
+  operatingStatus: "Status",
+  auditFlag: "Flag",
+  auditSeverity: "Severity",
+};
+
+const formatBound = (v: string) => {
+  const n = Number(v.replace(/,/g, ""));
+  return Number.isFinite(n) ? n.toLocaleString() : v;
+};
+
+/** One removable chip per active filter (range pairs and ranking combined), built from the filters themselves. */
+function activeChips(filters: FacilityFilters) {
+  const on = (key: keyof FacilityFilters) => isFilterActive(filters, key);
+  const chips: { label: string; keys: (keyof FacilityFilters)[] }[] = [];
+  if (on("search"))
+    chips.push({ label: `"${filters.search}"`, keys: ["search"] });
+  if (on("facilityId"))
+    chips.push({
+      label: `Facility #${filters.facilityId}`,
+      keys: ["facilityId"],
+    });
+  if (on("unitId"))
+    chips.push({ label: `Unit ${filters.unitId}`, keys: ["unitId"] });
+  for (const [key, label] of Object.entries(CHIP_LABELS) as [
+    keyof FacilityFilters,
+    string,
+  ][]) {
+    if (on(key))
+      chips.push({ label: `${label}: ${filters[key]}`, keys: [key] });
+  }
+  if (on("year")) chips.push({ label: `Year ${filters.year}`, keys: ["year"] });
+  if (on("origin")) {
+    chips.push({
+      label: `Origin: ${filters.origin === "API" ? "EPA API" : "Upload"}`,
+      keys: ["origin"],
+    });
+  }
+  for (const { key, label, unit } of RANGE_FIELDS) {
+    const min = on(`${key}Min`) ? formatBound(filters[`${key}Min`]) : undefined;
+    const max = on(`${key}Max`) ? formatBound(filters[`${key}Max`]) : undefined;
+    if (!min && !max) continue;
+    const range =
+      key === "year"
+        ? `${label} ${min ?? "…"}–${max ?? "…"}`
+        : min && max
+          ? `${label} ${min}–${max} ${unit}`
+          : `${label} ${min ? `≥ ${min}` : `≤ ${max}`} ${unit}`;
+    chips.push({ label: range, keys: [`${key}Min`, `${key}Max`] });
+  }
+  if (on("topN") || on("rankGroup")) {
+    chips.push({
+      label:
+        [on("topN") && `First ${filters.topN}`, on("rankGroup") && "per state"]
+          .filter(Boolean)
+          .join(" ") || "Ranked",
+      keys: ["topN", "rankGroup"],
+    });
+  }
+  return chips;
+}
+
+function FilterChips({
+  filters,
+  onFilterChange,
+  describe,
+}: {
+  filters: FacilityFilters;
+  onFilterChange: FilterChangeHandler;
+  describe?: DescribeProps;
+}) {
+  const chips = activeChips(filters);
+  const result = describe?.mode === "describe" ? describe.result : null;
+  if (chips.length === 0 && !result) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="text-fg-muted">
+        {result ? "Interpreted as:" : "Filters:"}
+      </span>
+      {chips.map(({ label, keys }) => (
+        <Badge key={keys.join()} variant="outline" className="gap-1 pr-1">
+          {label}
+          <button
+            type="button"
+            onClick={() =>
+              keys.forEach((k) => onFilterChange(k, DEFAULT_FILTERS[k]))
+            }
+            className="text-fg-muted hover:text-fg cursor-pointer rounded"
+            aria-label={`Remove ${label}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+      {result && chips.length === 0 && (
+        <span className="text-fg-muted italic">no filters</span>
+      )}
+      {result && result.unrecognized.length > 0 && (
+        <span className="text-amber-700 dark:text-amber-400">
+          Not understood: {result.unrecognized.join(", ")}
+        </span>
+      )}
+      {result && (
+        <span className="text-fg-muted" title={result.notes.join("\n")}>
+          via {result.via}
+          {result.notes.length > 0 && ` · ${result.notes.join(" · ")}`}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function FilterSelects({
   drawer,
@@ -99,20 +248,17 @@ function FilterSelects({
   );
 }
 
-const FIELD_LABEL =
-  "text-fg-muted text-[11px] font-medium tracking-wider uppercase";
-
 /** §8.1 unit/year filters, §8.2 min–max ranges, and §8.3 Top-N ranking; all AND together. */
 function AdvancedFilters({
   filters,
   filterOptions,
   onFilterChange,
-  isUnitView,
+  view,
 }: {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
   onFilterChange: FilterChangeHandler;
-  isUnitView: boolean;
+  view: FilterBarProps["itemLabel"];
 }) {
   const counties = [
     ...new Set(
@@ -148,6 +294,33 @@ function AdvancedFilters({
       "PM control",
       toOptions(filterOptions?.pmControls, "Any PM control"),
     ],
+    [
+      "operatingStatus",
+      "Operating status",
+      toOptions(filterOptions?.operatingStatuses, "Any status"),
+    ],
+    [
+      "auditFlag",
+      "Audit flag",
+      [
+        { value: "ALL", label: "Any (or none)" },
+        ...AUDIT_RULES.map((r) => ({ value: r.flagType, label: r.label })),
+      ],
+    ],
+    [
+      "auditSeverity",
+      "Flag severity",
+      toOptions(AUDIT_SEVERITIES, "Any severity"),
+    ],
+    [
+      "origin",
+      "Origin",
+      [
+        { value: "ALL", label: "Any origin" },
+        { value: "API", label: "EPA CAMPD API" },
+        { value: "UPLOAD", label: "File upload" },
+      ],
+    ],
   ] as const;
   const inputs = [
     ["facilityId", "Facility ID", "e.g. 1378", "numeric"],
@@ -155,7 +328,7 @@ function AdvancedFilters({
   ] as const;
 
   return (
-    <div className="border-edge/80 bg-surface/30 animate-in fade-in slide-in-from-top-1 space-y-4 rounded-xl border p-3 duration-150 sm:p-4">
+    <div className="border-edge/80 bg-surface/30 space-y-4 rounded-xl border p-3 sm:p-4">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {inputs.map(([key, label, placeholder, inputMode]) => (
           <label key={key} className="space-y-1">
@@ -187,7 +360,7 @@ function AdvancedFilters({
           Ranges per unit-year (min / max, inclusive)
         </span>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {UNIT_METRICS.map(({ key, label, unit }) => (
+          {RANGE_FIELDS.map(({ key, label, unit }) => (
             <div key={key} className="flex items-center gap-1.5 text-xs">
               <span className="text-fg-2 w-28 shrink-0">
                 {label} <span className="text-fg-muted">({unit})</span>
@@ -210,44 +383,46 @@ function AdvancedFilters({
         </div>
       </div>
 
-      <div className="border-edge/60 flex flex-wrap items-end gap-2.5 border-t pt-3">
-        <label className="space-y-1">
-          <span className={FIELD_LABEL}>Ranking</span>
-          <Select
-            value={filters.topN}
-            onValueChange={(value) => onFilterChange("topN", value)}
-            options={[
-              { value: "ALL", label: "All rows" },
-              ...TOP_N_OPTIONS.map((n) => ({
-                value: String(n),
-                label: `First ${n}`,
-              })),
-            ]}
-            size="toolbar"
-            className="w-32"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className={FIELD_LABEL}>Group</span>
-          <Select
-            value={filters.rankGroup}
-            onValueChange={(value) => onFilterChange("rankGroup", value)}
-            options={[
-              { value: "ALL", label: "Overall" },
-              { value: "state", label: "Per state" },
-            ]}
-            size="toolbar"
-            className="w-32"
-          />
-        </label>
-        <p className="text-fg-muted max-w-xl pb-1 text-xs">
-          Ranks follow the table sort: click a column header (↓ = Top-N, ↑ =
-          Bottom-N).{" "}
-          {isUnitView
-            ? "Each row is one unit in one reporting year."
-            : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
-        </p>
-      </div>
+      {view !== "flags" && (
+        <div className="border-edge/60 flex flex-wrap items-end gap-2.5 border-t pt-3">
+          <label className="space-y-1">
+            <span className={FIELD_LABEL}>Ranking</span>
+            <Select
+              value={filters.topN}
+              onValueChange={(value) => onFilterChange("topN", value)}
+              options={[
+                { value: "ALL", label: "All rows" },
+                ...TOP_N_OPTIONS.map((n) => ({
+                  value: String(n),
+                  label: `First ${n}`,
+                })),
+              ]}
+              size="toolbar"
+              className="w-32"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className={FIELD_LABEL}>Group</span>
+            <Select
+              value={filters.rankGroup}
+              onValueChange={(value) => onFilterChange("rankGroup", value)}
+              options={[
+                { value: "ALL", label: "Overall" },
+                { value: "state", label: "Per state" },
+              ]}
+              size="toolbar"
+              className="w-32"
+            />
+          </label>
+          <p className="text-fg-muted max-w-xl pb-1 text-xs">
+            Ranks follow the table sort: click a column header (↓ = Top-N, ↑ =
+            Bottom-N).{" "}
+            {view === "unit-years"
+              ? "Each row is one unit in one reporting year."
+              : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -260,6 +435,19 @@ function CountBubble({ count }: { count: number }) {
   );
 }
 
+interface FilterBarProps {
+  filters: FacilityFilters;
+  filterOptions?: FilterOptions;
+  onFilterChange: FilterChangeHandler;
+  onResetFilters: () => void;
+  totalMatching?: number;
+  itemLabel: "facilities" | "unit-years" | "flags";
+  isLoading: boolean;
+  /** Extra controls beside the result count, e.g. a CSV download. */
+  actions?: ReactNode;
+  describe?: DescribeProps;
+}
+
 export function FacilityFilterBar({
   filters,
   filterOptions,
@@ -269,17 +457,8 @@ export function FacilityFilterBar({
   itemLabel,
   isLoading,
   actions,
-}: {
-  filters: FacilityFilters;
-  filterOptions?: FilterOptions;
-  onFilterChange: FilterChangeHandler;
-  onResetFilters: () => void;
-  totalMatching?: number;
-  itemLabel: "facilities" | "unit-years";
-  isLoading: boolean;
-  /** Extra controls beside the result count, e.g. a CSV download. */
-  actions?: ReactNode;
-}) {
+  describe,
+}: FilterBarProps) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter((key) =>
     isFilterActive(filters, key),
@@ -294,30 +473,86 @@ export function FacilityFilterBar({
     onFilterChange,
     onResetFilters,
   };
+  const isDescribing = describe?.mode === "describe";
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-64 md:w-72">
-            <Search className="text-fg-muted pointer-events-none absolute top-2.5 left-3 h-4 w-4" />
-            <Input
-              value={filters.search}
-              onChange={(e) => onFilterChange("search", e.target.value)}
-              placeholder="Search plant, operator, state..."
-              className="bg-surface/60 pr-8 pl-9"
+          {describe && (
+            <SegmentedControl
+              value={describe.mode}
+              onChange={describe.onModeChange}
+              options={[
+                {
+                  value: "name",
+                  label: "Name",
+                  title: "Search by plant, operator, or county name",
+                },
+                {
+                  value: "describe",
+                  label: "Describe",
+                  title: "Describe what you want in plain English",
+                },
+              ]}
+              className="h-9 items-center"
             />
-            {filters.search && (
+          )}
+          {isDescribing ? (
+            <form
+              className="relative w-full sm:w-96 lg:w-[28rem]"
+              onSubmit={(e) => {
+                e.preventDefault();
+                describe.onSubmit();
+              }}
+            >
+              {describe.isLoading ? (
+                <Loader2 className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 animate-spin text-emerald-400" />
+              ) : (
+                <Sparkles className="pointer-events-none absolute top-2.5 left-3 h-4 w-4 text-emerald-400" />
+              )}
+              <Input
+                value={describe.text}
+                onChange={(e) => describe.onTextChange(e.target.value)}
+                placeholder={`e.g. ${DESCRIBE_EXAMPLES[0]}`}
+                aria-label="Describe what you want to find"
+                list="describe-examples"
+                className="bg-surface/60 pr-16 pl-9"
+              />
+              <datalist id="describe-examples">
+                {DESCRIBE_EXAMPLES.map((ex) => (
+                  <option key={ex} value={ex} />
+                ))}
+              </datalist>
               <button
-                type="button"
-                onClick={() => onFilterChange("search", "")}
-                className="text-fg-muted hover:text-fg absolute top-2.5 right-2.5 cursor-pointer"
-                aria-label="Clear search"
+                type="submit"
+                disabled={!describe.text.trim() || describe.isLoading}
+                className="text-fg-muted hover:text-fg absolute top-1.5 right-1.5 cursor-pointer rounded px-2 py-1 text-xs font-medium disabled:opacity-40"
               >
-                <X className="h-4 w-4" />
+                Search
               </button>
-            )}
-          </div>
+            </form>
+          ) : (
+            <div className="relative w-full sm:w-64 md:w-72">
+              <Search className="text-fg-muted pointer-events-none absolute top-2.5 left-3 h-4 w-4" />
+              <Input
+                value={filters.search}
+                onChange={(e) => onFilterChange("search", e.target.value)}
+                placeholder="Search plant, operator, county..."
+                className="bg-surface/60 pr-8 pl-9"
+              />
+              {filters.search && (
+                <button
+                  type="button"
+                  onClick={() => onFilterChange("search", "")}
+                  className="text-fg-muted hover:text-fg absolute top-2.5 right-2.5 cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="hidden items-center gap-2 sm:flex">
             <FilterSelects drawer={false} {...selectProps} />
@@ -364,8 +599,14 @@ export function FacilityFilterBar({
         </div>
       </div>
 
+      <FilterChips
+        filters={filters}
+        onFilterChange={onFilterChange}
+        describe={describe}
+      />
+
       {isMobileFiltersOpen && (
-        <div className="animate-in fade-in slide-in-from-top-1 grid grid-cols-2 gap-2 pt-1 duration-150 sm:hidden">
+        <div className="grid grid-cols-2 gap-2 pt-1 sm:hidden">
           <FilterSelects drawer {...selectProps} />
         </div>
       )}
@@ -375,7 +616,7 @@ export function FacilityFilterBar({
           filters={filters}
           filterOptions={filterOptions}
           onFilterChange={onFilterChange}
-          isUnitView={itemLabel === "unit-years"}
+          view={itemLabel}
         />
       )}
     </div>

@@ -11,7 +11,7 @@ export default async function Home({
 }) {
   // §8.4: the explorer's tab, filters, sort, and page come from the URL (see explorerSearchParams).
   const initialState = parseExplorerParams(await searchParams);
-  const { tab, filters, table, unitTable } = initialState;
+  const { tab, filters, table, unitTable, auditTable } = initialState;
 
   await Promise.all([
     api.facilities.getStats.prefetch(),
@@ -21,6 +21,8 @@ export default async function Home({
     tab === "units" &&
       api.facilities.getUnitYears.prefetch({ ...unitTable, ...filters }),
     tab === "map" && api.facilities.getMapFacilities.prefetch(filters),
+    tab === "audit" &&
+      api.facilities.getAuditLogs.prefetch({ ...auditTable, ...filters }),
   ]);
 
   return (

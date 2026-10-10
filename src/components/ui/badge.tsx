@@ -3,6 +3,8 @@ import {
   Activity,
   Atom,
   Clock,
+  CloudDownload,
+  Database,
   Droplets,
   Factory,
   Flame,
@@ -16,7 +18,7 @@ import {
   getCarbonIntensityTier,
   type PlantRoleInfo,
 } from "~/lib/plant-narrative";
-import { cn } from "~/lib/utils";
+import { cn, datasetOriginLabel } from "~/lib/utils";
 
 const VARIANT_STYLES = {
   default: "bg-surface-2 text-fg border-edge",
@@ -49,6 +51,62 @@ export function Badge({
       )}
       {...props}
     />
+  );
+}
+
+/**
+ * Where the numbers on screen come from: the local SQLite database, or a live call to the EPA
+ * CAMPD API. `detail` adds context such as the last import date.
+ */
+export function SourceBadge({
+  kind,
+  detail,
+  className,
+}: {
+  kind: "db" | "api";
+  detail?: string;
+  className?: string;
+}) {
+  const db = kind === "db";
+  const Icon = db ? Database : CloudDownload;
+  return (
+    <Badge
+      variant={db ? "outline" : "sky"}
+      className={cn("font-normal", className)}
+      title={
+        db
+          ? "Read from the local SQLite database"
+          : "Fetched live from the EPA CAMPD API (not stored until saved)"
+      }
+    >
+      <Icon className="h-3 w-3 shrink-0" />
+      {db ? "Local database" : "Live EPA API"}
+      {detail && <span className="opacity-75">· {detail}</span>}
+    </Badge>
+  );
+}
+
+/** Which dataset wrote a unit-year: the CAMPD API or a file upload (date and dataset name on hover). */
+export function OriginBadge({
+  origin,
+  datasetImportedAt,
+  datasetName,
+}: {
+  origin: string | null;
+  datasetImportedAt: Date | null;
+  datasetName?: string | null;
+}) {
+  if (!origin || !datasetImportedAt) {
+    return <span className="text-fg-muted text-xs">—</span>;
+  }
+  const api = origin === "API";
+  return (
+    <Badge
+      variant={api ? "sky" : "purple"}
+      title={`${datasetOriginLabel({ source: origin, importedAt: datasetImportedAt })}${datasetName ? `\n${datasetName}` : ""}`}
+    >
+      {api ? "API" : "Upload"}
+    </Badge>
   );
 }
 

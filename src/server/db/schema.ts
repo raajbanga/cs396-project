@@ -100,6 +100,11 @@ export const datasets = sqliteTable("datasets", {
   rawRecordCount: integer("raw_record_count").default(0).notNull(),
   validRecords: integer("valid_records").default(0).notNull(),
   flaggedRecords: integer("flagged_records").default(0).notNull(),
+  // How the stored records compared with what the database held before this import (null = not tracked yet)
+  insertedRecords: integer("inserted_records"),
+  updatedRecords: integer("updated_records"),
+  unchangedRecords: integer("unchanged_records"),
+  droppedRecords: integer("dropped_records"), // rejected + duplicate source rows (listed in import_issues)
   originalFilename: text("original_filename"), // Uploaded file name (uploads only)
   archivedPath: text("archived_path"), // Copy of the original file under uploads/
   queryParams: text("query_params", { mode: "json" }).$type<
@@ -140,13 +145,14 @@ export const annualRecords = sqliteTable(
     so2MassTons: real("so2_mass_tons").default(0.0).notNull(),
     noxMassTons: real("nox_mass_tons").default(0.0).notNull(),
 
-    // Derived Metrics (PRD Section 1.2 & 3.3)
+    // Derived rates, computed on write by deriveRates (~/lib/emissions-metrics)
     co2IntensityLbsMWh: real("co2_intensity_lbs_mwh"), // (co2MassTons * 2000) / grossGenerationMWh
     heatRateMMBtuMWh: real("heat_rate_mmbtu_mwh"), // heatInputMMBtu / grossGenerationMWh
   },
   (t) => [
     uniqueIndex("annual_record_unit_year_idx").on(t.unitInternalId, t.year),
-    index("annual_record_facility_idx").on(t.facilityId),
+    // (facility, year) serves the per-facility year subqueries; with only (year, co2) SQLite scanned a whole year per facility.
+    index("annual_record_facility_year_idx").on(t.facilityId, t.year),
     index("annual_record_year_co2_idx").on(t.year, t.co2MassTons),
   ],
 );
@@ -171,7 +177,7 @@ export const annualRecordsRelations = relations(
 );
 
 /**
- * Data Audit Logs: Recorded anomalies and validation flags for annual records (PRD Section 3.3).
+ * Data Audit Logs: Recorded anomalies and validation flags for annual records.
  */
 export const dataAuditLogs = sqliteTable(
   "data_audit_logs",
