@@ -151,7 +151,8 @@ export const annualRecords = sqliteTable(
   },
   (t) => [
     uniqueIndex("annual_record_unit_year_idx").on(t.unitInternalId, t.year),
-    index("annual_record_facility_idx").on(t.facilityId),
+    // (facility, year) serves the per-facility year subqueries; with only (year, co2) SQLite scanned a whole year per facility.
+    index("annual_record_facility_year_idx").on(t.facilityId, t.year),
     index("annual_record_year_co2_idx").on(t.year, t.co2MassTons),
   ],
 );

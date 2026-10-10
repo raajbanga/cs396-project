@@ -18,7 +18,8 @@
     "test": "node --import tsx --test src/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
     "validate": "npm run format:check && npm run check && npm test && npm run build",
-    "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle"
+    "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle",
+    "report": "tectonic -X compile report/main.tex"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

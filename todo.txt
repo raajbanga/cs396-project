@@ -496,16 +496,16 @@ D9 [x] Re-sync 2026 (EPA publishes more quarters) right before the demo.
    SQL); Retired = 31 unit-years (= SQL).
 
 ================================================================================
-STAGE E — README, SAMPLE DATA, DEMO SCRIPT
+STAGE E — README, SAMPLE DATA, DEMO SCRIPT  ✅ DONE 2026-10-09
 ================================================================================
-E1 [ ] README rewrite:
+E1 [x] README rewrite:
        - epaData name, live counts, seven tables, Stage B/C features
        - "Where data comes from" section: diagram + table of each view →
          local DB or live API
        - env vars incl. OPENROUTER_*
        - Next.js-instead-of-Flask note
        - DATABASE_BREAKDOWN.md synced
-E2 [ ] Committed sample upload samples/annual-emissions-sample.csv (~25
+E2 [x] Committed sample upload samples/annual-emissions-sample.csv (~25
        rows, real CAMPD headers). Deliberately includes:
        - 3 rejected rows (bad state "KZ", negative CO₂, missing unit ID)
        - 1 in-file duplicate
@@ -515,7 +515,7 @@ E2 [ ] Committed sample upload samples/annual-emissions-sample.csv (~25
        - the rest new
        Plus a small .xlsx copy to show Excel support. README + demo point to
        them.
-E3 [ ] presentation/demo-script.md: an ordered live workflow mapped to rubric rows,
+E3 [x] presentation/demo-script.md: an ordered live workflow mapped to rubric rows,
        with timings and the exact clicks/inputs:
        1. home → coverage
        2. Retrieve preview (DB vs API diff) → approve
@@ -529,9 +529,52 @@ E3 [ ] presentation/demo-script.md: an ordered live workflow mapped to rubric ro
        10. Download dialog (search, invalid, provenance)
        Also: a fallback plan if the network is down (everything except
        Retrieve and the granular view works offline).
+   Done notes:
+   - E1: README rewritten: committed-DB counts, spec-§ → UI table, sanity
+     rules, description-search algorithm, "Where the data comes from"
+     (mermaid + view → DB/API table), step-by-step setup, env table,
+     "Reproducing the results" (six URLs + expected counts, all re-checked
+     on a fresh db.sqlite copy via /api/export), Flask → Next.js mapping,
+     design assumptions, scripts, layout, credits (atlases are ISC, not BSD).
+     Tables: SIX (facilities, units, annual_records, datasets,
+     data_audit_logs, import_issues), not seven.
+   - Bug caught in the old acceptance check: "top-1 per state" needs
+     &sort=co2&dir=desc; the facility table defaults to name ↑, so without
+     it the count is 51 but each state's pick is alphabetical.
+   - DATABASE_BREAKDOWN.md synced: undefined GR node removed from §1,
+     stale "stored only" notes (unit dialog now shows program code,
+     retirement date, max HI rate, PM/Hg, steam), datasets notes, views
+     8–10 (Retrieve, Upload, Download), §5 rewritten (four ingestion paths +
+     preview/save sequence), matrix datasets row, caveats 4–6.
+   - E2: samples/annual-emissions-sample.{csv,xlsx} + samples/README.md
+     (row-by-row manifest). Metrics are REAL CAMPD API rows (KY 2014 =
+     new, Trimble County 2023 = existing); unit attribute columns copied
+     from db.sqlite so the import changes no unit columns (units whose fuel
+     changed since 2014, e.g. Big Sandy BSU1, left out). The sanity-flag row
+     (Robert Reid RT 2014, 38,801.9 MMBtu, no CO₂) is unmodified EPA data.
+     Defects: rows 12 (no unit ID), 18 (KZ), 19 (negative CO₂), 23 (CO₂
+     −1,000 t → Changed), 25 (dup of row 4).
+   - Demo order changed: Upload BEFORE Retrieve. The upload's edited Trimble
+     2 record is what Retrieve (KY, facility 6071, 2023) then shows as
+     1 Changed (DB 4,098,943.863 → API 4,099,943.863); approving restores
+     EPA's value.
+   Verified (DB copies, real db.sqlite untouched):
+   - parse_import.py: CSV and XLSX give identical reports (25 / 21 valid /
+     3 rejected / 1 duplicate; 5 unmapped columns).
+   - /api/upload preview 19 new / 1 changed / 1 unchanged, 1 flag (row 16);
+     commit → dataset counts 19/1/1/4 dropped, 4 import_issues, invalid CSV
+     = 3 rejected + 1 duplicate + 1 flagged; Origin=Upload = 21; XLSX
+     re-upload = 21 unchanged.
+   - Retrieve preview/save restores Trimble 2 (updated 1, unchanged 7).
+   - Post-demo numbers used in the script: rubric sentence → CO₂ ≥
+     2,720,000, 109 rows (top row Paradise 3 2014, from the upload);
+     multi-constraint 25 / 8; top-1 per state 2024 = 51 (KY = Ghent);
+     Ghent unit 1 = 13 years (2014–2026).
+   NOT verified in a browser: the demo clicks themselves. Do one full
+   rehearsal with the script, then `git restore db.sqlite`.
 
 ================================================================================
-STAGE F — PROJECT REPORT (LaTeX, rubric §11, 20 pts)
+STAGE F — PROJECT REPORT (LaTeX, rubric §11, 20 pts)  ✅ DONE 2026-10-09
 ================================================================================
 The structure is fixed by docs/Submission Guidelines.pdf: exactly these 10
 numbered sections, in this order, with these titles.
@@ -541,12 +584,12 @@ via `listings` (TS/SQL/Python styles, line numbers, captions). Diagrams in
 TikZ. Build: `tectonic report/main.tex` (installed; no pdflatex), via a new
 `npm run report`. Commit sources + PDF under report/ (NOT docs/, which is
 gitignored).
-F1 [ ] Skeleton report/: main.tex, sections/01–10*.tex, figures/
+F1 [x] Skeleton report/: main.tex, sections/01–10*.tex, figures/
        (screenshots), refs.bib (EPA CAMPD API + master-data docs, CAMPD Custom
        Data Download, Next.js, tRPC, Drizzle, SQLite window functions, RFC
        4180, OpenRouter, Leaflet, D3, TopoJSON atlases). Title page: epaData,
        CS396 Phase 1, Raaj Banga & Arnav Bawankule, date.
-F2 [ ] Sections (guideline wording → our content):
+F2 [x] Sections (guideline wording → our content):
         1 Project description: the problem (CAMPD data is rich but hard to
           query or validate), intended users (students, analysts, regulators),
           objectives (requirements §2 items 1–7, 11–12), Phase 1 scope (data
@@ -613,15 +656,49 @@ F2 [ ] Sections (guideline wording → our content):
           course policy: what AI assisted with (code, docs, this report) and
           how output was reviewed.
        Appendices (optional): tRPC/API reference, export types, env vars, DDL.
-F2b[ ] Last line of the last page, bottom of page (e.g. \vfill then the line
+F2b[x] Last line of the last page, bottom of page (e.g. \vfill then the line
        at the end of §10 / the final page): "We used AI to help with this
        project."
-F3 [ ] Proofread pass:
+F3 [x] Proofread pass:
        - consistent terms (unit-year, dataset, facility)
        - figure/table refs resolve
        - no orphaned TODOs
        - all 10 guideline headings present verbatim
        - PDF builds cleanly
+
+   Done notes:
+   - report/main.tex (single file; the 10 sections were inlined and sections/
+     removed 2026-10-09), refs.bib, figures/ (10 screenshots, JPEG). 35 pages.
+   - Bibliography = peer-reviewed only (user request): Codd 1970, Gaffney
+     2022 (SQLite), Leis 2015 (window functions), Buneman 2001 (provenance),
+     Hyndman & Fan 1996 (quantiles), Damerau 1964 (edit distance), Bostock
+     2011 (D3), Bare 2011 (TRACI). Course spec + proposal no longer cited;
+     EPA data, create-t3-app, and the atlases are acknowledged in §10 prose
+     with URLs (guideline item 10 asks to cite datasets and reused code).
+     `npm run report` = tectonic -X compile report/main.tex. Builds with no
+     overfull boxes and no undefined references.
+   - TikZ: architecture, ER (all 6 tables, PK/FK, cardinalities), data flow.
+     Listings: record diff (TS), parse_value (Python), parser outline,
+     ranking SQL. Equations: percentile threshold, rates, 3 sanity rules.
+   - Screenshots: puppeteer-core (scratchpad) driving the real UI on DB copies
+     (upload → retrieve restore → searches → dialogs). Real db.sqlite untouched.
+   - Every number in the report re-derived: hand SQL (25/8/51/11/31/103,
+     P75 2,656,019 → 2,660,000, 2025 = 3,989/420), describe worked examples
+     run live, timings measured (prod build, median of 3).
+   - Found while testing → FIXED: year-filtered facility queries took 4–10 s
+     (planner used (year, co2) index per facility). Migration 0005 replaces
+     annual_record_facility_idx with (facility_id, year): ranking 9.5 s →
+     22 ms, results identical. Applied to db.sqlite (backup in scratchpad).
+   - Found → DOCUMENTED as known issues (not fixed): NULL CO₂ stored as 0
+     (most of the 6,105 ZERO_EMISSIONS flags; 2,637 have no gross load
+     either); compare dialog labels gross load "Net Generation"; 37
+     facilities lack coordinates (not on map); Dialog has no role="dialog" /
+     focus trap; upload Duplicates tab count ≠ tile (by design).
+   - Added test: samples/ CSV + XLSX give the documented report (39 tests).
+   - §9 written from proposal roles + git history only (Arnav: the import
+     feature f2897b5; Raaj: the rest). REVIEW WITH BOTH MEMBERS.
+   - §10 AI disclosure names Claude/Claude Code; final line "We used AI to
+     help with this project." sits at the bottom of the last page.
 
 ================================================================================
 STAGE G — PRESENTATION OUTLINE (rubric §10, 5 pts)
