@@ -18,7 +18,7 @@ import {
   getCarbonIntensityTier,
   type PlantRoleInfo,
 } from "~/lib/plant-narrative";
-import { cn } from "~/lib/utils";
+import { cn, datasetOriginLabel } from "~/lib/utils";
 
 const VARIANT_STYLES = {
   default: "bg-surface-2 text-fg border-edge",
@@ -82,6 +82,30 @@ export function SourceBadge({
       <Icon className="h-3 w-3 shrink-0" />
       {db ? "Local database" : "Live EPA API"}
       {detail && <span className="opacity-75">· {detail}</span>}
+    </Badge>
+  );
+}
+
+/** Which dataset wrote a unit-year: the CAMPD API or a file upload (date and dataset name on hover). */
+export function OriginBadge({
+  origin,
+  datasetImportedAt,
+  datasetName,
+}: {
+  origin: string | null;
+  datasetImportedAt: Date | null;
+  datasetName?: string | null;
+}) {
+  if (!origin || !datasetImportedAt) {
+    return <span className="text-fg-muted text-xs">—</span>;
+  }
+  const api = origin === "API";
+  return (
+    <Badge
+      variant={api ? "sky" : "purple"}
+      title={`${datasetOriginLabel({ source: origin, importedAt: datasetImportedAt })}${datasetName ? `\n${datasetName}` : ""}`}
+    >
+      {api ? "API" : "Upload"}
     </Badge>
   );
 }

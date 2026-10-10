@@ -310,6 +310,8 @@ export function DataRetrievalDialog({
           <EmptyState title="Nothing stored for these years and filters yet." />
         ) : (
           <ReportTable
+            sortable
+            sortKeys={coverage.map((c) => [undefined, undefined, c.importedAt])}
             head={["Year", "Stored unit-years", "Last written by"]}
             rows={coverage.map((c) => [
               c.year,
@@ -379,6 +381,7 @@ export function DataRetrievalDialog({
               </KpiStrip>
               {previewYears.length > 1 && (
                 <ReportTable
+                  sortable
                   head={[
                     "Year",
                     "Received",
@@ -416,6 +419,7 @@ export function DataRetrievalDialog({
                   />
                 ) : (
                   <ReportTable
+                    sortable
                     head={["Year", "Row", "Kind", "Reason"]}
                     rows={droppedRows.map((d) => [
                       d.year,
@@ -429,6 +433,15 @@ export function DataRetrievalDialog({
                 <EmptyState title={`No ${tab} records`} />
               ) : (
                 <ReportTable
+                  sortable
+                  sortKeys={previewRows.map((r) => [
+                    undefined,
+                    r.facilityName,
+                    undefined,
+                    undefined,
+                    undefined,
+                    r.changes.length,
+                  ])}
                   head={[
                     "Year",
                     "Facility",
@@ -519,6 +532,15 @@ export function DataRetrievalDialog({
           <EmptyState title="No datasets yet" />
         ) : (
           <ReportTable
+            sortable
+            sortKeys={history.map((d) => [
+              undefined,
+              undefined,
+              datasetParams(d),
+              d.importedAt,
+              ...Array<undefined>(6),
+              datasetStatus(d),
+            ])}
             head={[
               "Year",
               "Source",

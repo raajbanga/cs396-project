@@ -441,12 +441,12 @@ Accept:
   - CSV button exports exactly the interpreted search.
 
 ================================================================================
-STAGE D — SPEC CONFORMANCE + BUG FIXES (small)
+STAGE D — SPEC CONFORMANCE + BUG FIXES (small)  ✅ DONE 2026-10-10
 ================================================================================
 D1 [x] Retrieval dialog names its method (§9.2): "Method: EPA CAM API —
        apportioned annual emissions (/annual)". Hint: CAMPD Custom Data
        Download files → use Upload.
-D2 [ ] Home intro (§9.1): replace the marketing hero with a plain epaData
+D2 [x] Home intro (§9.1): replace the marketing hero with a plain epaData
        introduction:
        - purpose (one paragraph)
        - data sources (CAMPD API, CSV/Excel uploads; TRACI = Phase 2)
@@ -458,18 +458,42 @@ D3 [x] operatingStatus filter (units.operating_status, indexed):
 D4 [x] Year range yearMin/yearMax on annual_records.year: add Year to the
        existing range grid (same RANGE_KEYS pattern). The single Year select
        stays in the toolbar. Gives §8.3 "same unit 2015–2025" in the explorer.
-D5 [ ] Fix hasAirQualityControls (`??` → non-blank `||`). Make SQL
+D5 [x] Fix hasAirQualityControls (`??` → non-blank `||`). Make SQL
        controlledUnitsCount use notBlank() so the two agree; add a test.
-D6 [ ] Audits tab paginated: getAuditLogs({page, pageSize}) → {items,
+D6 [x] Audits tab paginated: getAuditLogs({page, pageSize}) → {items,
        totalCount} via A6's pageOf + the shared TablePagination. Replaces
        "latest 50".
-D7 [ ] Compare limit: replace window.alert() with an inline message in the
+D7 [x] Compare limit: replace window.alert() with an inline message in the
        compare dock (rubric R1 "user feedback").
-D8 [ ] Drop deployment leftovers: the Vercel/Lambda /tmp copy in
+D8 [x] Drop deployment leftovers: the Vercel/Lambda /tmp copy in
        src/server/db/index.ts and outputFileTracingIncludes in next.config.js.
        (~/package-lock.json, an empty stub, deleted 2026-10-09; that
        removes the build warning.)
-D9 [ ] Re-sync 2026 (EPA publishes more quarters) right before the demo.
+D9 [x] Re-sync 2026 (EPA publishes more quarters) right before the demo.
+   2026-10-10: `npm run sync:campd -- --year 2026` → 3,959 received, 0 new,
+   276 updated, 3,683 unchanged, 0 dropped (EPA revised values but added no
+   new 2026 unit-years). The previous 2026 dataset is now Superseded. Backup:
+   scratchpad db.before-d9.sqlite. Re-run once more on demo day if EPA
+   publishes another quarter.
+   Done notes:
+   - D1/D3/D4 shipped with Stages B/C.
+   - D2: plain intro paragraph (what epaData does, sources, Phase 2 note)
+     + numbered nav row Retrieve → Upload → Search → Download. Header
+     buttons reordered to the same workflow order.
+   - D5: hasAirQualityControls ignores blank strings; the SQL
+     controlledUnitsCount uses TRIM/COALESCE so the two agree; tests added.
+     Latent bug: the current DB has no blank control values, so no visible
+     count changed.
+   - D6: getAuditLogs({page, pageSize}) via pageOf + shared TablePagination
+     (25/page) → all 6,958 flags reachable over 279 pages (was newest 50).
+   - D7: no window.alert left. The compare dock shows "Max 4: remove one
+     first".
+   - D8: db/index.ts reduced to resolving relative file: URLs;
+     outputFileTracingIncludes removed. trpc/react's VERCEL_URL base-URL
+     helper (T3 boilerplate) left in.
+   Verified: validate green (36 tests); pages / audit / year-range /
+   status URLs → 200; year range fac 3 unit 1 2015–2025 = 11 rows (=
+   SQL); Retired = 31 unit-years (= SQL).
 
 ================================================================================
 STAGE E — README, SAMPLE DATA, DEMO SCRIPT

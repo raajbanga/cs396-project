@@ -64,6 +64,8 @@ export const facilityFilterSchema = z.object({
   topN: text,
   rankGroup: text, // "state" = rank within each state
   origin: text, // "API" | "UPLOAD": where the unit-year record came from
+  auditFlag: text, // physical-sanity rule (flag_type) the unit-year was flagged with
+  auditSeverity: text, // "ERROR" | "WARN"
   ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, text])) as Record<
     RangeKey,
     typeof text
@@ -89,6 +91,8 @@ export const DEFAULT_FILTERS = {
   topN: "ALL",
   rankGroup: "ALL",
   origin: "ALL",
+  auditFlag: "ALL",
+  auditSeverity: "ALL",
   ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, ""])) as Record<
     RangeKey,
     string
@@ -113,6 +117,23 @@ export const DEFAULT_TABLE_STATE = {
   pageSize: 10,
   sortBy: "name" as SortField,
   sortDir: "asc" as SortDirection,
+};
+
+/** Audits tab sort keys (server-side, the table is paged). */
+export const AUDIT_SORT_FIELDS = [
+  "year",
+  "severity",
+  "rule",
+  "facility",
+  "source",
+] as const;
+export type AuditSortField = (typeof AUDIT_SORT_FIELDS)[number];
+
+export const DEFAULT_AUDIT_TABLE_STATE = {
+  page: 1,
+  pageSize: 25,
+  sortBy: "year" as AuditSortField,
+  sortDir: "desc" as SortDirection,
 };
 
 export const DEFAULT_UNIT_TABLE_STATE = {
@@ -178,7 +199,23 @@ export interface ExplorerState {
   filters: FacilityFilters;
   table: typeof DEFAULT_TABLE_STATE;
   unitTable: typeof DEFAULT_UNIT_TABLE_STATE;
+  auditTable: typeof DEFAULT_AUDIT_TABLE_STATE;
 }
+
+/** The paged table behind each tab: its state key, defaults, and valid sort keys (shared by parse and serialize). */
+const TAB_TABLES = {
+  explorer: { key: "table", defaults: DEFAULT_TABLE_STATE, sorts: SORT_FIELDS },
+  units: {
+    key: "unitTable",
+    defaults: DEFAULT_UNIT_TABLE_STATE,
+    sorts: UNIT_SORT_FIELDS,
+  },
+  audit: {
+    key: "auditTable",
+    defaults: DEFAULT_AUDIT_TABLE_STATE,
+    sorts: AUDIT_SORT_FIELDS,
+  },
+} as const;
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -201,49 +238,41 @@ export function parseExplorerParams(params: Params): ExplorerState {
     if (v !== undefined) filters[key] = v;
   }
   const tab = oneOf(EXPLORER_TABS, get("tab")) ?? "explorer";
-  const paging = {
-    page: positive(get("page")) ?? 1,
-    pageSize:
-      [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
-      DEFAULT_TABLE_STATE.pageSize,
+  const state: ExplorerState = {
+    tab,
+    q: get("q") ?? "",
+    filters,
+    table: { ...DEFAULT_TABLE_STATE },
+    unitTable: { ...DEFAULT_UNIT_TABLE_STATE },
+    auditTable: { ...DEFAULT_AUDIT_TABLE_STATE },
   };
-  const sortDir = oneOf(["asc", "desc"] as const, get("dir"));
-  const sortBy = get("sort");
-  const table = { ...DEFAULT_TABLE_STATE };
-  const unitTable = { ...DEFAULT_UNIT_TABLE_STATE };
-  if (tab === "units") {
-    Object.assign(unitTable, paging, {
-      sortBy: oneOf(UNIT_SORT_FIELDS, sortBy) ?? unitTable.sortBy,
-      sortDir: sortDir ?? unitTable.sortDir,
-    });
-  } else {
-    Object.assign(table, paging, {
-      sortBy: oneOf(SORT_FIELDS, sortBy) ?? table.sortBy,
-      sortDir: sortDir ?? table.sortDir,
+  // Paging and sort params belong to the active tab's table (the map has none).
+  if (tab !== "map") {
+    const { key, defaults, sorts } = TAB_TABLES[tab];
+    Object.assign(state[key], {
+      page: positive(get("page")) ?? 1,
+      pageSize:
+        [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
+        defaults.pageSize,
+      sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
+      sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
     });
   }
-  return { tab, q: get("q") ?? "", filters, table, unitTable };
+  return state;
 }
 
 /** Query string for the explorer state, keeping only non-default values (the inverse of parseExplorerParams). */
-export function explorerSearchParams({
-  tab,
-  q,
-  filters,
-  table,
-  unitTable,
-}: ExplorerState) {
+export function explorerSearchParams(state: ExplorerState) {
+  const { tab, q, filters } = state;
   const params = new URLSearchParams();
   if (tab !== "explorer") params.set("tab", tab);
   if (q.trim()) params.set("q", q.trim());
   for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
     if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
   }
-  if (tab === "explorer" || tab === "units") {
-    const [current, defaults] =
-      tab === "units"
-        ? [unitTable, DEFAULT_UNIT_TABLE_STATE]
-        : [table, DEFAULT_TABLE_STATE];
+  if (tab !== "map") {
+    const { key, defaults } = TAB_TABLES[tab];
+    const current = state[key];
     if (current.sortBy !== defaults.sortBy) params.set("sort", current.sortBy);
     if (current.sortDir !== defaults.sortDir)
       params.set("dir", current.sortDir);
