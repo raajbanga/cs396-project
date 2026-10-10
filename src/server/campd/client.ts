@@ -40,15 +40,9 @@ import {
 } from "~/lib/record-diff";
 import { uniqueStrings } from "~/lib/utils";
 import { db } from "~/server/db";
+import { annualRecords, datasets, facilities, units } from "~/server/db/schema";
 import {
-  annualRecords,
-  datasets,
-  facilities,
-  importIssues,
-  units,
-} from "~/server/db/schema";
-import {
-  insertInChunks,
+  insertImportIssues,
   insertMissingFacilities,
   storedRecords,
   upsertAnnualRecords,
@@ -92,61 +86,27 @@ const pick = (row: CampdRow, ...keys: string[]) =>
     .map((k) => row[k])
     .find((v) => v !== undefined && v !== null && v !== "");
 
-/**
- * Field aliases across the CAMPD REST API (camelCase), snake_case, and bulk EPA
- * Custom Data Download (CDD) CSV headers.
- */
-const METRIC_ALIASES: Record<keyof EmissionTotals, string[]> = {
-  operatingHours: [
-    "opTime",
-    "sumOpTime",
-    "operatingTime",
-    "operatingHours",
-    "Operating Time",
-    "countOpTime",
-  ],
-  grossGenerationMWh: ["grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"],
-  heatInputMMBtu: ["heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"],
-  steamLoadKlb: ["steamLoad", "steamLoadKlb", "Steam Load (1000 lb)"],
-  co2MassTons: ["co2Mass", "co2MassTons", "CO2 (short tons)"],
-  so2MassTons: ["so2Mass", "so2MassTons", "SO2 (short tons)"],
-  noxMassTons: ["noxMass", "noxMassTons", "NOx (short tons)"],
+/** CAMPD apportioned-emissions fields per metric (annual/daily/monthly report sumOpTime, hourly opTime). */
+const METRIC_FIELDS: Record<keyof EmissionTotals, string[]> = {
+  operatingHours: ["sumOpTime", "opTime"],
+  grossGenerationMWh: ["grossLoad"],
+  heatInputMMBtu: ["heatInput"],
+  steamLoadKlb: ["steamLoad"],
+  co2MassTons: ["co2Mass"],
+  so2MassTons: ["so2Mass"],
+  noxMassTons: ["noxMass"],
 };
 
-const UNIT_ALIASES = {
-  unitType: ["unitType", "unit_type", "Unit Type"],
-  primaryFuel: [
-    "primaryFuelInfo",
-    "primaryFuel",
-    "primary_fuel",
-    "Primary Fuel Type",
-  ],
-  secondaryFuel: [
-    "secondaryFuelInfo",
-    "secondaryFuel",
-    "secondary_fuel",
-    "Secondary Fuel Type",
-  ],
-  so2Controls: [
-    "so2ControlInfo",
-    "so2Controls",
-    "so2_controls",
-    "SO2 Controls",
-  ],
-  noxControls: [
-    "noxControlInfo",
-    "noxControls",
-    "nox_controls",
-    "NOx Controls",
-  ],
-  pmControls: ["pmControlInfo", "pmControls", "pm_controls", "PM Controls"],
-  hgControls: ["hgControlInfo", "hgControls", "hg_controls", "Hg Controls"],
-  programCode: [
-    "programCodeInfo",
-    "programCode",
-    "program_code",
-    "Program Code",
-  ],
+/** CAMPD fields of the unit attributes reported with each row. */
+const UNIT_FIELDS = {
+  unitType: "unitType",
+  primaryFuel: "primaryFuelInfo",
+  secondaryFuel: "secondaryFuelInfo",
+  so2Controls: "so2ControlInfo",
+  noxControls: "noxControlInfo",
+  pmControls: "pmControlInfo",
+  hgControls: "hgControlInfo",
+  programCode: "programCodeInfo",
 };
 
 /** A row's metrics; null where CAMPD left the value out (`missingHours` stands in for absent hours). */
@@ -156,7 +116,7 @@ function readMetrics(
 ): ReportedTotals {
   const totals: ReportedTotals = { ...emptyTotals() };
   for (const key of TOTAL_KEYS) {
-    const n = parseNum(pick(row, ...METRIC_ALIASES[key]), Number.NaN);
+    const n = parseNum(pick(row, ...METRIC_FIELDS[key]), Number.NaN);
     totals[key] = Number.isNaN(n)
       ? key === "operatingHours"
         ? missingHours
@@ -167,24 +127,9 @@ function readMetrics(
 }
 
 const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
-  const str = (...keys: string[]) => toStr(pick(raw, ...keys));
-  const facilityId = Math.round(
-    parseNum(
-      pick(
-        raw,
-        "facilityId",
-        "facility_id",
-        "Facility ID (ORISPL)",
-        "Facility ID",
-      ),
-    ),
-  );
-  const unitId = str("unitId", "unit_id", "Unit ID");
-  const year = Math.round(
-    parseNum(
-      pick(raw, "year", "Year", "reportingYear", "opYear", "calendarYear"),
-    ),
-  );
+  const facilityId = Math.round(parseNum(raw.facilityId));
+  const unitId = toStr(raw.unitId);
+  const year = Math.round(parseNum(raw.year));
 
   if (!facilityId || !unitId || !year) {
     ctx.addIssue({
@@ -198,19 +143,15 @@ const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
     facilityId,
     unitId,
     year,
-    facilityName:
-      str("facilityName", "facility_name", "Facility Name") ??
-      `Facility #${facilityId}`,
-    stateCode: (str("stateCode", "state", "State") ?? "US")
-      .toUpperCase()
-      .slice(0, 2),
+    facilityName: toStr(raw.facilityName) ?? `Facility #${facilityId}`,
+    stateCode: (toStr(raw.stateCode) ?? "US").toUpperCase().slice(0, 2),
     metrics: readMetrics(raw),
     unit: Object.fromEntries(
-      Object.entries(UNIT_ALIASES).map(([field, keys]) => [
+      Object.entries(UNIT_FIELDS).map(([field, key]) => [
         field,
-        str(...keys),
+        toStr(raw[key]),
       ]),
-    ) as Record<keyof typeof UNIT_ALIASES, string | null>,
+    ) as Record<keyof typeof UNIT_FIELDS, string | null>,
   };
 });
 
@@ -288,7 +229,7 @@ async function fetchAllCampdPages(
 }
 
 /** A CAMPD row that wasn't stored: it failed validation or repeated a facility-unit-year. */
-export interface DroppedCampdRow {
+interface DroppedCampdRow {
   rowNumber: number;
   kind: "REJECTED" | "DUPLICATE";
   reason: string;
@@ -312,7 +253,7 @@ function annualQuery(year: number, filters: CampdFilters) {
  * validation, or repeat a facility-unit-year already seen in this run (the first is kept, as with
  * uploads), come back in `dropped` so they can be reported instead of silently discarded.
  */
-export async function fetchCampdAnnual(year: number, filters: CampdFilters) {
+async function fetchCampdAnnual(year: number, filters: CampdFilters) {
   const records = new Map<
     string,
     NormalizedCampdRecord & { rowNumber: number }
@@ -353,7 +294,7 @@ type FetchedCampdYear = Awaited<ReturnType<typeof fetchCampdAnnual>>;
 
 const PREVIEW_ROWS = 50;
 
-export interface CampdPreviewRow {
+interface CampdPreviewRow {
   year: number;
   facilityId: number;
   facilityName: string;
@@ -417,15 +358,7 @@ async function storeCampdAnnual(
   year: number,
   { records, dropped }: FetchedCampdYear,
 ) {
-  await insertInChunks(dropped, (chunk) =>
-    tx.insert(importIssues).values(
-      chunk.map(({ data, ...issue }) => ({
-        ...issue,
-        datasetId,
-        rawRow: data,
-      })),
-    ),
-  );
+  await insertImportIssues(tx, datasetId, dropped);
   await insertMissingFacilities(
     records.map((r) => ({
       id: r.facilityId,
@@ -676,7 +609,7 @@ interface GranularPlan {
 }
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const rowDate = (row: CampdRow) => toStr(row.date ?? row.opDate) ?? "";
+const rowDate = (row: CampdRow) => toStr(row.date) ?? "";
 const monthName = (m: number) =>
   new Date(Date.UTC(2000, m - 1)).toLocaleString("en-US", {
     month: "long",
@@ -875,9 +808,7 @@ export async function fetchGranularEmissionsForFacility(options: {
   const result = await fetchWithPublishedRetry(publishedThrough, plan.request);
   const rows = unitId
     ? result.items.filter(
-        (row) =>
-          toStr(row.unitId ?? row.unit_id)?.toLowerCase() ===
-          unitId.toLowerCase(),
+        (row) => toStr(row.unitId)?.toLowerCase() === unitId.toLowerCase(),
       )
     : result.items;
 

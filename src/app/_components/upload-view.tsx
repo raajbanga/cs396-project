@@ -1,18 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  CheckCircle2,
-  Database,
-  FileDown,
-  FileUp,
-  Loader2,
-} from "lucide-react";
-import { Badge, SourceBadge, type BadgeVariant } from "~/components/ui/badge";
+import { FileUp, Loader2 } from "lucide-react";
+import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button, buttonClass } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
-import { Dialog, DialogTitle } from "~/components/ui/dialog";
 import { EmptyState } from "~/components/ui/empty-state";
+import { PageTitle, PageView } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import { ErrorBanner, ReportTable, Section } from "~/components/ui/report";
@@ -26,7 +20,9 @@ import {
   type RowStatus,
 } from "~/lib/data-import";
 import { cn, formatNumber, formatQuantity } from "~/lib/utils";
+import { api } from "~/trpc/react";
 import { AuditTable } from "./audit-logs-table";
+import { DatasetHistory } from "./dataset-history";
 
 type Tab = "preview" | "quality" | "duplicates" | "existing" | "columns";
 
@@ -59,16 +55,9 @@ async function postUpload<T>(file: File, commit: boolean): Promise<T> {
   return json;
 }
 
-/** Upload → Python validation report → approve or cancel → stored records. */
-export function DataUploadDialog({
-  open,
-  onOpenChange,
-  onImported,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onImported: () => void;
-}) {
+/** §9 upload page: file → Python validation report → approve or cancel → stored records. */
+export function UploadView() {
+  const utils = api.useUtils();
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<ImportReport | null>(null);
@@ -116,65 +105,39 @@ export function DataUploadDialog({
   const approve = (approved: File) =>
     void run(async () => {
       setResult(await postUpload<ImportResult>(approved, true));
-      onImported();
+      void utils.facilities.invalidate();
     });
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset();
-        onOpenChange(next);
-      }}
-      size="compare"
-      closeLabel="Close"
+    <PageView
       header={
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="flex items-center gap-1 font-mono text-xs font-semibold text-emerald-400">
-              <Database className="h-3.5 w-3.5" />
-              Data Import
-            </span>
-            {report && (
-              <Badge variant="sky" className="font-mono">
-                {report.targetSchema.replaceAll("_", " ")}
-              </Badge>
-            )}
-          </div>
-          <DialogTitle>Import Power & Emissions Data</DialogTitle>
-          <p className="text-fg-muted text-xs sm:text-sm">
-            Upload a CSV or Excel file. Python reads it and checks it against
-            the project schema; nothing is saved until you approve the import.
-          </p>
-        </div>
+        <PageTitle lead="Python reads the file, matches its columns to the project schema, and checks every row for missing, invalid, and duplicate values. Nothing is saved until you approve the import; rejected rows are listed, never dropped silently.">
+          Upload a file
+        </PageTitle>
       }
       footer={
         result ? (
           <Button size="sm" onClick={reset}>
-            Upload Another File
+            Upload another file
           </Button>
         ) : report && file ? (
           <>
-            <span className="text-fg-muted truncate font-mono text-xs sm:mr-auto">
+            <span className="text-fg-muted truncate text-sm sm:mr-auto">
               {file.name} (
               {formatQuantity(file.size / 1024, "KB", { digits: 1 })})
             </span>
             <Button variant="ghost" size="sm" onClick={reset} disabled={busy}>
-              Cancel Import
+              Cancel import
             </Button>
             <Button
               size="sm"
               disabled={busy || !canImport(report)}
               onClick={() => approve(file)}
             >
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-3.5 w-3.5" />
-              )}
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {attributesOnly(report)
-                ? `Approve & Import ${formatNumber(report.recordCounts.units)} Units`
-                : `Approve & Import ${formatNumber(report.summary.validCount)} Records`}
+                ? `Approve and import ${formatNumber(report.recordCounts.units)} units`
+                : `Approve and import ${formatNumber(report.summary.validCount)} records`}
             </Button>
           </>
         ) : null
@@ -207,30 +170,52 @@ export function DataUploadDialog({
             setDragging(false);
             selectFile(e.dataTransfer.files[0]);
           }}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+          }}
           className={cn(
-            "border-edge bg-surface/30 flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed p-8 text-center transition-colors hover:border-emerald-500/60 sm:p-12",
-            dragging && "border-emerald-500 bg-emerald-500/10",
+            "border-edge bg-surface hover:border-fg-muted flex cursor-pointer flex-col items-center rounded-md border border-dashed px-6 py-14 text-center",
+            dragging && "border-primary bg-primary/5",
             busy && "pointer-events-none opacity-60",
           )}
         >
           {busy ? (
-            <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
+            <Loader2 className="text-fg-muted h-6 w-6 animate-spin" />
           ) : (
-            <FileUp className="h-8 w-8 text-emerald-400" />
+            <FileUp className="text-fg-muted h-6 w-6" />
           )}
-          <p className="text-fg mt-3 text-base font-semibold">
+          <p className="text-fg mt-3 font-medium">
             {busy
               ? "Reading and validating with Python…"
-              : "Drag a file here or click to browse"}
+              : "Drop a file here, or click to choose one"}
           </p>
-          <p className="text-fg-muted mt-1 max-w-md text-xs sm:text-sm">
-            CSV or Excel (.xlsx), up to 100 MB. CAMPD facility files fill{" "}
-            <code>facilities</code> and <code>units</code>; annual emissions
-            files also fill <code>annual_records</code>.
+          <dl className="text-fg-muted mt-3 grid max-w-lg grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-left text-sm">
+            <dt className="text-fg-2">Supported formats</dt>
+            <dd>CSV (.csv) and Excel (.xlsx), up to 100 MB</dd>
+            <dt className="text-fg-2">What it fills</dt>
+            <dd>
+              CAMPD facility files fill <code>facilities</code> and{" "}
+              <code>units</code>; annual emissions files also fill{" "}
+              <code>annual_records</code>.
+            </dd>
+          </dl>
+          <p className="text-fg-muted mt-3 text-xs">
+            Sample files for a first try are in the repository&apos;s{" "}
+            <code>samples/</code> folder.
           </p>
         </div>
       )}
-    </Dialog>
+
+      {!report && !result && (
+        <DatasetHistory
+          title="Past uploads"
+          uploads
+          note="Each upload is its own dataset. New / Updated / Unchanged compare it with what the database held before; Dropped rows are in its invalid-records report on the Download page."
+        />
+      )}
+    </PageView>
   );
 }
 
@@ -259,7 +244,7 @@ function ReportView({
           variant="card"
           label="Valid"
           value={formatNumber(summary.validCount)}
-          valueClassName="text-emerald-400"
+          valueClassName="text-success"
           subtext={
             attributesOnly(report) ? "Attributes kept" : "Will be imported"
           }
@@ -268,14 +253,14 @@ function ReportView({
           variant="card"
           label="Rejected"
           value={formatNumber(summary.invalidCount)}
-          valueClassName={summary.invalidCount ? "text-red-400" : undefined}
+          valueClassName={summary.invalidCount ? "text-danger" : undefined}
           subtext="Not imported"
         />
         <StatTile
           variant="card"
           label="Duplicates"
           value={formatNumber(summary.duplicateCount)}
-          valueClassName={summary.duplicateCount ? "text-amber-400" : undefined}
+          valueClassName={summary.duplicateCount ? "text-warn" : undefined}
           subtext={
             report.periodColumns.length
               ? "Same unit and period, skipped"
@@ -284,16 +269,14 @@ function ReportView({
         />
         <StatTile
           variant="card"
-          label="Audit Flags"
+          label="Audit flags"
           value={formatNumber(report.anomalies.length)}
-          valueClassName={
-            report.anomalies.length ? "text-amber-400" : undefined
-          }
+          valueClassName={report.anomalies.length ? "text-warn" : undefined}
           subtext="Imported and flagged"
         />
       </KpiStrip>
 
-      <div className="border-edge bg-surface/40 flex flex-wrap items-center gap-2 rounded-lg border p-3 text-xs">
+      <div className="border-edge flex flex-wrap items-center gap-2 border-y py-3 text-sm">
         {report.missingRequired.length > 0 ? (
           <Badge variant="destructive">
             Missing required columns:{" "}
@@ -303,8 +286,10 @@ function ReportView({
           </Badge>
         ) : (
           <>
-            <Database className="h-3.5 w-3.5 text-emerald-400" />
-            <span className="text-fg font-semibold">Saves to</span>
+            <span className="text-fg-2">
+              {report.targetSchema.replaceAll("_", " ").toLowerCase()} file,
+              saves to
+            </span>
             {report.destinationTables.map((table) => (
               <Badge key={table} variant="secondary" className="font-mono">
                 {table}
@@ -325,17 +310,16 @@ function ReportView({
               </span>
             )}
             {report.destinationTables.includes("annual_records") && (
-              <span className="text-fg-2 flex flex-wrap items-center gap-1.5 sm:ml-auto">
-                <SourceBadge kind="db" />
-                compared with stored records:
-                <strong className="text-emerald-400">
+              <span className="text-fg-2 sm:ml-auto">
+                Compared with the local database:{" "}
+                <strong className="text-fg font-medium">
                   {formatNumber(report.diff.inserted)} new
                 </strong>
-                ·
-                <strong className="text-amber-400">
+                ,{" "}
+                <strong className="text-fg font-medium">
                   {formatNumber(report.diff.updated)} changed
                 </strong>
-                · {formatNumber(report.diff.unchanged)} unchanged
+                , {formatNumber(report.diff.unchanged)} unchanged
               </span>
             )}
           </>
@@ -343,13 +327,14 @@ function ReportView({
       </div>
 
       <SegmentedControl
+        variant="tabs"
         value={tab}
         onChange={onTabChange}
         options={[
           { value: "preview", label: "Preview" },
           {
             value: "quality",
-            label: `Data Quality (${formatNumber(summary.invalidCount + report.anomalies.length)})`,
+            label: `Data quality (${formatNumber(summary.invalidCount + report.anomalies.length)})`,
           },
           {
             value: "duplicates",
@@ -498,11 +483,11 @@ function ReportView({
             <ReportTable
               sortable
               head={[
-                "File Column",
+                "File column",
                 "Table",
-                "Database Column",
+                "Database column",
                 "Required",
-                "Missing Values",
+                "Missing values",
               ]}
               rows={report.tableMappings.map((m) => [
                 m.fileColumn,
@@ -548,15 +533,15 @@ function ImportSuccess({ result }: { result: ImportResult }) {
         />
         <StatTile
           variant="card"
-          label="Annual Records"
+          label="Annual records"
           value={formatNumber(result.annualRecords)}
           subtext={`${formatNumber(result.diff.inserted)} new · ${formatNumber(result.diff.updated)} updated · ${formatNumber(result.diff.unchanged)} unchanged`}
         />
         <StatTile
           variant="card"
-          label="Audit Flags"
+          label="Audit flags"
           value={formatNumber(result.anomalies)}
-          subtext="See the Audits tab"
+          subtext="See Explore, Audit flags"
         />
       </KpiStrip>
       <div className="flex flex-wrap items-center gap-2">
@@ -566,11 +551,10 @@ function ImportSuccess({ result }: { result: ImportResult }) {
             download
             className={buttonClass({ variant: "outline", size: "sm" })}
           >
-            <FileDown className="h-3.5 w-3.5 text-red-400" />
             Download rejected rows ({formatNumber(result.issues)})
           </a>
         )}
-        <p className="text-fg-muted font-mono text-xs sm:ml-auto">
+        <p className="text-fg-muted text-xs sm:ml-auto">
           Dataset ID {result.datasetId}
         </p>
       </div>

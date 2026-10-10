@@ -42,8 +42,7 @@ export type RowStatus = "valid" | "flagged" | "duplicate" | "invalid";
 type Cell = string | number | null;
 
 /** An annual row: metrics null when blank; control/program keys present only when the file has those columns. */
-export interface ParsedAnnualRecord
-  extends ReportedTotals, Partial<RecordAttributes> {
+interface ParsedAnnualRecord extends ReportedTotals, Partial<RecordAttributes> {
   rowNumber: number;
   facilityId: number;
   unitId: string;

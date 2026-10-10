@@ -1,11 +1,7 @@
 "use client";
 
-import { Scale } from "lucide-react";
-import {
-  CarbonIntensityBadge,
-  FuelBadge,
-  OriginBadge,
-} from "~/components/ui/badge";
+import { use } from "react";
+import { FuelBadge, OriginBadge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -21,15 +17,20 @@ import {
   TableSkeleton,
 } from "~/components/ui/table";
 import type { SortDirection, UnitSortField } from "~/lib/facility-filters";
-import { formatCountyShort } from "~/lib/plant-narrative";
+import {
+  formatCountyShort,
+  getCarbonIntensityTier,
+} from "~/lib/plant-narrative";
 import { cn, formatNumber, formatQuantity } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
+import { DetailLink } from "./detail-link";
 import { CompareCheckbox, RankBadge, SELECTED_ROW } from "./facilities-table";
+import { SelectionContext } from "./selection-context";
 
 type UnitYearsPage = RouterOutputs["facilities"]["getUnitYears"];
 type UnitYearRow = UnitYearsPage["items"][number];
 
-const NUM = "text-right font-mono text-xs whitespace-nowrap";
+const NUM = "text-right tabular-nums whitespace-nowrap";
 
 /** Metric columns: header, sort key, and how the row value renders. */
 const METRIC_COLUMNS: {
@@ -87,7 +88,6 @@ export function UnitsTable({
   onSortChange,
   compareUnitIds,
   onToggleCompare,
-  onInspect,
   onPageChange,
   onPageSizeChange,
   onResetFilters,
@@ -103,39 +103,40 @@ export function UnitsTable({
   onSortChange: (field: UnitSortField) => void;
   compareUnitIds: string[];
   onToggleCompare: (unitInternalId: string) => void;
-  onInspect: (unitInternalId: string) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onResetFilters: () => void;
 }) {
+  const { inspect } = use(SelectionContext);
   const rows = data?.items ?? [];
   const head = { sortBy, sortDir, onSortChange };
 
   return (
-    <DataPanel className="border-edge/80 bg-surface/20 shadow-xs">
+    <DataPanel>
       {isLoading ? (
         <TableSkeleton rows={pageSize} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No unit-years match the active filter criteria."
-          className="border-0 py-14"
+          title="No unit-years match these filters."
+          description="Remove a filter above, or clear them all."
           action={
             <Button variant="outline" size="sm" onClick={onResetFilters}>
-              Clear All Filters
+              Clear filters
             </Button>
           }
         />
       ) : (
-        <Table>
+        <Table className="[&_td]:px-2 [&_th]:px-2">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10 text-center">
-                <Scale className="text-fg-muted mx-auto h-3.5 w-3.5" />
+              <TableHead className="w-10">
+                <span className="sr-only">Compare</span>
               </TableHead>
               <SortableTableHead label="Facility" sort="facility" {...head} />
-              <SortableTableHead label="State" sort="state" {...head} />
               <SortableTableHead label="Unit" sort="unitId" {...head} />
+              <SortableTableHead label="State" sort="state" {...head} />
               <SortableTableHead label="Year" sort="year" {...head} />
+              <TableHead>Fuel</TableHead>
               <TableHead>Origin</TableHead>
               {METRIC_COLUMNS.map((col) => (
                 <SortableTableHead
@@ -155,7 +156,7 @@ export function UnitsTable({
               <SortableTableHead
                 label="Heat rate"
                 sort="heatRate"
-                className="pr-4 text-right"
+                className="text-right"
                 {...head}
               />
             </TableRow>
@@ -167,11 +168,10 @@ export function UnitsTable({
               return (
                 <TableRow
                   key={r.id}
-                  className={cn(
-                    "group cursor-pointer",
-                    isSelected && SELECTED_ROW,
-                  )}
-                  onClick={() => onInspect(r.unitInternalId)}
+                  className={cn("cursor-pointer", isSelected && SELECTED_ROW)}
+                  onClick={() =>
+                    inspect({ kind: "unit", id: r.unitInternalId })
+                  }
                 >
                   <TableCell className="text-center">
                     <CompareCheckbox
@@ -180,22 +180,33 @@ export function UnitsTable({
                       onToggle={() => onToggleCompare(r.unitInternalId)}
                     />
                   </TableCell>
-                  <TableCell className="max-w-56 min-w-40">
-                    <div className="flex items-center">
+                  <TableCell className="max-w-48 min-w-36">
+                    <div className="truncate">
                       {showRank && <RankBadge rank={r.rank} />}
-                      <span
-                        className="text-fg truncate font-semibold"
-                        title={r.facilityName}
-                      >
+                      <span className="text-fg" title={r.facilityName}>
                         {r.facilityName}
                       </span>
                     </div>
                     <div className="text-fg-muted font-mono text-xs">
-                      #{r.facilityId}
+                      {r.facilityId}
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-36 min-w-24">
+                    <DetailLink
+                      view={{ kind: "unit", id: r.unitInternalId }}
+                      className="text-fg block font-medium"
+                    >
+                      Unit {r.unitId}
+                    </DetailLink>
+                    <div
+                      className="text-fg-muted truncate text-xs"
+                      title={r.unitType ?? undefined}
+                    >
+                      {r.unitType ?? "—"}
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
-                    <div className="text-fg-2 font-semibold">{r.stateCode}</div>
+                    <div className="text-fg-2">{r.stateCode}</div>
                     <div
                       className="text-fg-muted max-w-28 truncate text-xs"
                       title={r.county ?? undefined}
@@ -203,24 +214,15 @@ export function UnitsTable({
                       {formatCountyShort(r.county)}
                     </div>
                   </TableCell>
-                  <TableCell className="min-w-36">
-                    <div className="font-mono text-xs font-semibold text-emerald-400">
-                      Unit {r.unitId}
-                    </div>
-                    <div
-                      className="text-fg-muted max-w-44 truncate text-xs"
-                      title={r.unitType ?? undefined}
-                    >
-                      {r.unitType ?? "—"}
-                    </div>
-                    {r.primaryFuel && (
-                      <div className="pt-0.5">
-                        <FuelBadge fuel={r.primaryFuel} />
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-fg font-mono text-xs font-semibold">
+                  <TableCell className="text-fg tabular-nums">
                     {r.year}
+                  </TableCell>
+                  <TableCell>
+                    {r.primaryFuel ? (
+                      <FuelBadge fuel={r.primaryFuel} />
+                    ) : (
+                      <span className="text-fg-muted">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <OriginBadge {...r} />
@@ -230,19 +232,24 @@ export function UnitsTable({
                       key={col.sort}
                       className={cn(
                         NUM,
-                        col.sort === sortBy ? "text-fg font-semibold" : "",
+                        col.sort === sortBy ? "text-fg font-medium" : "",
                       )}
                     >
                       {col.render(r)}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right">
-                    <CarbonIntensityBadge
-                      intensity={r.co2IntensityLbsMWh}
-                      showValue
-                    />
+                  <TableCell
+                    className={NUM}
+                    title={
+                      r.co2IntensityLbsMWh != null
+                        ? getCarbonIntensityTier(r.co2IntensityLbsMWh)
+                            .description
+                        : undefined
+                    }
+                  >
+                    {formatNumber(r.co2IntensityLbsMWh)}
                   </TableCell>
-                  <TableCell className={cn(NUM, "text-fg-muted pr-4")}>
+                  <TableCell className={cn(NUM, "text-fg-muted")}>
                     {formatQuantity(r.heatRateMMBtuMWh, "", { digits: 2 })}
                   </TableCell>
                 </TableRow>

@@ -799,9 +799,9 @@ F2.14[ ] Optional rubric polish, not done: range filters are inclusive (≥/≤)
        strict operators. Pages are dialogs, not routes (argued in report §7).
 
 ================================================================================
-STAGE G — PRESENTATION OUTLINE (rubric §10, 5 pts)
+STAGE G — PRESENTATION OUTLINE (rubric §10, 5 pts)  ✅ DONE 2026-10-10
 ================================================================================
-G1 [ ] presentation/slides-outline.md, ~12 slides with speaker notes:
+G1 [x] presentation/slides-outline.md, ~12 slides with speaker notes:
        1. title + team
        2. problem
        3. architecture diagram (reuse F TikZ export)
@@ -817,6 +817,122 @@ G1 [ ] presentation/slides-outline.md, ~12 slides with speaker notes:
        12. demo hand-off
        Sized for 10–15 minutes total (≈7 min slides + ≈6 min live demo +
        buffer); demo-script timings (E3) add up to that.
+   Done 2026-10-10 (Q&A: .pptx, light stone theme matching the app, slides
+   follow demo-script.md, notes = full-sentence bullets + note-like subs per
+   slide/speaker, native diagrams, Geist fonts):
+   - epaData-slides.pptx (20 slides, now in report/): title, problem,
+     architecture, data flow (DB vs API), ER, implementation choices, demo
+     roadmap, one slide per demo step 1–10 (screenshot + bullets; SQL/URL
+     code blocks on 5 and 7), challenges, contributions, Q&A + next steps.
+     Speaker notes in each slide; same text in presentation/slides-outline.md.
+     Timing ≈ 5:30 slides + 7:30 demo = 13:00.
+   - Speaker/time only in the notes, not on slides. Presenting from the
+     laptop that has Geist installed (no fonts/ dir in the repo).
+   - Later the same day: presentation/ folder removed. Deck + outline live in
+     report/ (epaData-slides.pptx, slides-outline.md). demo-script.md was
+     merged into slides-outline.md (checklist, per-step clicks/inputs/numbers,
+     fallbacks) and deleted. Outline bullets split shorter; keywords defined
+     on first use. Screenshot copies (presentation/img) dropped; they are
+     embedded in the .pptx.
+   - demo-script.md total fixed: steps sum to 7:30, not 7:20.
+   - App palette changed with it: light = warm stone, higher contrast; dark =
+     lifted stone; accent emerald → blue-600/400 via semantic tokens
+     (primary/success/warn/danger/info in globals.css). Green kept only for
+     success states; map fuel colors unchanged. Report figures retaken
+     (same framing), main.pdf rebuilt.
+   NOT done: deck checked in LibreOffice renders only, not PowerPoint or
+   Keynote. Open it once in PowerPoint before presenting.
+
+================================================================================
+STAGE I — UI REWORK, DOCS, REPORT, AND DECK REFRESH  ✅ DONE 2026-10-10
+================================================================================
+Code done 2026-10-10 (Q&A: real routes for the §9 pages; describe-first search;
+"datasheet" look; latte light theme with blue accent; facility + unit detail as
+one near-full-screen dialog kept in the URL). `npm run validate` green.
+What changed in the app (the docs below still describe the old UI):
+  - Routes: / (Home: intro, sources, coverage chart, links to every function),
+    /explore (Facilities | Unit-years | Audit flags), /map, /retrieve, /upload,
+    /download. Old /?tab=… links redirect to /explore?tab=….
+  - Detail: facility and unit open in one dialog over any page, URL ?facility=3
+    or ?unit=<id> (link / reload reopens it). The same dialog shows the
+    comparison of 2–4 picks ("Compare n" button; dock at the bottom).
+  - Search: one box (description, falls back to name search), basic fields
+    visible (state, year, fuel, unit type, facility ID, unit ID), Advanced panel
+    (grid, controls, ranges, Top-N) opens itself when one is set. "Try" sample
+    lines on Explore, Retrieve, and Download for the demo.
+  - Look: IBM Plex Sans/Mono, flat sections + hairlines, one-line table rows,
+    fuel = colored dot (same colors as the map), badges only for status. Light
+    theme latte (#efe6da canvas / #2a1f16 ink / #1d4ed8 accent) is the default;
+    dark = the same coffee palette, lights off.
+  - Maps: globe colors come from the theme tokens; flat map uses CARTO light or
+    dark tiles to match the theme (light needs NEXT_PUBLIC_CARTO_API; without
+    a key it falls back to public dark tiles). Both maps share one hover card.
+  - Fixes worth a report sentence: facility CO₂ column and map total were
+    labeled "annual" but sum all years (now labeled; follows the year filter);
+    stale webpack cache served the old palette (restart dev with .next/dev
+    cleared after editing globals.css).
+
+I0 [x] Codebase audit + cleanup before the docs (behavior kept; validate green, 42 tests):
+       Bugs fixed
+       - Tab bars (Explore, detail, upload) showed a vertical scrollbar: tabs used
+         -mb-px inside overflow-x-auto. Baseline is now an inset shadow.
+       - Facility table "Role" summed operating hours over every unit and year, so
+         peaking stations read "Baseload". Now the busiest unit's hours in the
+         latest year in scope (peakUnitHours), same as the facility dialog.
+       - Map fuel chips counted by fuel class but filtered by one fuel name (oil
+         chip said 108, showed 22). Chips now filter the drawn dots by the same
+         class. "Nuclear 0" chip removed (CAMPD has no nuclear units).
+       - Map total and hover card said "all years" under a year filter.
+       - Compare title "3 facilities and units" for 3 facilities → selectionLabel.
+       - Facility narrative claimed SO₂ scrubbers + "catalytic converters" for any
+         control; now states what the units report.
+       - Heat rate: year rollups rounded to 1 decimal, everything else to 2.
+       Dead spots / UX
+       - Facility dialog narrative in two columns (right half was empty).
+       - Upload page: "Past uploads" history + samples/ hint under the drop zone.
+       - Audit-flag rows link to their unit (only results without a link).
+       DRY / dead code
+       - plural() and selectionLabel() replace 13 hand-rolled plurals.
+       - rankedView(): ranked queries return rows()/total(), used by both tables
+         and the CSV export. eachYear() shared by previewCampd/retrieveCampd.
+       - insertImportIssues() shared by CAMPD sync and uploads.
+       - DatasetHistory component shared by Retrieve and Upload; DiffTiles in
+         Retrieve; generic sum().
+       - CAMPD client field aliases cut to the camelCase fields the API returns
+         (checked against live /annual, /daily, /hourly, /monthly).
+       - Removed: getStats totalStates/totalNercRegions/totalCo2Tons, compare
+         reportingYear, homesPoweredRaw, deriveRates decimals param, globe color()
+         indirection; unexported campdFilterSchema, ExplorerTab,
+         ParsedAnnualRecord, insertInChunks (knip clean except tectonic/types).
+       Spot checks unchanged: 25 / 8 / 51, historical 11, retired 31.
+I1 [x] All 10 report figures retaken (1440 wide, light, DSF 1.25) on a scratch
+       copy of db.sqlite with `next start` on :3100, in the report's scenario
+       order (upload sample → Ghent unit 1 → Trimble 2023 re-retrieval). Committed
+       db.sqlite untouched. main.pdf rebuilt (33 pages).
+I2 [x] report/main.tex: §4 Functions rewritten for pages + one detail dialog;
+       traceability table, architecture/data-flow labels, life-of-a-search URL
+       (/explore?…), captions, contributions wording; "One page with dialogs"
+       design argument → "Separate pages with one detail dialog"; the three
+       review fixes added to the testing section.
+I3 [x] README: features table, page routes, URL examples → /explore?…, file
+       map, CARTO row. Old /?tab= links still redirect (checked).
+I4 [x] slides-outline.md: clicks for the nav bar, single search box, Try
+       samples, Advanced, Unit-years tab, button labels; KY ranking row is on
+       page 2 at 10/page.
+I5 [x] epaData-slides.pptx rebuilt: latte #EFE6DA / ink #2A1F16 / blue
+       #1D4ED8 only for data accents, IBM Plex Sans/Mono, hairline sections (no
+       boxed cards, shadows, or icon-per-heading), sentence-case labels, new
+       screenshots from a demo-order replay. Generator: scratchpad deck/build.cjs
+       of session a0f48f23 — it now READS speaker notes from slides-outline.md
+       (single source; it no longer writes the outline). Validates clean.
+       IBM Plex installed to ~/Library/Fonts on this Mac (converted from IBM's
+       @ibm/plex WOFF); install it on any other presenting machine.
+I6 [x] Demo replayed end to end on a scratch DB (puppeteer): every number in
+       the outline reproduces (19/1/1 upload; 8 received, 1 changed; 25 / 8;
+       2,780,000 → 99; 51 with Ghent for KY; 13 years; Paradise 861 lb/MWh).
+       Step timings unchanged (13:00); the new UI has fewer clicks (no
+       Name/Describe toggle, Try samples).
+   NOT done: deck checked only in LibreOffice renders, not PowerPoint/Keynote.
 
 ================================================================================
 STAGE H — SUBMISSION ZIP

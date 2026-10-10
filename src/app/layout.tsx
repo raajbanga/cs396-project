@@ -1,36 +1,50 @@
 import "~/styles/globals.css";
 
 import { type Metadata } from "next";
-import { Geist } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 
+import { AppShell } from "~/app/_components/app-shell";
 import { TRPCReactProvider } from "~/trpc/react";
 
 export const metadata: Metadata = {
-  title: "epaData",
+  title: { default: "epaData", template: "%s · epaData" },
   description:
     "Retrieve, validate, store, search, and download EPA Clean Air Markets (CAMPD) power-sector emissions data.",
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
-const geist = Geist({
+const plexSans = IBM_Plex_Sans({
   subsets: ["latin"],
-  variable: "--font-geist-sans",
+  weight: ["400", "500", "600"],
+  variable: "--font-plex-sans",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-plex-mono",
 });
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geist.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${plexSans.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
+    >
       <body>
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem={false}
           scriptProps={{ suppressHydrationWarning: true }}
         >
-          <TRPCReactProvider>{children}</TRPCReactProvider>
+          <TRPCReactProvider>
+            <AppShell>{children}</AppShell>
+          </TRPCReactProvider>
         </ThemeProvider>
       </body>
     </html>

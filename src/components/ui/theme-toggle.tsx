@@ -9,13 +9,13 @@ export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="icon"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       title="Toggle light/dark mode"
     >
-      <Sun className="hidden h-3.5 w-3.5 text-amber-400 dark:block" />
-      <Moon className="text-fg-muted h-3.5 w-3.5 dark:hidden" />
+      <Sun className="hidden h-4 w-4 dark:block" />
+      <Moon className="h-4 w-4 dark:hidden" />
       <span className="sr-only">Toggle theme</span>
     </Button>
   );

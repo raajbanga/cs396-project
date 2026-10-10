@@ -1,15 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Clock, Flame, Gauge, Leaf, RefreshCw, Zap } from "lucide-react";
-import { CarbonIntensityBadge, SourceBadge } from "~/components/ui/badge";
+import { RefreshCw } from "lucide-react";
+import { SourceBadge } from "~/components/ui/badge";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
-import {
-  percentOf,
-  ProgressBar,
-  type BarColor,
-} from "~/components/ui/metric-bar";
+import { percentOf, ProgressBar } from "~/components/ui/metric-bar";
 import { Select, toOptions } from "~/components/ui/select";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import {
@@ -30,7 +26,6 @@ import {
   type Granularity,
 } from "~/lib/campd-reporting-period";
 import type { SortDirection } from "~/lib/facility-filters";
-import { getCarbonIntensityTier } from "~/lib/plant-narrative";
 import { cn, sortRows } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 
@@ -41,12 +36,6 @@ interface GranularPlant {
   availableYears?: number[];
 }
 
-const INTENSITY_TEXT = {
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  destructive: "text-rose-400",
-} as Record<string, string>;
-
 type Item =
   RouterOutputs["facilities"]["getGranularEmissions"]["items"][number] & {
     order: number;
@@ -54,14 +43,14 @@ type Item =
 
 /** Header, width, and sort key per column; "Time Interval" sorts chronologically. */
 const COLUMNS = [
-  ["Time Interval", "w-28 text-left", (i: Item) => i.order],
-  ["Operating", "w-16", (i: Item) => i.operatingHours],
-  ["Generation", "w-24", (i: Item) => i.grossGenerationMWh],
-  ["Heat Input", "w-20", (i: Item) => i.heatInputMMBtu],
-  ["CO₂ Mass", "w-20", (i: Item) => i.co2MassTons],
-  ["SO₂", "w-12", (i: Item) => i.so2MassTons],
-  ["NOₓ", "w-12", (i: Item) => i.noxMassTons],
-  ["Intensity", "w-20", (i: Item) => i.co2IntensityLbsMWh],
+  ["Period", "w-28 text-left", (i: Item) => i.order],
+  ["Op. hours", "w-16", (i: Item) => i.operatingHours],
+  ["Gross MWh", "w-24", (i: Item) => i.grossGenerationMWh],
+  ["Heat MMBtu", "w-20", (i: Item) => i.heatInputMMBtu],
+  ["CO₂ t", "w-20", (i: Item) => i.co2MassTons],
+  ["SO₂ t", "w-12", (i: Item) => i.so2MassTons],
+  ["NOₓ t", "w-12", (i: Item) => i.noxMassTons],
+  ["lbs/MWh", "w-20", (i: Item) => i.co2IntensityLbsMWh],
 ] as const;
 type ColumnLabel = (typeof COLUMNS)[number][0];
 
@@ -77,10 +66,10 @@ export function GranularEmissionsWindow({
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [selectedUnit, setSelectedUnit] = useState("ALL");
   const [sort, setSort] = useState({
-    sortBy: "Time Interval" as ColumnLabel,
+    sortBy: "Period" as ColumnLabel,
     sortDir: "asc" as SortDirection,
   });
-  const head = localSortProps(sort, setSort, (f) => f !== "Time Interval");
+  const head = localSortProps(sort, setSort, (f) => f !== "Period");
 
   const plant = plants.find((p) => p.id === activeFacilityId) ?? plants[0]!;
   const units = plant.units ?? [];
@@ -141,35 +130,26 @@ export function GranularEmissionsWindow({
   };
 
   return (
-    <div className="space-y-3.5">
-      <div className="border-edge bg-surface/50 space-y-3 rounded-xl border p-3 sm:p-4">
-        <div className="border-edge/40 flex items-center gap-2.5 border-b pb-2.5">
-          <div className="border-edge bg-surface flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
-            <Clock className="h-4 w-4 text-emerald-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-fg text-sm font-semibold">
-                Emissions Over Time
-              </span>
-              {data && data.source !== "UNAVAILABLE" && (
-                <SourceBadge
-                  kind={data.source === "LOCAL_RECORDS" ? "db" : "api"}
-                />
-              )}
-              {isFetching && (
-                <RefreshCw className="h-3 w-3 animate-spin text-emerald-400" />
-              )}
-            </div>
-            <p className="text-fg-muted text-xs">
-              {plant.name} by hour, day, week, month, or year
-              {livePublishedThrough &&
-                ` · EPA published through ${livePublishedThrough}`}
-            </p>
-          </div>
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-fg-2 text-sm">
+            {plant.name} by hour, day, week, month, or year
+            {livePublishedThrough &&
+              `; the EPA has published through ${livePublishedThrough}`}
+            .
+          </p>
+          {data && data.source !== "UNAVAILABLE" && (
+            <SourceBadge
+              kind={data.source === "LOCAL_RECORDS" ? "db" : "api"}
+            />
+          )}
+          {isFetching && (
+            <RefreshCw className="text-fg-muted h-3.5 w-3.5 animate-spin" />
+          )}
         </div>
 
-        <div className="-m-1 flex items-center gap-2 overflow-x-auto p-1 whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-2">
           {plants.length > 1 && (
             <Select
               value={String(plant.id)}
@@ -231,48 +211,39 @@ export function GranularEmissionsWindow({
       </div>
 
       {summary && items.length > 0 && (
-        <KpiStrip className="gap-2.5 sm:grid-cols-4 sm:gap-2.5">
+        <KpiStrip className="lg:grid-cols-4">
           <StatTile
-            label="Total Generation"
-            icon={<Zap className="h-3.5 w-3.5 text-sky-400" />}
+            label="Gross load"
             value={`${summary.grossGenerationMWh.toLocaleString()} MWh`}
-            subtext={`${summary.operatingHours.toLocaleString()} run hours`}
+            subtext={`${summary.operatingHours.toLocaleString()} operating hours`}
           />
           <StatTile
-            label="Carbon Dioxide"
-            icon={<Flame className="h-3.5 w-3.5 text-amber-400" />}
+            label="CO₂"
             value={`${summary.co2MassTons.toLocaleString()} t`}
-            subtext={`${summary.heatInputMMBtu.toLocaleString()} MMBtu fuel`}
+            subtext={`${summary.heatInputMMBtu.toLocaleString()} MMBtu heat input`}
           />
           <StatTile
-            label="Carbon Intensity"
-            icon={<Leaf className="h-3.5 w-3.5 text-emerald-400" />}
+            label="CO₂ rate"
             value={
-              summary.co2IntensityLbsMWh !== null ? (
-                <div className="flex items-center gap-2">
-                  {summary.co2IntensityLbsMWh.toLocaleString()}
-                  <CarbonIntensityBadge
-                    intensity={summary.co2IntensityLbsMWh}
-                  />
-                </div>
-              ) : (
-                "N/A"
-              )
+              summary.co2IntensityLbsMWh !== null
+                ? `${summary.co2IntensityLbsMWh.toLocaleString()} lbs/MWh`
+                : "—"
             }
-            subtext="lbs CO₂ / MWh"
           />
           <StatTile
-            label="Heat Rate Efficiency"
-            icon={<Gauge className="h-3.5 w-3.5 text-purple-400" />}
-            value={summary.heatRateMMBtuMWh?.toFixed(2) ?? "N/A"}
-            subtext="MMBtu / MWh (Thermal efficiency)"
+            label="Heat rate"
+            value={
+              summary.heatRateMMBtuMWh !== null
+                ? `${summary.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh`
+                : "—"
+            }
           />
         </KpiStrip>
       )}
 
       <DataPanel>
         {isLoading ? (
-          <InlineLoading title={`Loading ${granularity} data from EPA...`} />
+          <InlineLoading title={`Loading ${granularity} data from the EPA…`} />
         ) : items.length === 0 ? (
           <EmptyState
             title={
@@ -284,12 +255,11 @@ export function GranularEmissionsWindow({
               data?.error ??
               "EPA CAMPD returned no records for this facility and time window."
             }
-            className="border-0"
           />
         ) : (
           <div className="max-h-[380px] overflow-auto">
-            <Table className="text-xs">
-              <TableHeader className="sticky top-0 z-10 backdrop-blur-xs">
+            <Table>
+              <TableHeader className="bg-surface sticky top-0 z-10">
                 <TableRow>
                   {COLUMNS.map(([label, width]) => (
                     <SortableTableHead
@@ -297,10 +267,7 @@ export function GranularEmissionsWindow({
                       label={label}
                       sort={label}
                       {...head}
-                      className={cn(
-                        "h-7 px-1.5 py-1 text-right font-sans text-xs",
-                        width,
-                      )}
+                      className={cn("h-8 px-2 text-right", width)}
                     />
                   ))}
                 </TableRow>
@@ -311,55 +278,33 @@ export function GranularEmissionsWindow({
                   COLUMNS.find(([label]) => label === sort.sortBy)![2],
                   sort.sortDir,
                 ).map((item) => (
-                  <TableRow key={item.periodKey} className="font-mono text-xs">
-                    <TableCell className="px-2 py-1 font-sans">
-                      <span className="text-fg font-semibold">
-                        {item.periodLabel}
-                      </span>
+                  <TableRow key={item.periodKey} className="tabular-nums">
+                    <TableCell className="px-2 py-1">
+                      <span className="text-fg">{item.periodLabel}</span>
                       {item.subLabel && (
-                        <span className="text-fg-muted ml-1.5 text-[10px]">
+                        <span className="text-fg-muted ml-1.5">
                           {item.subLabel}
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-fg-2 px-1.5 py-1 text-right whitespace-nowrap">
+                    <TableCell className="text-fg-2 px-2 py-1 text-right whitespace-nowrap">
                       {item.operatingHours.toLocaleString()}
-                      <span className="text-fg-muted ml-0.5 text-[10px]">
-                        h
-                      </span>
                     </TableCell>
                     {(
                       [
-                        {
-                          value: item.grossGenerationMWh,
-                          max: maxGen,
-                          color: "sky",
-                        },
+                        { value: item.grossGenerationMWh, max: maxGen },
                         { value: item.heatInputMMBtu },
-                        {
-                          value: item.co2MassTons,
-                          max: maxCo2,
-                          color: "amber",
-                        },
-                      ] satisfies {
-                        value: number;
-                        max?: number;
-                        color?: BarColor;
-                      }[]
-                    ).map(({ value, max, color }, i) => (
-                      <TableCell key={i} className="px-1.5 py-1 text-right">
-                        <span
-                          className={
-                            max ? "text-fg font-semibold" : "text-fg-2"
-                          }
-                        >
+                        { value: item.co2MassTons, max: maxCo2 },
+                      ] satisfies { value: number; max?: number }[]
+                    ).map(({ value, max }, i) => (
+                      <TableCell key={i} className="px-2 py-1 text-right">
+                        <span className={max ? "text-fg" : "text-fg-2"}>
                           {value.toLocaleString()}
                         </span>
                         {max && (
                           <ProgressBar
                             percent={percentOf(value, max)}
-                            color={color}
-                            className="bg-edge/60 mt-0.5 ml-auto h-1 w-12"
+                            className="mt-0.5 ml-auto h-1 w-12"
                           />
                         )}
                       </TableCell>
@@ -367,26 +312,13 @@ export function GranularEmissionsWindow({
                     {[item.so2MassTons, item.noxMassTons].map((value, i) => (
                       <TableCell
                         key={i}
-                        className="text-fg-muted px-1 py-1 text-right text-[11px] whitespace-nowrap"
+                        className="text-fg-muted px-2 py-1 text-right whitespace-nowrap"
                       >
                         {value.toFixed(1)}
                       </TableCell>
                     ))}
-                    <TableCell className="px-2 py-1 text-right font-semibold whitespace-nowrap">
-                      {item.co2IntensityLbsMWh !== null ? (
-                        <span
-                          className={
-                            INTENSITY_TEXT[
-                              getCarbonIntensityTier(item.co2IntensityLbsMWh)
-                                .variant
-                            ]
-                          }
-                        >
-                          {item.co2IntensityLbsMWh.toLocaleString()}
-                        </span>
-                      ) : (
-                        <span className="text-fg-muted font-normal">—</span>
-                      )}
+                    <TableCell className="text-fg-2 px-2 py-1 text-right whitespace-nowrap">
+                      {item.co2IntensityLbsMWh?.toLocaleString() ?? "—"}
                     </TableCell>
                   </TableRow>
                 ))}

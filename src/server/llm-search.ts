@@ -17,7 +17,7 @@ const DEFAULT_MODEL = "openrouter/free";
 const TIMEOUT_MS = 8000;
 
 type Additions = Partial<FacilityFilters>;
-export type LlmResult =
+type LlmResult =
   | { ok: true; filters: Additions; unrecognized: string[] }
   | { ok: false; note: string };
 
