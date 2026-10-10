@@ -148,7 +148,7 @@ function matrixSections(
             ),
             barRow(
               plants,
-              "Net Generation",
+              "Gross Load",
               "totalGenerationMWh",
               "MWh",
               "sky",

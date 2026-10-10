@@ -50,9 +50,9 @@ retrieval, search). Confirm it with both team members.
 - Point at the introduction: what epaData does, the two data sources (EPA CAMPD API, CSV/Excel
   uploads), and that TRACI scoring is Phase 2.
 - Point at the coverage strip: records per reporting year (2015–2026) and the datasets line,
-  "CAMPD API · 12 active (+6 superseded)". Superseded = earlier retrievals replaced by a
+  "CAMPD API · 12 active (+18 superseded)". Superseded = earlier retrievals replaced by a
   re-sync and kept as history.
-- Point at the tiles: 1,619 facilities, 5,204 units, 6,960 audit flags.
+- Point at the tiles: 1,619 facilities, 5,204 units, 6,909 audit flags.
 - Say: "Everything you browse reads the local SQLite database. Only Retrieve and the
   granular time series call the EPA API live. Each panel is labeled with its source."
 - Point at the numbered links: Retrieve → Upload → Search → Download.
@@ -68,11 +68,12 @@ retrieval, search). Confirm it with both team members.
    - Comparison with the database: **19 new, 1 changed, 1 unchanged**.
    - Rejected rows with reasons: missing Unit ID (row 12), state `KZ` (row 18), negative CO₂
      (row 19).
-   - Duplicate: row 25 repeats row 4 (Ghent unit 1, 2014). The **Duplicates** tab shows 3:
-     this in-file repeat plus the two rows already in the database (one "unchanged", one
-     "will update co2MassTons"). The tile counts only the in-file repeat.
-   - Sanity flag: row 16, Robert Reid RT, 38,801.9 MMBtu of heat input but 0 CO₂. Say: "This
-     is real EPA data, not something we planted. The import keeps it and flags it."
+   - Duplicate: row 25 repeats row 4 (Ghent unit 1, 2014), listed under **Duplicates in
+     file (1)**. **Already in database (2)** shows the two 2023 Trimble County rows: one
+     unchanged, one "Will update co2MassTons".
+   - Sanity flag: row 16, Robert Reid RT, 38,801.9 MMBtu of heat input but no CO₂ value
+     (`CO2_NOT_REPORTED`, WARN). Say: "This is real EPA data, not something we planted. A
+     blank is stored as 'not reported', not as zero, and the import keeps and flags it."
 4. Click **Approve & Import 21 Records**. "Import complete" shows the dataset and the file
    archived under `uploads/`.
 5. Click **Download rejected rows (4)**. The CSV opens with the 3 rejected rows, the
@@ -114,15 +115,15 @@ retrieval, search). Confirm it with both team members.
 
 1. Back on **Units**, click **Reset**, switch the search box from **Name** to **Describe**.
 2. Type `Find coal units in Kentucky with high CO2 emissions.` and press Enter.
-3. Chips appear: **KY · Coal · CO₂ ≥ 2,720,000**, sorted by CO₂, with the note “"high" = top
-   25% of unit-years matching the other filters.” **109** unit-years. "via parser": no language
+3. Chips appear: **KY · Coal · CO₂ ≥ 2,780,000**, sorted by CO₂, with the note “"high" = top
+   25% of unit-years matching the other filters.” **99** unit-years. "via parser": no language
    model was needed.
 4. The first row is Paradise unit 3 in 2014, one of the rows uploaded in step 2.
 5. Click ✕ on the Coal chip to show that every part of the interpretation is an ordinary,
    editable filter. Put it back with Fuel = Coal.
 
-(Without the upload, the threshold is 2,660,000 and the count is 103. The percentile moves
-because the new 2014 rows are part of the data.)
+(Without the upload, the threshold is 2,720,000 and the count is 97. The percentile moves
+because the new 2014 rows are part of the data; unit-years with no CO₂ reported are left out.)
 
 ### 7. Ranking (0:30)
 

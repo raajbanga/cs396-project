@@ -33,10 +33,10 @@ interface AuditLog {
   unitId?: string;
   facilityId?: number;
   facilityName?: string;
-  heatInputMMBtu?: number;
-  co2MassTons?: number;
-  grossGenerationMWh?: number;
-  operatingHours?: number;
+  heatInputMMBtu?: number | null;
+  co2MassTons?: number | null;
+  grossGenerationMWh?: number | null;
+  operatingHours?: number | null;
   heatRateMMBtuMWh?: number | null;
   origin?: string | null;
   datasetImportedAt?: Date | null;
@@ -55,6 +55,8 @@ function flaggedValue(log: AuditLog) {
   switch (log.flagType) {
     case "ZERO_EMISSIONS_HIGH_HEAT":
       return `${formatNumber(log.heatInputMMBtu)} MMBtu · ${formatNumber(log.co2MassTons, 1)} t CO₂`;
+    case "CO2_NOT_REPORTED":
+      return `${formatNumber(log.heatInputMMBtu)} MMBtu · CO₂ not reported`;
     case "PHANTOM_GENERATION":
       return `${formatNumber(log.grossGenerationMWh)} MWh · ${formatNumber(log.operatingHours, 1)} h`;
     case "EXTREME_HEAT_RATE":
@@ -314,10 +316,10 @@ export function AuditLogsTable({
 export const flagsOfRecords = (
   records: {
     year: number;
-    operatingHours: number;
-    grossGenerationMWh: number;
-    heatInputMMBtu: number;
-    co2MassTons: number;
+    operatingHours: number | null;
+    grossGenerationMWh: number | null;
+    heatInputMMBtu: number | null;
+    co2MassTons: number | null;
     heatRateMMBtuMWh: number | null;
     unit?: { unitId: string } | null;
     auditLogs: Pick<AuditLog, "id" | "flagType" | "severity" | "details">[];

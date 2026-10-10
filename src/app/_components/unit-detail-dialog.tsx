@@ -219,6 +219,7 @@ export function UnitDetailDialog({
                   ...Array<undefined>(7),
                   r.co2IntensityLbsMWh,
                   undefined,
+                  undefined,
                   r.dataset?.importedAt,
                 ])}
                 head={[
@@ -232,6 +233,7 @@ export function UnitDetailDialog({
                   "NOₓ t",
                   "lbs/MWh",
                   "MMBtu/MWh",
+                  "Controls & programs",
                   "Source",
                 ]}
                 rows={records.map((r) => [
@@ -260,6 +262,7 @@ export function UnitDetailDialog({
                     showValue
                   />,
                   formatQuantity(r.heatRateMMBtuMWh, "", { digits: 2 }),
+                  <YearControls key="c" record={r} />,
                   <span key="s" className="font-sans" title={r.dataset?.name}>
                     {r.dataset ? datasetOriginLabel(r.dataset) : "—"}
                   </span>,
@@ -274,5 +277,39 @@ export function UnitDetailDialog({
         </>
       )}
     </Dialog>
+  );
+}
+
+/** The controls and programs a unit reported for one year (§7: stored per annual record). */
+function YearControls({
+  record,
+}: {
+  record: {
+    so2Controls: string | null;
+    noxControls: string | null;
+    pmControls: string | null;
+    hgControls: string | null;
+    programCode: string | null;
+  };
+}) {
+  const parts = [
+    ["SO₂", record.so2Controls],
+    ["NOₓ", record.noxControls],
+    ["PM", record.pmControls],
+    ["Hg", record.hgControls],
+  ].filter((p): p is [string, string] => Boolean(p[1]));
+  const text = parts.map(([k, v]) => `${k}: ${v}`).join("\n");
+  return (
+    <span
+      className="block max-w-[14rem] truncate font-sans text-[11px]"
+      title={[text, record.programCode && `Programs: ${record.programCode}`]
+        .filter(Boolean)
+        .join("\n")}
+    >
+      {parts.length ? parts.map(([k]) => k).join(" · ") : "None"}
+      {record.programCode && (
+        <span className="text-fg-muted"> · {record.programCode}</span>
+      )}
+    </span>
   );
 }

@@ -43,6 +43,13 @@
       "when": 1791601547924,
       "tag": "0005_productive_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791644081300,
+      "tag": "0006_chilly_sabretooth",
+      "breakpoints": true
     }
   ]
 }

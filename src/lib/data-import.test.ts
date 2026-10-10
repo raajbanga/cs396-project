@@ -36,6 +36,40 @@ void test("upload check enforces extension and size", () => {
   );
 });
 
+void test("daily files: one row per unit per day is not a duplicate; only attributes are kept", () => {
+  const csvPath = path.join(tmpDir, "daily.csv");
+  fs.writeFileSync(
+    csvPath,
+    [
+      '"State","Facility Name","Facility ID","Unit ID","Date","Gross Load (MWh)","Primary Fuel Type"',
+      'AL,"Barry",3,"1",2026-04-01,10,"Coal"',
+      'AL,"Barry",3,"1",2026-04-02,12,"Coal"', // next day: same unit, not a duplicate
+      'AL,"Barry",3,"2",2026-04-01,9,"Pipeline Natural Gas"',
+      'AL,"Barry",3,"1",2026-04-02,12,"Coal"', // same unit and day: duplicate
+    ].join("\n"),
+  );
+
+  const parsed = parse(csvPath);
+  assert.equal(parsed.targetSchema, "FACILITIES_AND_UNITS");
+  assert.equal(parsed.reportingYear, 2026);
+  assert.deepEqual(parsed.summary, {
+    totalRows: 4,
+    validCount: 3,
+    invalidCount: 0,
+    duplicateCount: 1,
+  });
+  assert.equal(parsed.duplicates[0]?.firstSeenRow, 2);
+  assert.match(parsed.duplicates[0]?.reason ?? "", /facility-unit-period/);
+  assert.deepEqual(
+    parsed.records.units.map((u) => [u.unitId, u.primaryFuel]),
+    [
+      ["1", "Coal"],
+      ["2", "Pipeline Natural Gas"],
+    ],
+  );
+  assert.equal(parsed.records.annual.length, 0);
+});
+
 void test("parser rejects invalid rows, skips duplicates, and reports audit flags", () => {
   const csvPath = path.join(tmpDir, "annual.csv");
   fs.writeFileSync(
@@ -91,22 +125,26 @@ void test("parser rejects invalid rows, skips duplicates, and reports audit flag
   const report = buildImportReport(
     parsed,
     new Map([
-      ["12:U1:2025", { ...stored, co2MassTons: stored.co2MassTons + 1 }],
+      ["12:U1:2025", { ...stored, co2MassTons: (stored.co2MassTons ?? 0) + 1 }],
     ]),
   );
   assert.deepEqual(report.diff, { inserted: 1, updated: 1, unchanged: 0 });
-  assert.match(
-    report.duplicates.find((d) => d.rowNumber === 6)!.reason,
-    /update co2MassTons/,
+  assert.deepEqual(
+    report.existing.map((e) => [e.rowNumber, e.status]),
+    [[6, "changed"]],
   );
+  assert.match(report.existing[0]?.reason ?? "", /update co2MassTons/);
+  // In-file repeats and database matches are reported separately.
+  assert.deepEqual(
+    report.duplicates.map((d) => d.rowNumber),
+    [2],
+  );
+  assert.deepEqual(report.recordCounts, { facilities: 2, units: 2, annual: 2 });
   assert.deepEqual(
     report.anomalies.map((a) => a.flagType),
     ["ZERO_EMISSIONS_HIGH_HEAT", "EXTREME_HEAT_RATE"],
   );
   assert.equal(report.previewRows[0]?.status, "flagged");
-  assert.ok(
-    report.duplicates.some((d) => d.rowNumber === 6 && !d.firstSeenRow),
-  );
   assert.ok(!("records" in report));
   assert.ok(!("rejectedRows" in report));
 });
@@ -218,14 +256,16 @@ void test("samples/ upload files give the report documented in samples/README.md
         .filter((r) => r.year === 2023)
         .map((r) => [
           recordKey(r.facilityId, r.unitId, r.year),
-          r.rowNumber === 23 ? { ...r, co2MassTons: r.co2MassTons + 1000 } : r,
+          r.rowNumber === 23
+            ? { ...r, co2MassTons: (r.co2MassTons ?? 0) + 1000 }
+            : r,
         ]),
     );
     const report = buildImportReport(parsed, stored);
     assert.deepEqual(report.diff, { inserted: 19, updated: 1, unchanged: 1 });
     assert.deepEqual(
       report.anomalies.map((a) => [a.rowNumber, a.flagType]),
-      [[16, "ZERO_EMISSIONS_HIGH_HEAT"]],
+      [[16, "CO2_NOT_REPORTED"]],
     );
   }
 });

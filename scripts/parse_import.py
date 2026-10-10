@@ -63,6 +63,11 @@ SCHEMA = {
     },
 }
 METRICS = [c for c in SCHEMA["annual_records"] if c != "year"]
+# §7 per-year control and program information: read from the unit columns, stored on each annual record.
+RECORD_ATTRIBUTES = ["so2Controls", "noxControls", "pmControls", "hgControls", "programCode"]
+# Period columns of sub-annual (daily/hourly) CAMPD files. They aren't stored, but a row's identity
+# includes them: a daily file has one row per unit per day, which isn't a duplicate.
+PERIOD_ALIASES = {"date": ["date", "opdate", "operatingdate"], "hour": ["hour", "ophour"]}
 
 # Numeric columns: (min, max or None, whole number?)
 BOUNDS = {
@@ -116,15 +121,17 @@ def _rows_to_dicts(rows):
             yield {h: row[i].strip() if i < len(row) else "" for i, h in cols}
 
 
-def map_columns(headers):
-    """Match file headers to schema columns: {table: {column: header}}."""
+def _match(headers, aliases_by_col):
+    """{column: first header whose case/punctuation-stripped form is one of the column's aliases}."""
     by_key = {}
     for h in headers:
         by_key.setdefault(re.sub(r"[^a-z0-9]", "", h.lower()), h)
-    return {
-        table: {col: h for col, aliases in cols.items() if (h := next((by_key[a] for a in aliases if a in by_key), None))}
-        for table, cols in SCHEMA.items()
-    }
+    return {col: h for col, aliases in aliases_by_col.items() if (h := next((by_key[a] for a in aliases if a in by_key), None))}
+
+
+def map_columns(headers):
+    """Match file headers to schema columns: {table: {column: header}}."""
+    return {table: _match(headers, cols) for table, cols in SCHEMA.items()}
 
 
 def parse_value(col, raw):
@@ -159,6 +166,7 @@ def parse(path):
     cols = map_columns(headers)
     year_header = cols["annual_records"].get("year")
     is_annual = year_header is not None and any(m in cols["annual_records"] for m in METRICS)
+    period_headers = [] if is_annual else list(_match(headers, PERIOD_ALIASES).values())
     if not is_annual:
         cols["annual_records"] = {}  # metrics without a year (daily/hourly files) aren't annual records
 
@@ -201,8 +209,11 @@ def parse(path):
                     issues.append({"field": header, "value": raw, "reason": str(e)})
 
         fid, uid = values["facilities"].get("id"), values["units"].get("unitId")
-        year = values["annual_records"].get("year") if is_annual else row.get(year_header, "")
-        key = (fid, uid, year)
+        if is_annual:
+            year = values["annual_records"].get("year")
+        else:  # a facility file's year, or the year of a daily/hourly row's date
+            year = row.get(year_header, "") or next((row[h][:4] for h in period_headers if row[h][:4].isdigit()), "")
+        key = (fid, uid, year, *(row[h] for h in period_headers))
         if schema == "UNRECOGNIZED" or issues:
             status = "invalid"
             ids = {"facilityId": row.get(cols["facilities"].get("id"), ""), "unitId": row.get(cols["units"].get("unitId"), "")}
@@ -211,7 +222,8 @@ def parse(path):
             rejected.append({"rowNumber": total, "kind": "REJECTED", "reason": reason, "data": row})
         elif key in first_seen:
             status = "duplicate"
-            reason = f"Same facility-unit-year as row {first_seen[key]}; skipped"
+            what = "facility-unit-period" if period_headers else "facility-unit-year"
+            reason = f"Same {what} as row {first_seen[key]}; skipped"
             if len(duplicates) < MAX_LISTED:
                 duplicates.append({
                     "rowNumber": total, "firstSeenRow": first_seen[key], "facilityId": fid, "unitId": uid,
@@ -225,8 +237,11 @@ def parse(path):
             facilities.setdefault(fid, values["facilities"])
             units.setdefault((fid, uid), {**values["units"], "facilityId": fid})
             if is_annual:
-                metrics = {m: values["annual_records"].get(m) or 0.0 for m in METRICS}
-                annual.append({**metrics, "rowNumber": total, "facilityId": fid, "unitId": uid, "year": year})
+                # Blank metrics stay None (not reported), distinct from a reported 0. Attribute keys are
+                # included only when the file has the column, so records without them inherit the unit's.
+                metrics = {m: values["annual_records"].get(m) for m in METRICS}
+                attributes = {a: values["units"][a] for a in RECORD_ATTRIBUTES if a in cols["units"]}
+                annual.append({**metrics, **attributes, "rowNumber": total, "facilityId": fid, "unitId": uid, "year": year})
         status_counts[status] += 1
         if total <= PREVIEW_ROWS:
             preview.append({"rowNumber": total, "status": status, "data": row})
@@ -238,6 +253,7 @@ def parse(path):
         else ["datasets", "facilities", "units"] + (["annual_records", "data_audit_logs"] if is_annual else []),
         "availableColumns": headers,
         "tableMappings": mappings,
+        "periodColumns": period_headers,  # Date/Hour of a daily or hourly file; empty otherwise
         "missingRequired": [{"table": t, "column": c} for t, c in sorted(required) if c not in cols[t]],
         "unmappedColumns": [h for h in headers if h not in mapped_headers],
         "missingValueCounts": {h: missing[h] for h in headers},

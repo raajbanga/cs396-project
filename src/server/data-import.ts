@@ -63,7 +63,10 @@ export async function previewUpload(parsed: ParsedUpload) {
   );
 }
 
-/** Stores an upload's valid records as a dataset; with `original`, archives the file under `uploads/`. */
+/**
+ * Stores an upload's valid records as a dataset in one transaction, so a failure leaves nothing
+ * behind; with `original`, archives the file under `uploads/` once the import has committed.
+ */
 export async function importUpload(
   { records, rejectedRows, summary, reportingYear }: ParsedUpload,
   fileName: string,
@@ -75,51 +78,57 @@ export async function importUpload(
   const archivedFile = original
     ? path.join("uploads", `${datasetId}_${fileName.replace(/[^\w.-]/g, "_")}`)
     : null;
-  await db.insert(datasets).values({
-    id: datasetId,
-    name: datasetName,
-    source,
-    reportingYear: reportingYear ?? new Date().getFullYear(),
-    rawRecordCount: summary.totalRows,
-    validRecords: summary.validCount,
-    originalFilename: fileName,
-    archivedPath: archivedFile,
-    notes: `${summary.invalidCount} rejected, ${summary.duplicateCount} duplicate rows`,
-  });
-  await insertInChunks(rejectedRows, (chunk) =>
-    db.insert(importIssues).values(
-      chunk.map(({ data, ...issue }) => ({
-        ...issue,
-        datasetId,
-        rawRow: data,
-      })),
-    ),
-  );
 
-  // Rows without a name and state may only create placeholder facilities, never overwrite real ones.
-  const named = records.facilities.filter((f) => f.name && f.stateCode);
-  await upsertFacilities(named as (typeof facilities.$inferInsert)[]);
-  await insertMissingFacilities(
-    records.facilities.filter((f) => !f.name || !f.stateCode),
-  );
-  const unitIds = await upsertUnits(records.units);
-  const { flaggedRecords, anomalyCount, ...diff } = await upsertAnnualRecords(
-    datasetId,
-    records.annual.map((r) => ({
-      ...r,
-      unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
-    })),
-  );
-  await db
-    .update(datasets)
-    .set({
-      flaggedRecords,
-      insertedRecords: diff.inserted,
-      updatedRecords: diff.updated,
-      unchangedRecords: diff.unchanged,
-      droppedRecords: rejectedRows.length,
-    })
-    .where(eq(datasets.id, datasetId));
+  const { unitIds, anomalyCount, diff } = await db.transaction(async (tx) => {
+    await tx.insert(datasets).values({
+      id: datasetId,
+      name: datasetName,
+      source,
+      reportingYear: reportingYear ?? new Date().getFullYear(),
+      rawRecordCount: summary.totalRows,
+      validRecords: summary.validCount,
+      originalFilename: fileName,
+      archivedPath: archivedFile,
+      notes: `${summary.invalidCount} rejected, ${summary.duplicateCount} duplicate rows`,
+    });
+    await insertInChunks(rejectedRows, (chunk) =>
+      tx.insert(importIssues).values(
+        chunk.map(({ data, ...issue }) => ({
+          ...issue,
+          datasetId,
+          rawRow: data,
+        })),
+      ),
+    );
+
+    // Rows without a name and state may only create placeholder facilities, never overwrite real ones.
+    const named = records.facilities.filter((f) => f.name && f.stateCode);
+    await upsertFacilities(named as (typeof facilities.$inferInsert)[], tx);
+    await insertMissingFacilities(
+      records.facilities.filter((f) => !f.name || !f.stateCode),
+      tx,
+    );
+    const unitIds = await upsertUnits(records.units, tx);
+    const { flaggedRecords, anomalyCount, ...diff } = await upsertAnnualRecords(
+      datasetId,
+      records.annual.map((r) => ({
+        ...r,
+        unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
+      })),
+      tx,
+    );
+    await tx
+      .update(datasets)
+      .set({
+        flaggedRecords,
+        insertedRecords: diff.inserted,
+        updatedRecords: diff.updated,
+        unchangedRecords: diff.unchanged,
+        droppedRecords: rejectedRows.length,
+      })
+      .where(eq(datasets.id, datasetId));
+    return { unitIds, anomalyCount, diff };
+  });
 
   if (original && archivedFile) {
     await fs.mkdir("uploads", { recursive: true });

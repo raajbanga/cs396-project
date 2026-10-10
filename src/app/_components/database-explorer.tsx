@@ -537,7 +537,8 @@ export function DatabaseExplorer({
 
         {activeTab === "map" && (
           <FacilitiesMap
-            facilities={mapQuery.data}
+            facilities={mapQuery.data?.facilities}
+            unlocated={mapQuery.data?.unlocated}
             isLoading={mapQuery.isLoading}
             onInspectFacility={setInspectFacilityId}
             filters={filters}

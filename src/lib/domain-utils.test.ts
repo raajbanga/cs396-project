@@ -14,7 +14,12 @@ import {
   buildYearlyRollups,
   computeCo2IntensityLbsMWh,
   computeHeatRateMMBtuMWh,
+  deriveRates,
+  emptyTotals,
+  evaluatePhysicalSanityRules,
   pickCleanestByCarbonIntensity,
+  sumTotals,
+  type ReportedTotals,
 } from "./emissions-metrics";
 import {
   activeCampdFilters,
@@ -49,6 +54,42 @@ void test("emissions metrics handle valid and missing generation", () => {
       { carbonIntensityLbsMWh: 0 },
     ])?.carbonIntensityLbsMWh,
     0,
+  );
+});
+
+void test("not reported (null) is kept apart from 0 in rates, totals, and sanity rules", () => {
+  const record: ReportedTotals = {
+    ...emptyTotals(),
+    heatInputMMBtu: 38801.9,
+    grossGenerationMWh: 2012,
+    operatingHours: 111,
+    co2MassTons: null,
+    steamLoadKlb: null,
+  };
+  const flags = (r: ReportedTotals) =>
+    evaluatePhysicalSanityRules({ ...r, ...deriveRates(r) }).map(
+      (f) => `${f.flagType}:${f.severity}`,
+    );
+  // Missing CO₂ is a reporting gap (WARN); a reported 0 is implausible (ERROR).
+  assert.deepEqual(flags(record), ["CO2_NOT_REPORTED:WARN"]);
+  assert.deepEqual(flags({ ...record, co2MassTons: 0 }), [
+    "ZERO_EMISSIONS_HIGH_HEAT:ERROR",
+  ]);
+  // Rates need both inputs reported; missing heat input never looks like an extreme heat rate.
+  assert.equal(deriveRates(record).co2IntensityLbsMWh, null);
+  assert.deepEqual(
+    flags({ ...record, heatInputMMBtu: null, co2MassTons: 1 }),
+    [],
+  );
+  // Phantom generation needs a reported 0 hours, not a missing value.
+  assert.deepEqual(
+    flags({ ...record, co2MassTons: 1, operatingHours: null }),
+    [],
+  );
+  // Totals count unreported values as 0.
+  assert.equal(
+    sumTotals([record, { ...record, co2MassTons: 5 }]).co2MassTons,
+    5,
   );
 });
 

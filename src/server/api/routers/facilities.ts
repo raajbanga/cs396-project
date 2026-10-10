@@ -6,6 +6,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   lte,
   sql,
   type SQL,
@@ -216,7 +217,7 @@ function facilityConditions(f: FilterInput): SQL[] {
   return conditions;
 }
 
-/** Conditions on the unit's attributes (§8.1); fuels, unit type, and controls match by "contains". */
+/** Conditions on the unit's attributes (§8.1); fuels and unit type match by "contains". */
 function unitConditions(f: FilterInput): SQL[] {
   const conditions: SQL[] = [];
   if (f.unitId?.trim()) {
@@ -228,9 +229,6 @@ function unitConditions(f: FilterInput): SQL[] {
     [units.primaryFuel, f.primaryFuel],
     [units.secondaryFuel, f.secondaryFuel],
     [units.unitType, f.unitType],
-    [units.so2Controls, f.so2Control],
-    [units.noxControls, f.noxControl],
-    [units.pmControls, f.pmControl],
   ] as const;
   for (const [col, value] of containsFilters) {
     if (active(value)) conditions.push(contains(col, value));
@@ -250,9 +248,20 @@ const ORIGIN_SOURCES: Record<string, string[]> = {
   UPLOAD: ["BULK_CSV", "BULK_EXCEL"],
 };
 
-/** Conditions on the unit-year record: reporting year, origin, and §8.2 min/max ranges. */
+/**
+ * Conditions on the unit-year record: reporting year, controls as reported that year (§7, "contains"),
+ * origin, and §8.2 min/max ranges.
+ */
 function recordConditions(f: FilterInput): SQL[] {
   const conditions: SQL[] = [];
+  const controlFilters = [
+    [annualRecords.so2Controls, f.so2Control],
+    [annualRecords.noxControls, f.noxControl],
+    [annualRecords.pmControls, f.pmControl],
+  ] as const;
+  for (const [col, value] of controlFilters) {
+    if (active(value)) conditions.push(contains(col, value));
+  }
   const year = filterYear(f);
   if (year !== undefined) conditions.push(eq(annualRecords.year, year));
   const sources = active(f.origin) ? ORIGIN_SOURCES[f.origin] : undefined;
@@ -372,11 +381,12 @@ export function rankedUnitYears(
       unitType: units.unitType,
       primaryFuel: units.primaryFuel,
       secondaryFuel: units.secondaryFuel,
-      so2Controls: units.so2Controls,
-      noxControls: units.noxControls,
-      pmControls: units.pmControls,
-      hgControls: units.hgControls,
-      programCode: units.programCode,
+      // Controls and programs as reported for this year (§7); the unit holds the latest values.
+      so2Controls: annualRecords.so2Controls,
+      noxControls: annualRecords.noxControls,
+      pmControls: annualRecords.pmControls,
+      hgControls: annualRecords.hgControls,
+      programCode: annualRecords.programCode,
       operatingStatus: units.operatingStatus,
       commercialOpDate: units.commercialOpDate,
       retirementDate: units.retirementDate,
@@ -478,14 +488,15 @@ async function filterOptions(database: typeof Database) {
       .reverse(),
     secondaryFuels: await tokens(units.secondaryFuel),
     unitTypes: await tokens(units.unitType),
-    so2Controls: await tokens(units.so2Controls),
-    noxControls: await tokens(units.noxControls),
-    pmControls: await tokens(units.pmControls),
+    // Control filters match the per-year values, so offer every control any year reported.
+    so2Controls: await tokens(annualRecords.so2Controls),
+    noxControls: await tokens(annualRecords.noxControls),
+    pmControls: await tokens(annualRecords.pmControls),
     operatingStatuses: await tokens(units.operatingStatus),
   };
 }
 
-/** "high"/"low": the 75th / 25th percentile of `metric` over unit-years matching the other filters (3 significant figures). */
+/** "high"/"low": the 75th / 25th percentile of `metric` over unit-years matching the other filters that report it (3 significant figures). */
 async function percentileOf(
   database: typeof Database,
   filters: FacilityFilters,
@@ -504,15 +515,21 @@ async function percentileOf(
     sortBy: metric,
     sortDir: "asc",
   });
-  const [{ n } = { n: 0 }] = await database.select({ n: count() }).from(ranked);
+  // Only reported values count; SQLite would otherwise sort NULLs first.
+  const reported = isNotNull(ranked[metric]);
+  const [{ n } = { n: 0 }] = await database
+    .select({ n: count() })
+    .from(ranked)
+    .where(reported);
   if (n === 0) return undefined;
   const [row] = await database
     .select({ value: ranked[metric] })
     .from(ranked)
+    .where(reported)
     .orderBy(asc(ranked[metric]))
     .limit(1)
     .offset(Math.floor((n - 1) * (level === "high" ? 0.75 : 0.25)));
-  return row ? Number(row.value.toPrecision(3)) : undefined;
+  return row?.value != null ? Number(row.value.toPrecision(3)) : undefined;
 }
 
 export const facilitiesRouter = createTRPCRouter({
@@ -668,19 +685,24 @@ export const facilitiesRouter = createTRPCRouter({
           ...perFacility(input && filterYear(input)),
         })
         .from(facilities)
-        .where(
-          and(
-            sql`${facilities.latitude} IS NOT NULL AND ${facilities.longitude} IS NOT NULL`,
-            ...filterConditions(input),
-          ),
-        );
+        .where(and(...filterConditions(input)));
 
-      return rows.map((r) => ({
-        ...r,
-        latitude: r.latitude!,
-        longitude: r.longitude!,
-        primaryFuel: r.primaryFuel ?? "Unknown",
-      }));
+      // CAMPD has no coordinates for some (mostly retired) plants; the map lists them instead of drawing them.
+      const located = rows.filter(
+        (r) => r.latitude !== null && r.longitude !== null,
+      );
+      return {
+        facilities: located.map((r) => ({
+          ...r,
+          latitude: r.latitude!,
+          longitude: r.longitude!,
+          primaryFuel: r.primaryFuel ?? "Unknown",
+        })),
+        unlocated: rows
+          .filter((r) => r.latitude === null || r.longitude === null)
+          .map(({ id, name, stateCode }) => ({ id, name, stateCode }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      };
     }),
 
   getFacility: publicProcedure
@@ -989,7 +1011,7 @@ export const facilitiesRouter = createTRPCRouter({
               : undefined,
             active(unitType) ? contains(units.unitType, unitType) : undefined,
             active(control)
-              ? sql`(${contains(units.so2Controls, control)} OR ${contains(units.noxControls, control)} OR ${contains(units.pmControls, control)} OR ${contains(units.hgControls, control)})`
+              ? sql`(${contains(annualRecords.so2Controls, control)} OR ${contains(annualRecords.noxControls, control)} OR ${contains(annualRecords.pmControls, control)} OR ${contains(annualRecords.hgControls, control)})`
               : undefined,
           ),
         )

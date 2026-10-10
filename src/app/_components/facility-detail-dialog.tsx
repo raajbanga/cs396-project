@@ -269,14 +269,13 @@ function EmissionCells({
   hours,
   sub,
 }: {
-  rec: Pick<
-    YearlyRollup,
-    | "grossGenerationMWh"
-    | "co2MassTons"
-    | "co2IntensityLbsMWh"
-    | "heatRateMMBtuMWh"
-  >;
-  hours: number;
+  rec: {
+    grossGenerationMWh: number | null;
+    co2MassTons: number | null;
+    co2IntensityLbsMWh: number | null;
+    heatRateMMBtuMWh: number | null;
+  };
+  hours: number | null;
   sub?: boolean;
 }) {
   const numeric = cn(

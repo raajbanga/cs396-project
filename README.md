@@ -28,8 +28,8 @@ repository.
 | `facilities`      |  1,619 | 50 states, DC, and Puerto Rico                                                                          |
 | `units`           |  5,204 | 1,067.5 GW nameplate capacity                                                                           |
 | `annual_records`  | 50,947 | One row per facility-unit-year, reporting years 2015–2026 (2026 is partial; EPA publishes it quarterly) |
-| `datasets`        |     18 | All from the CAMPD API; 12 own records, 6 were superseded by later re-syncs                             |
-| `data_audit_logs` |  6,960 | Physical-sanity flags: 6,105 ERROR, 855 WARN                                                            |
+| `datasets`        |     30 | All from the CAMPD API; 12 own records, 18 were superseded by later re-syncs                            |
+| `data_audit_logs` |  6,909 | Physical-sanity flags on 6,432 records: 6,105 CO₂ not reported, 804 extreme heat rates (all WARN)       |
 | `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                               |
 
 ---
@@ -60,14 +60,17 @@ Applied to every annual record written by a retrieval, an upload, or the CLI syn
 (`AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts`). Flagged records are stored, not
 dropped, and appear in the Audits tab and the invalid-record report.
 
-| Flag                       | Severity | Condition                                     |
-| :------------------------- | :------- | :-------------------------------------------- |
-| `ZERO_EMISSIONS_HIGH_HEAT` | ERROR    | heat input > 1,000 MMBtu and CO₂ = 0          |
-| `PHANTOM_GENERATION`       | ERROR    | gross load > 0 MWh and operating time = 0 h   |
-| `EXTREME_HEAT_RATE`        | WARN     | heat input ÷ gross load < 5 or > 25 MMBtu/MWh |
+| Flag                       | Severity | Condition                                          |
+| :------------------------- | :------- | :------------------------------------------------- |
+| `ZERO_EMISSIONS_HIGH_HEAT` | ERROR    | heat input > 1,000 MMBtu and CO₂ reported as 0     |
+| `CO2_NOT_REPORTED`         | WARN     | heat input > 1,000 MMBtu and no CO₂ value reported |
+| `PHANTOM_GENERATION`       | ERROR    | gross load > 0 MWh and operating time reported 0 h |
+| `EXTREME_HEAT_RATE`        | WARN     | heat input ÷ gross load < 5 or > 25 MMBtu/MWh      |
 
-Derived values stored with each record: CO₂ intensity = CO₂ (short tons) × 2,000 ÷ gross load
-(lb/MWh), and heat rate = heat input ÷ gross load (MMBtu/MWh).
+Metrics the source leaves blank are stored as `NULL` ("not reported"), not 0, so the rules
+can tell a missing value from a reported zero. Derived values stored with each record: CO₂
+intensity = CO₂ (short tons) × 2,000 ÷ gross load (lb/MWh), and heat rate = heat input ÷
+gross load (MMBtu/MWh); both are `NULL` when an input is missing or gross load is 0.
 
 ### Description search
 
@@ -206,7 +209,7 @@ hand-written SQL.
 | Same search, facility level                                         | [`/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)                             | 8 facilities                                                                               |
 | Group-and-rank: top CO₂ facility in each state, 2024                | [`/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc`](http://localhost:3000/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc)                                                   | 51 facilities, one per state with 2024 data                                                |
 | Historical: one unit, 2015–2025                                     | [`/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc`](http://localhost:3000/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc) | 11 rows (Barry unit 1)                                                                     |
-| Description search                                                  | Units tab → **Describe** → "Find coal units in Kentucky with high CO2 emissions."                                                                                                     | KY · Coal · CO₂ ≥ 2,660,000 (top 25 %), sorted by CO₂, 103 unit-years                      |
+| Description search                                                  | Units tab → **Describe** → "Find coal units in Kentucky with high CO2 emissions."                                                                                                     | KY · Coal · CO₂ ≥ 2,720,000 (top 25 %), sorted by CO₂, 97 unit-years                       |
 | Retired units                                                       | [`/?tab=units&operatingStatus=Retired`](http://localhost:3000/?tab=units&operatingStatus=Retired)                                                                                     | 31 unit-years                                                                              |
 | Sample upload                                                       | **Upload** → `samples/annual-emissions-sample.csv`                                                                                                                                    | 25 rows: 21 valid (19 new, 1 changed, 1 unchanged), 3 rejected, 1 duplicate, 1 sanity flag |
 
@@ -326,6 +329,11 @@ erDiagram
         real co2_mass_tons
         real so2_mass_tons
         real nox_mass_tons
+        text so2_controls "as reported that year"
+        text nox_controls
+        text pm_controls
+        text hg_controls
+        text program_code
         real co2_intensity_lbs_mwh
         real heat_rate_mmbtu_mwh
     }
@@ -351,8 +359,11 @@ erDiagram
 
 Design assumptions to be aware of:
 
-- **Controls and program codes are stored per unit, not per unit-year.** The specification
-  lists them with the annual record; CAMPD reports them per unit, and the latest import wins.
+- **Controls and program codes are stored per unit-year** on `annual_records`, as the
+  specification asks; `units` keeps the latest values for display. Fuel and unit type are
+  still per unit, so the latest import wins for those.
+- **Metrics are `NULL` when not reported.** Totals treat them as 0; range filters and
+  percentile thresholds skip them; CSV exports leave them blank.
 - **`annual_records.dataset_id` is the dataset that last wrote the record.** Re-importing a
   year moves its records to the new dataset; the older dataset stays in the history as
   "superseded". Values are overwritten, not versioned.

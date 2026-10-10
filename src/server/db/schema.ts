@@ -137,13 +137,21 @@ export const annualRecords = sqliteTable(
       .notNull()
       .references(() => units.id, { onDelete: "cascade" }),
     year: integer("year").notNull(),
-    operatingHours: real("operating_hours").default(0.0).notNull(),
-    grossGenerationMWh: real("gross_generation_mwh").default(0.0).notNull(),
-    heatInputMMBtu: real("heat_input_mmbtu").default(0.0).notNull(),
-    steamLoadKlb: real("steam_load_klb").default(0.0).notNull(), // Steam load (1000 lb)
-    co2MassTons: real("co2_mass_tons").default(0.0).notNull(),
-    so2MassTons: real("so2_mass_tons").default(0.0).notNull(),
-    noxMassTons: real("nox_mass_tons").default(0.0).notNull(),
+    // Metrics are NULL when the source did not report them (distinct from a reported 0).
+    operatingHours: real("operating_hours"),
+    grossGenerationMWh: real("gross_generation_mwh"),
+    heatInputMMBtu: real("heat_input_mmbtu"),
+    steamLoadKlb: real("steam_load_klb"), // Steam load (1000 lb)
+    co2MassTons: real("co2_mass_tons"),
+    so2MassTons: real("so2_mass_tons"),
+    noxMassTons: real("nox_mass_tons"),
+
+    // §7 control and program information as reported for this year (units hold the latest values)
+    so2Controls: text("so2_controls"),
+    noxControls: text("nox_controls"),
+    pmControls: text("pm_controls"),
+    hgControls: text("hg_controls"),
+    programCode: text("program_code"),
 
     // Derived rates, computed on write by deriveRates (~/lib/emissions-metrics)
     co2IntensityLbsMWh: real("co2_intensity_lbs_mwh"), // (co2MassTons * 2000) / grossGenerationMWh
