@@ -1,8 +1,53 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+import type { SortDirection } from "./facility-filters";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+export type SortValue = string | number | Date | null | undefined;
+
+const isMissing = (v: SortValue) =>
+  v === null || v === undefined || v === "" || v === "—";
+
+/** Dates and formatted numbers ("1,234.5") as numbers; anything else unchanged. */
+const sortable = (v: SortValue) =>
+  v instanceof Date
+    ? v.getTime()
+    : typeof v === "string" && /^-?[\d,]*\.?\d+$/.test(v.trim())
+      ? Number(v.replace(/,/g, ""))
+      : v;
+
+/** Whether a value sorts as a number (so its column starts highest-first). */
+export const isNumericValue = (v: SortValue) => typeof sortable(v) === "number";
+
+/** Ascending order for table cells: numbers and dates numerically, text naturally ("Unit 2" < "Unit 10"). */
+export function compareValues(a: SortValue, b: SortValue) {
+  const x = sortable(a);
+  const y = sortable(b);
+  return typeof x === "number" && typeof y === "number"
+    ? x - y
+    : String(x).localeCompare(String(y), undefined, { numeric: true });
+}
+
+/** Client-side sort for small tables: stable, and missing values stay last in either direction. */
+export function sortRows<T>(
+  rows: readonly T[],
+  key: (row: T) => SortValue,
+  dir: SortDirection,
+) {
+  return rows
+    .map((row, i) => ({ row, i, v: key(row) }))
+    .sort((a, b) => {
+      if (isMissing(a.v) || isMissing(b.v)) {
+        return Number(isMissing(a.v)) - Number(isMissing(b.v)) || a.i - b.i;
+      }
+      const c = compareValues(a.v, b.v);
+      return (dir === "asc" ? c : -c) || a.i - b.i;
+    })
+    .map(({ row }) => row);
 }
 
 /** Distinct non-empty strings, in first-seen order. */

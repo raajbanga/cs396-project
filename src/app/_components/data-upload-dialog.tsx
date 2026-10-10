@@ -330,6 +330,8 @@ function ReportView({
           title={`First ${report.previewRows.length} of ${formatNumber(summary.totalRows)} rows`}
         >
           <ReportTable
+            sortable
+            sortKeys={report.previewRows.map((row) => [undefined, row.status])}
             head={["Row", "Status", ...previewColumns]}
             rows={report.previewRows.map((row) => {
               const [variant, label] = STATUS_BADGES[row.status];
@@ -360,6 +362,7 @@ function ReportView({
                 note={`These rows are not imported.${summary.invalidCount > report.validationErrors.length ? ` Showing the first ${report.validationErrors.length} problems.` : ""}`}
               >
                 <ReportTable
+                  sortable
                   head={[
                     "Row",
                     "Facility / Unit",
@@ -403,6 +406,7 @@ function ReportView({
             note="Repeats within the file keep the first row; records already in the database are updated."
           >
             <ReportTable
+              sortable
               head={["Row", "Facility", "Unit", "Year", "Resolution"]}
               rows={report.duplicates.map((d) => [
                 d.rowNumber,
@@ -419,6 +423,7 @@ function ReportView({
         <>
           <Section title="Schema mapping">
             <ReportTable
+              sortable
               head={[
                 "File Column",
                 "Table",

@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, type ComponentProps, type ReactNode } from "react";
+import {
+  useState,
+  type ComponentProps,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -13,6 +19,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select, toOptions } from "~/components/ui/select";
+import { nextSort, type SortDirection } from "~/lib/facility-filters";
 import { cn } from "~/lib/utils";
 
 export function Table({ className, ...props }: ComponentProps<"table">) {
@@ -81,6 +88,21 @@ export function TableSkeleton({ rows }: { rows: number }) {
 }
 
 /** Header cell that sorts on click; `sort` omitted = plain header. Right-aligns when className has text-right. */
+type LocalSort<F extends string> = { sortBy: F; sortDir: SortDirection };
+
+/**
+ * SortableTableHead props for a table sorted in the browser from a `useState` sort: clicking the
+ * active column flips direction; a new column starts descending when `descFirst(field)`.
+ */
+export const localSortProps = <F extends string>(
+  sort: LocalSort<F>,
+  setSort: Dispatch<SetStateAction<LocalSort<F>>>,
+  descFirst: (field: F) => boolean,
+) => ({
+  ...sort,
+  onSortChange: (field: F) => setSort((s) => nextSort(s, field, descFirst)),
+});
+
 export function SortableTableHead<F extends string>({
   label,
   sort,

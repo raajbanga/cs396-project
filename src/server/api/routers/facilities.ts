@@ -19,6 +19,7 @@ import {
 } from "~/lib/campd-reporting-period";
 import { deriveRates, sumTotals } from "~/lib/emissions-metrics";
 import {
+  AUDIT_SORT_FIELDS,
   campdRetrievalSchema,
   DEFAULT_FILTERS,
   facilityFilterSchema,
@@ -261,6 +262,14 @@ function recordConditions(f: FilterInput): SQL[] {
       sql`"annual_records"."dataset_id" IN (SELECT "datasets"."id" FROM "datasets" WHERE "datasets"."source" IN ${sources})`,
     );
   }
+  // Unit-years flagged with a given rule and/or severity (hand-qualified for the same reason).
+  const flag = active(f.auditFlag) ? f.auditFlag : undefined;
+  const severity = active(f.auditSeverity) ? f.auditSeverity : undefined;
+  if (flag ?? severity) {
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM "data_audit_logs" WHERE "data_audit_logs"."annual_record_id" = "annual_records"."id"${flag ? sql` AND "data_audit_logs"."flag_type" = ${flag}` : sql``}${severity ? sql` AND "data_audit_logs"."severity" = ${severity}` : sql``})`,
+    );
+  }
   for (const { key } of RANGE_FIELDS) {
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
@@ -323,7 +332,7 @@ export function rankedFacilities(
         FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
       )`.as("carbon_intensity_lbs_mwh"),
       controlledUnitsCount: sql<number>`(
-        SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND ("units"."so2_controls" IS NOT NULL OR "units"."nox_controls" IS NOT NULL OR "units"."pm_controls" IS NOT NULL OR "units"."hg_controls" IS NOT NULL)
+        SELECT COUNT(*) FROM "units" WHERE "units"."facility_id" = "facilities"."id" AND (TRIM(COALESCE("units"."so2_controls", '')) != '' OR TRIM(COALESCE("units"."nox_controls", '')) != '' OR TRIM(COALESCE("units"."pm_controls", '')) != '' OR TRIM(COALESCE("units"."hg_controls", '')) != '')
       )`.as("controlled_units_count"),
       totalOperatingHours: sql<number>`(
         SELECT COALESCE(ROUND(SUM("annual_records"."operating_hours"), 0), 0) FROM "annual_records" WHERE "annual_records"."facility_id" = "facilities"."id"${yearRecords}
@@ -813,20 +822,41 @@ export const facilitiesRouter = createTRPCRouter({
       });
     }),
 
+  /**
+   * Audits tab: physical-sanity flags matching the explorer filters (rule and severity apply to the
+   * flag itself), sorted and paged, with per-rule counts. Each row carries the values that tripped
+   * the rule and the dataset the flagged record came from.
+   */
   getAuditLogs: publicProcedure
-    .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
-    .query(({ ctx, input }) =>
-      ctx.db
+    .input(
+      facilityFilterSchema.extend({
+        ...pagingSchema,
+        sortBy: z.enum(AUDIT_SORT_FIELDS).default("year"),
+        sortDir: z.enum(["asc", "desc"]).default("desc"),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const flagged = ctx.db
         .select({
           id: dataAuditLogs.id,
           flagType: dataAuditLogs.flagType,
           severity: dataAuditLogs.severity,
           details: dataAuditLogs.details,
-          createdAt: dataAuditLogs.createdAt,
           year: annualRecords.year,
+          unitInternalId: annualRecords.unitInternalId,
           facilityId: annualRecords.facilityId,
           facilityName: facilities.name,
+          stateCode: facilities.stateCode,
           unitId: units.unitId,
+          heatInputMMBtu: annualRecords.heatInputMMBtu,
+          co2MassTons: annualRecords.co2MassTons,
+          grossGenerationMWh: annualRecords.grossGenerationMWh,
+          operatingHours: annualRecords.operatingHours,
+          heatRateMMBtuMWh: annualRecords.heatRateMMBtuMWh,
+          origin: datasets.source,
+          datasetImportedAt: datasets.importedAt,
+          // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
+          datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
         })
         .from(dataAuditLogs)
         .innerJoin(
@@ -835,9 +865,61 @@ export const facilitiesRouter = createTRPCRouter({
         )
         .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
         .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
-        .orderBy(desc(dataAuditLogs.createdAt))
-        .limit(input.limit),
-    ),
+        .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
+        .where(
+          and(
+            ...facilityConditions(input),
+            ...unitConditions(input),
+            // Rule/severity filter the flag rows directly, not "records with such a flag".
+            ...recordConditions({
+              ...input,
+              auditFlag: undefined,
+              auditSeverity: undefined,
+            }),
+            active(input.auditFlag)
+              ? eq(dataAuditLogs.flagType, input.auditFlag)
+              : undefined,
+            active(input.auditSeverity)
+              ? eq(dataAuditLogs.severity, input.auditSeverity)
+              : undefined,
+          ),
+        )
+        .as("flagged");
+
+      const summary = await ctx.db
+        .select({
+          flagType: flagged.flagType,
+          severity: flagged.severity,
+          count: count(),
+        })
+        .from(flagged)
+        .groupBy(flagged.flagType, flagged.severity)
+        .orderBy(desc(count()));
+      const total = summary.reduce((n, r) => n + r.count, 0);
+
+      const sortColumn = {
+        year: flagged.year,
+        severity: flagged.severity,
+        rule: flagged.flagType,
+        facility: flagged.facilityName,
+        source: flagged.datasetImportedAt,
+      }[input.sortBy];
+      const direction = input.sortDir === "asc" ? asc : desc;
+      const page = await pageOf(
+        ctx.db
+          .select()
+          .from(flagged)
+          .orderBy(
+            direction(sortColumn),
+            asc(flagged.facilityName),
+            asc(flagged.unitId),
+            asc(flagged.id),
+          ),
+        Promise.resolve([{ total }]),
+        input,
+      );
+      return { ...page, summary };
+    }),
 
   /** Retrieval history (§5): every dataset, newest first, with its parameters and counts. */
   getDatasets: publicProcedure

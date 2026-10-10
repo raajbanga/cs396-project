@@ -14,6 +14,7 @@ import {
   CloudDownload,
   FileDown,
   Globe,
+  Search,
   Scale,
   Upload,
   Zap,
@@ -30,6 +31,7 @@ import {
   nextSort,
   type ExplorerState,
   type FilterChangeHandler,
+  type AuditSortField,
   type SortField,
   type UnitSortField,
 } from "~/lib/facility-filters";
@@ -51,13 +53,15 @@ import { UnitsTable } from "./units-table";
 
 const MAX_COMPARE = 4;
 
-/** Text-identity sort keys start ascending; numeric metrics start descending (highest first). */
+/** Text-identity sort keys start ascending (severity: ERROR first); numeric metrics and dates start descending. */
 const ASC_FIRST: readonly string[] = [
   "name",
   "id",
   "facility",
   "unitId",
   "state",
+  "severity",
+  "rule",
 ];
 const descByDefault = (field: string) => !ASC_FIRST.includes(field);
 
@@ -74,6 +78,7 @@ export function DatabaseExplorer({
   const [compareIds, setCompareIds] = useState<number[]>([]);
   const [compareUnitIds, setCompareUnitIds] = useState<string[]>([]);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [compareFull, setCompareFull] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isRetrieveOpen, setIsRetrieveOpen] = useState(false);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -81,6 +86,7 @@ export function DatabaseExplorer({
     null,
   );
   const [inspectUnitId, setInspectUnitId] = useState<string | null>(null);
+  const [auditTable, setAuditTable] = useState(initialState.auditTable);
   const [describeMode, setDescribeMode] = useState<"name" | "describe">(
     initialState.q ? "describe" : "name",
   );
@@ -98,6 +104,7 @@ export function DatabaseExplorer({
     filters,
     table,
     unitTable,
+    auditTable,
   };
   const explorerQuery = explorerSearchParams(explorerState);
 
@@ -113,10 +120,13 @@ export function DatabaseExplorer({
   const setPage = (page: number) =>
     activeTab === "units"
       ? setUnitTable((t) => ({ ...t, page }))
-      : setTable((t) => ({ ...t, page }));
+      : activeTab === "audit"
+        ? setAuditTable((t) => ({ ...t, page }))
+        : setTable((t) => ({ ...t, page }));
   const resetPages = () => {
     setTable((t) => ({ ...t, page: 1 }));
     setUnitTable((t) => ({ ...t, page: 1 }));
+    setAuditTable((t) => ({ ...t, page: 1 }));
   };
   const setFilter: FilterChangeHandler = (key, value) => {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -173,6 +183,8 @@ export function DatabaseExplorer({
 
   const handleSortChange = (field: SortField) =>
     setTable((t) => nextSort(t, field, descByDefault));
+  const handleAuditSortChange = (field: AuditSortField) =>
+    setAuditTable((t) => nextSort(t, field, descByDefault));
   const handleUnitSortChange = (field: UnitSortField) =>
     setUnitTable((t) => nextSort(t, field, descByDefault));
 
@@ -182,12 +194,10 @@ export function DatabaseExplorer({
     setList: Dispatch<SetStateAction<T[]>>,
     id: T,
   ) {
+    setCompareFull(false);
     if (list.includes(id)) return setList(list.filter((x) => x !== id));
-    if (compareCount >= MAX_COMPARE) {
-      return alert(
-        `Maximum of ${MAX_COMPARE} facilities or units can be compared simultaneously.`,
-      );
-    }
+    // At the limit the dock says so, instead of a blocking browser alert.
+    if (compareCount >= MAX_COMPARE) return setCompareFull(true);
     setList([...list, id]);
   }
   const toggleCompare = (id: number) => toggleIn(compareIds, setCompareIds, id);
@@ -196,6 +206,7 @@ export function DatabaseExplorer({
   const clearCompare = () => {
     setCompareIds([]);
     setCompareUnitIds([]);
+    setCompareFull(false);
   };
   const canCompare = compareCount >= 2;
   const showRank = filters.topN !== "ALL";
@@ -230,10 +241,11 @@ export function DatabaseExplorer({
     { enabled: isCompareOpen && canCompare },
   );
   const auditQuery = api.facilities.getAuditLogs.useQuery(
-    { limit: 50 },
-    { enabled: activeTab === "audit", staleTime: 0, refetchOnMount: "always" },
+    { ...auditTable, ...deferredFilters },
+    { enabled: activeTab === "audit", placeholderData: (prev) => prev },
   );
 
+  // In workflow order: get data in (Retrieve, Upload), then get it out (Download).
   const headerActions = [
     {
       label: "Retrieve",
@@ -242,16 +254,16 @@ export function DatabaseExplorer({
       open: setIsRetrieveOpen,
     },
     {
-      label: "Download",
-      title: "Download data as CSV",
-      icon: FileDown,
-      open: setIsDownloadOpen,
-    },
-    {
       label: "Upload",
       title: "Upload a CSV or Excel file",
       icon: Upload,
       open: setIsUploadOpen,
+    },
+    {
+      label: "Download",
+      title: "Download data as CSV",
+      icon: FileDown,
+      open: setIsDownloadOpen,
     },
   ];
 
@@ -333,10 +345,41 @@ export function DatabaseExplorer({
           <h1 className="text-fg text-3xl font-bold tracking-tight sm:text-4xl">
             EPA Power-Sector Emissions Data
           </h1>
-          <p className="text-fg-muted mt-1 text-sm sm:text-base">
-            Retrieve, upload, validate, search, and download annual operating
-            and emissions data for U.S. power plants.
+          <p className="text-fg-muted mt-1 max-w-3xl text-sm sm:text-base">
+            epaData collects annual operating and emissions data for U.S.
+            power-plant units from the EPA Clean Air Markets Program (CAMPD) and
+            from validated CSV/Excel uploads, stores it in a local SQLite
+            database, and lets you search, compare, and download it. TRACI
+            impact factors and scoring follow in Phase 2.
           </p>
+          <nav
+            aria-label="Main functions"
+            className="mt-3 flex flex-wrap items-center gap-2 text-xs"
+          >
+            {[
+              ...headerActions.slice(0, 2),
+              {
+                label: "Search",
+                title: "Search unit-years by filters or a description",
+                icon: Search,
+                open: () => setActiveTab("units"),
+              },
+              ...headerActions.slice(2),
+            ].map(({ label, title, icon: Icon, open }, i) => (
+              <Button
+                key={label}
+                variant="outline"
+                size="sm"
+                onClick={() => open(true)}
+                title={title}
+                className="h-7 gap-1.5 px-2.5 text-xs"
+              >
+                <span className="text-fg-muted font-mono">{i + 1}</span>
+                <Icon className="text-fg-muted h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
+          </nav>
         </div>
 
         <EpaPrimer />
@@ -392,14 +435,14 @@ export function DatabaseExplorer({
           />
         </KpiStrip>
 
-        {(activeTab === "explorer" || activeTab === "units") && (
+        {activeTab !== "map" && (
           <div className="space-y-4">
             <FacilityFilterBar
               filters={filters}
               onFilterChange={setFilter}
               onResetFilters={resetFilters}
               filterOptions={filterOptions}
-              describe={describe}
+              describe={activeTab === "audit" ? undefined : describe}
               actions={
                 <>
                   <SourceBadge
@@ -407,19 +450,21 @@ export function DatabaseExplorer({
                     detail={lastImport && `last import ${lastImport}`}
                     className="hidden md:inline-flex"
                   />
-                  <a
-                    href={exportUrl("search", {}, explorerQuery)}
-                    download
-                    className={buttonClass({
-                      variant: "outline",
-                      size: "sm",
-                      className: "bg-surface/60 h-8",
-                    })}
-                    title="Download every matching row as CSV"
-                  >
-                    <FileDown className="text-fg-muted h-3.5 w-3.5" />
-                    CSV
-                  </a>
+                  {activeTab !== "audit" && (
+                    <a
+                      href={exportUrl("search", {}, explorerQuery)}
+                      download
+                      className={buttonClass({
+                        variant: "outline",
+                        size: "sm",
+                        className: "bg-surface/60 h-8",
+                      })}
+                      title="Download every matching row as CSV"
+                    >
+                      <FileDown className="text-fg-muted h-3.5 w-3.5" />
+                      CSV
+                    </a>
+                  )}
                 </>
               }
               {...(activeTab === "units"
@@ -428,13 +473,31 @@ export function DatabaseExplorer({
                     totalMatching: unitsQuery.data?.totalCount,
                     isLoading: unitsQuery.isLoading,
                   }
-                : {
-                    itemLabel: "facilities",
-                    totalMatching: facilitiesQuery.data?.totalCount,
-                    isLoading: facilitiesQuery.isLoading,
-                  })}
+                : activeTab === "audit"
+                  ? {
+                      itemLabel: "flags",
+                      totalMatching: auditQuery.data?.totalCount,
+                      isLoading: auditQuery.isLoading,
+                    }
+                  : {
+                      itemLabel: "facilities",
+                      totalMatching: facilitiesQuery.data?.totalCount,
+                      isLoading: facilitiesQuery.isLoading,
+                    })}
             />
-            {activeTab === "units" ? (
+            {activeTab === "audit" ? (
+              <AuditLogsTable
+                data={auditQuery.data}
+                {...auditTable}
+                onSortChange={handleAuditSortChange}
+                isLoading={auditQuery.isLoading}
+                isPlaceholderData={auditQuery.isPlaceholderData}
+                onPageChange={setPage}
+                onPageSizeChange={(pageSize) =>
+                  setAuditTable((t) => ({ ...t, pageSize, page: 1 }))
+                }
+              />
+            ) : activeTab === "units" ? (
               <UnitsTable
                 data={unitsQuery.data}
                 {...unitTable}
@@ -479,13 +542,6 @@ export function DatabaseExplorer({
             onInspectFacility={setInspectFacilityId}
             filters={filters}
             onFilterChange={setFilter}
-          />
-        )}
-
-        {activeTab === "audit" && (
-          <AuditLogsTable
-            logs={auditQuery.data}
-            isLoading={auditQuery.isLoading}
           />
         )}
       </main>
@@ -571,6 +627,14 @@ export function DatabaseExplorer({
               .filter(Boolean)
               .join(" · ")}
           </span>
+          {compareFull && (
+            <span
+              role="status"
+              className="text-xs font-medium whitespace-nowrap text-amber-700 dark:text-amber-400"
+            >
+              Max {MAX_COMPARE}: remove one first
+            </span>
+          )}
           <div className="bg-edge h-4 w-px shrink-0" />
           {canCompare ? (
             <Button

@@ -37,9 +37,12 @@ import {
   TableCell,
   TableHead,
   TableHeader,
+  localSortProps,
+  SortableTableHead,
   TableRow,
 } from "~/components/ui/table";
 import { buildYearlyRollups, type YearlyRollup } from "~/lib/emissions-metrics";
+import type { SortDirection } from "~/lib/facility-filters";
 import {
   cleanOwnerOperator,
   formatCountyShort,
@@ -51,10 +54,12 @@ import {
   cn,
   datasetOriginLabel,
   formatQuantity,
+  sortRows,
   uniqueStrings,
+  type SortValue,
 } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
-import { AuditPanel } from "./audit-logs-table";
+import { AuditPanel, flagsOfRecords } from "./audit-logs-table";
 import { GranularEmissionsWindow } from "./granular-emissions-window";
 
 type FacilityDetail = NonNullable<RouterOutputs["facilities"]["getFacility"]>;
@@ -129,7 +134,22 @@ function OverviewPanel({ story }: { story: PlantStory }) {
   );
 }
 
+type FleetUnit = FacilityDetail["units"][number];
+type FleetSort = "unitId" | "type" | "status" | "capacity" | "commissioned";
+const FLEET_KEYS: Record<FleetSort, (u: FleetUnit) => SortValue> = {
+  unitId: (u) => u.unitId,
+  type: (u) => u.unitType,
+  status: (u) => u.operatingStatus,
+  capacity: (u) => u.nameplateCapacityMW,
+  commissioned: (u) => u.commercialOpDate,
+};
+
 function FleetPanel({ units }: { units: FacilityDetail["units"] }) {
+  const [sort, setSort] = useState({
+    sortBy: "unitId" as FleetSort,
+    sortDir: "asc" as SortDirection,
+  });
+  const head = localSortProps(sort, setSort, (f) => f === "capacity");
   if (units.length === 0) {
     return (
       <EmptyState title="No generation units recorded for this facility." />
@@ -140,76 +160,103 @@ function FleetPanel({ units }: { units: FacilityDetail["units"] }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-24">Unit ID</TableHead>
-            <TableHead>Type & Primary Fuel</TableHead>
-            <TableHead>Operating Status</TableHead>
-            <TableHead className="text-right">Capacity (MW)</TableHead>
+            <SortableTableHead
+              label="Unit ID"
+              sort="unitId"
+              className="w-24"
+              {...head}
+            />
+            <SortableTableHead
+              label="Type & Primary Fuel"
+              sort="type"
+              {...head}
+            />
+            <SortableTableHead
+              label="Operating Status"
+              sort="status"
+              {...head}
+            />
+            <SortableTableHead
+              label="Capacity (MW)"
+              sort="capacity"
+              className="text-right"
+              {...head}
+            />
             <TableHead>Air Quality Controls</TableHead>
-            <TableHead className="w-28 text-right">Commissioned</TableHead>
+            <SortableTableHead
+              label="Commissioned"
+              sort="commissioned"
+              className="w-28 text-right"
+              {...head}
+            />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {units.map((unit) => {
-            const controls = [
-              ["NOₓ", unit.noxControls],
-              ["SO₂", unit.so2Controls],
-            ].filter(([, value]) => value);
-            return (
-              <TableRow key={unit.id}>
-                <TableCell className="font-mono text-xs font-medium text-emerald-400">
-                  Unit {unit.unitId}
-                </TableCell>
-                <TableCell>
-                  <div className="text-fg font-medium">
-                    {unit.unitType ?? "Combustion Generator"}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1 pt-1">
-                    {unit.primaryFuel && <FuelBadge fuel={unit.primaryFuel} />}
-                    {unit.secondaryFuel && (
-                      <Badge variant="secondary">
-                        Sec: {unit.secondaryFuel}
-                      </Badge>
+          {sortRows(units, FLEET_KEYS[sort.sortBy], sort.sortDir).map(
+            (unit) => {
+              const controls = [
+                ["NOₓ", unit.noxControls],
+                ["SO₂", unit.so2Controls],
+              ].filter(([, value]) => value);
+              return (
+                <TableRow key={unit.id}>
+                  <TableCell className="font-mono text-xs font-medium text-emerald-400">
+                    Unit {unit.unitId}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-fg font-medium">
+                      {unit.unitType ?? "Combustion Generator"}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1 pt-1">
+                      {unit.primaryFuel && (
+                        <FuelBadge fuel={unit.primaryFuel} />
+                      )}
+                      {unit.secondaryFuel && (
+                        <Badge variant="secondary">
+                          Sec: {unit.secondaryFuel}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        isOperatingStatus(unit.operatingStatus)
+                          ? "success"
+                          : "secondary"
+                      }
+                    >
+                      {unit.operatingStatus ?? "Operating"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-fg text-right font-mono font-semibold">
+                    {formatQuantity(unit.nameplateCapacityMW, "MW", {
+                      digits: 2,
+                    })}
+                  </TableCell>
+                  <TableCell className="max-w-xs space-y-0.5 text-xs">
+                    {controls.length === 0 ? (
+                      <span className="text-fg-muted italic">
+                        No controls listed
+                      </span>
+                    ) : (
+                      controls.map(([label, value]) => (
+                        <div key={label} className="text-fg-2 truncate">
+                          <span className="text-fg-muted font-medium">
+                            {label}:
+                          </span>{" "}
+                          {value}
+                        </div>
+                      ))
                     )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      isOperatingStatus(unit.operatingStatus)
-                        ? "success"
-                        : "secondary"
-                    }
-                  >
-                    {unit.operatingStatus ?? "Operating"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-fg text-right font-mono font-semibold">
-                  {formatQuantity(unit.nameplateCapacityMW, "MW", {
-                    digits: 2,
-                  })}
-                </TableCell>
-                <TableCell className="max-w-xs space-y-0.5 text-xs">
-                  {controls.length === 0 ? (
-                    <span className="text-fg-muted italic">
-                      No controls listed
-                    </span>
-                  ) : (
-                    controls.map(([label, value]) => (
-                      <div key={label} className="text-fg-2 truncate">
-                        <span className="text-fg-muted font-medium">
-                          {label}:
-                        </span>{" "}
-                        {value}
-                      </div>
-                    ))
-                  )}
-                </TableCell>
-                <TableCell className="text-fg-muted text-right font-mono text-xs">
-                  {unit.commercialOpDate ?? "—"}
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                  </TableCell>
+                  <TableCell className="text-fg-muted text-right font-mono text-xs">
+                    {unit.commercialOpDate ?? "—"}
+                  </TableCell>
+                </TableRow>
+              );
+            },
+          )}
         </TableBody>
       </Table>
     </DataPanel>
@@ -263,8 +310,30 @@ function EmissionCells({
   );
 }
 
+type EmissionsSort =
+  "year" | "generation" | "co2" | "intensity" | "heatRate" | "hours";
+type RollupRecord = YearlyRollup["records"][number];
+/** Sort keys for year rows and, within a year, its unit rows ("year" keeps units by ID). */
+const EMISSIONS_KEYS: Record<
+  EmissionsSort,
+  [(r: YearlyRollup) => SortValue, (r: RollupRecord) => SortValue]
+> = {
+  year: [(r) => r.year, (r) => r.unit?.unitId],
+  generation: [(r) => r.grossGenerationMWh, (r) => r.grossGenerationMWh],
+  co2: [(r) => r.co2MassTons, (r) => r.co2MassTons],
+  intensity: [(r) => r.co2IntensityLbsMWh, (r) => r.co2IntensityLbsMWh],
+  heatRate: [(r) => r.heatRateMMBtuMWh, (r) => r.heatRateMMBtuMWh],
+  hours: [(r) => r.maxOperatingHours, (r) => r.operatingHours],
+};
+
 function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
   const [collapsedYears, setCollapsedYears] = useState<Set<number>>(new Set());
+  const [sort, setSort] = useState({
+    sortBy: "year" as EmissionsSort,
+    sortDir: "desc" as SortDirection,
+  });
+  const head = localSortProps(sort, setSort, () => true);
+  const [yearKey, recordKey] = EMISSIONS_KEYS[sort.sortBy];
 
   if (rollups.length === 0) {
     return <EmptyState title="No annual emissions records available." />;
@@ -282,16 +351,33 @@ function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-40">Reporting Year</TableHead>
-            <TableHead className="text-right">Generation (MWh)</TableHead>
-            <TableHead className="text-right">CO₂ Mass (tons)</TableHead>
-            <TableHead className="text-right">Intensity (lbs/MWh)</TableHead>
-            <TableHead className="text-right">Thermal Heat Rate</TableHead>
-            <TableHead className="text-right">Operating Hours</TableHead>
+            <SortableTableHead
+              label="Reporting Year"
+              sort="year"
+              className="w-40"
+              {...head}
+            />
+            {(
+              [
+                ["Generation (MWh)", "generation"],
+                ["CO₂ Mass (tons)", "co2"],
+                ["Intensity (lbs/MWh)", "intensity"],
+                ["Thermal Heat Rate", "heatRate"],
+                ["Operating Hours", "hours"],
+              ] as const
+            ).map(([label, key]) => (
+              <SortableTableHead
+                key={key}
+                label={label}
+                sort={key}
+                className="text-right"
+                {...head}
+              />
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rollups.map((rollup) => {
+          {sortRows(rollups, yearKey, sort.sortDir).map((rollup) => {
             const isExpanded = !collapsedYears.has(rollup.year);
             const expandable = rollup.records.length > 1;
             return (
@@ -327,7 +413,11 @@ function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
                 </TableRow>
 
                 {isExpanded &&
-                  rollup.records.map((rec) => (
+                  sortRows(
+                    rollup.records,
+                    recordKey,
+                    sort.sortBy === "year" ? "asc" : sort.sortDir,
+                  ).map((rec) => (
                     <TableRow
                       key={rec.id}
                       className="bg-surface/25 text-fg-2 text-xs"
@@ -397,7 +487,7 @@ export function FacilityDetailDialog({
     (acc, u) => acc + (u.nameplateCapacityMW ?? 0),
     0,
   );
-  const auditLogs = facility?.annualRecords.flatMap((r) => r.auditLogs) ?? [];
+  const auditLogs = flagsOfRecords(facility?.annualRecords ?? []);
   const flagged = auditLogs.length > 0;
 
   const story =

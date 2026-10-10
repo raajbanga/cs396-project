@@ -25,6 +25,7 @@ import {
   type FacilityFilters,
   type FilterChangeHandler,
 } from "~/lib/facility-filters";
+import { AUDIT_RULES, AUDIT_SEVERITIES } from "~/lib/emissions-metrics";
 import { cn } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
@@ -63,6 +64,8 @@ const CHIP_LABELS: Partial<Record<keyof FacilityFilters, string>> = {
   noxControl: "NOₓ control",
   pmControl: "PM control",
   operatingStatus: "Status",
+  auditFlag: "Flag",
+  auditSeverity: "Severity",
 };
 
 const formatBound = (v: string) => {
@@ -250,12 +253,12 @@ function AdvancedFilters({
   filters,
   filterOptions,
   onFilterChange,
-  isUnitView,
+  view,
 }: {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
   onFilterChange: FilterChangeHandler;
-  isUnitView: boolean;
+  view: FilterBarProps["itemLabel"];
 }) {
   const counties = [
     ...new Set(
@@ -295,6 +298,19 @@ function AdvancedFilters({
       "operatingStatus",
       "Operating status",
       toOptions(filterOptions?.operatingStatuses, "Any status"),
+    ],
+    [
+      "auditFlag",
+      "Audit flag",
+      [
+        { value: "ALL", label: "Any (or none)" },
+        ...AUDIT_RULES.map((r) => ({ value: r.flagType, label: r.label })),
+      ],
+    ],
+    [
+      "auditSeverity",
+      "Flag severity",
+      toOptions(AUDIT_SEVERITIES, "Any severity"),
     ],
     [
       "origin",
@@ -367,44 +383,46 @@ function AdvancedFilters({
         </div>
       </div>
 
-      <div className="border-edge/60 flex flex-wrap items-end gap-2.5 border-t pt-3">
-        <label className="space-y-1">
-          <span className={FIELD_LABEL}>Ranking</span>
-          <Select
-            value={filters.topN}
-            onValueChange={(value) => onFilterChange("topN", value)}
-            options={[
-              { value: "ALL", label: "All rows" },
-              ...TOP_N_OPTIONS.map((n) => ({
-                value: String(n),
-                label: `First ${n}`,
-              })),
-            ]}
-            size="toolbar"
-            className="w-32"
-          />
-        </label>
-        <label className="space-y-1">
-          <span className={FIELD_LABEL}>Group</span>
-          <Select
-            value={filters.rankGroup}
-            onValueChange={(value) => onFilterChange("rankGroup", value)}
-            options={[
-              { value: "ALL", label: "Overall" },
-              { value: "state", label: "Per state" },
-            ]}
-            size="toolbar"
-            className="w-32"
-          />
-        </label>
-        <p className="text-fg-muted max-w-xl pb-1 text-xs">
-          Ranks follow the table sort: click a column header (↓ = Top-N, ↑ =
-          Bottom-N).{" "}
-          {isUnitView
-            ? "Each row is one unit in one reporting year."
-            : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
-        </p>
-      </div>
+      {view !== "flags" && (
+        <div className="border-edge/60 flex flex-wrap items-end gap-2.5 border-t pt-3">
+          <label className="space-y-1">
+            <span className={FIELD_LABEL}>Ranking</span>
+            <Select
+              value={filters.topN}
+              onValueChange={(value) => onFilterChange("topN", value)}
+              options={[
+                { value: "ALL", label: "All rows" },
+                ...TOP_N_OPTIONS.map((n) => ({
+                  value: String(n),
+                  label: `First ${n}`,
+                })),
+              ]}
+              size="toolbar"
+              className="w-32"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className={FIELD_LABEL}>Group</span>
+            <Select
+              value={filters.rankGroup}
+              onValueChange={(value) => onFilterChange("rankGroup", value)}
+              options={[
+                { value: "ALL", label: "Overall" },
+                { value: "state", label: "Per state" },
+              ]}
+              size="toolbar"
+              className="w-32"
+            />
+          </label>
+          <p className="text-fg-muted max-w-xl pb-1 text-xs">
+            Ranks follow the table sort: click a column header (↓ = Top-N, ↑ =
+            Bottom-N).{" "}
+            {view === "unit-years"
+              ? "Each row is one unit in one reporting year."
+              : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -417,6 +435,19 @@ function CountBubble({ count }: { count: number }) {
   );
 }
 
+interface FilterBarProps {
+  filters: FacilityFilters;
+  filterOptions?: FilterOptions;
+  onFilterChange: FilterChangeHandler;
+  onResetFilters: () => void;
+  totalMatching?: number;
+  itemLabel: "facilities" | "unit-years" | "flags";
+  isLoading: boolean;
+  /** Extra controls beside the result count, e.g. a CSV download. */
+  actions?: ReactNode;
+  describe?: DescribeProps;
+}
+
 export function FacilityFilterBar({
   filters,
   filterOptions,
@@ -427,18 +458,7 @@ export function FacilityFilterBar({
   isLoading,
   actions,
   describe,
-}: {
-  filters: FacilityFilters;
-  filterOptions?: FilterOptions;
-  onFilterChange: FilterChangeHandler;
-  onResetFilters: () => void;
-  totalMatching?: number;
-  itemLabel: "facilities" | "unit-years";
-  isLoading: boolean;
-  /** Extra controls beside the result count, e.g. a CSV download. */
-  actions?: ReactNode;
-  describe?: DescribeProps;
-}) {
+}: FilterBarProps) {
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter((key) =>
     isFilterActive(filters, key),
@@ -596,7 +616,7 @@ export function FacilityFilterBar({
           filters={filters}
           filterOptions={filterOptions}
           onFilterChange={onFilterChange}
-          isUnitView={itemLabel === "unit-years"}
+          view={itemLabel}
         />
       )}
     </div>

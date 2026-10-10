@@ -74,8 +74,8 @@ export const hasAirQualityControls = (unit: {
   pmControls?: string | null;
   hgControls?: string | null;
 }) =>
-  Boolean(
-    unit.so2Controls ?? unit.noxControls ?? unit.pmControls ?? unit.hgControls,
+  [unit.so2Controls, unit.noxControls, unit.pmControls, unit.hgControls].some(
+    (c) => Boolean(c?.trim()),
   );
 
 /** Plain-English grid role, by category, fuel, and dispatch hours (baseload > 4,800 h/yr, peaker < 1,800 h/yr). */

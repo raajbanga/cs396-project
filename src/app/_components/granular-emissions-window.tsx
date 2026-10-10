@@ -16,8 +16,9 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
+  localSortProps,
+  SortableTableHead,
   TableRow,
 } from "~/components/ui/table";
 import {
@@ -28,9 +29,10 @@ import {
   GRANULARITIES,
   type Granularity,
 } from "~/lib/campd-reporting-period";
+import type { SortDirection } from "~/lib/facility-filters";
 import { getCarbonIntensityTier } from "~/lib/plant-narrative";
-import { cn } from "~/lib/utils";
-import { api } from "~/trpc/react";
+import { cn, sortRows } from "~/lib/utils";
+import { api, type RouterOutputs } from "~/trpc/react";
 
 interface GranularPlant {
   id: number;
@@ -45,16 +47,23 @@ const INTENSITY_TEXT = {
   destructive: "text-rose-400",
 } as Record<string, string>;
 
+type Item =
+  RouterOutputs["facilities"]["getGranularEmissions"]["items"][number] & {
+    order: number;
+  };
+
+/** Header, width, and sort key per column; "Time Interval" sorts chronologically. */
 const COLUMNS = [
-  ["Time Interval", "w-28 text-left"],
-  ["Operating", "w-16"],
-  ["Generation", "w-24"],
-  ["Heat Input", "w-20"],
-  ["CO₂ Mass", "w-20"],
-  ["SO₂", "w-12"],
-  ["NOₓ", "w-12"],
-  ["Intensity", "w-20"],
+  ["Time Interval", "w-28 text-left", (i: Item) => i.order],
+  ["Operating", "w-16", (i: Item) => i.operatingHours],
+  ["Generation", "w-24", (i: Item) => i.grossGenerationMWh],
+  ["Heat Input", "w-20", (i: Item) => i.heatInputMMBtu],
+  ["CO₂ Mass", "w-20", (i: Item) => i.co2MassTons],
+  ["SO₂", "w-12", (i: Item) => i.so2MassTons],
+  ["NOₓ", "w-12", (i: Item) => i.noxMassTons],
+  ["Intensity", "w-20", (i: Item) => i.co2IntensityLbsMWh],
 ] as const;
+type ColumnLabel = (typeof COLUMNS)[number][0];
 
 export function GranularEmissionsWindow({
   plants,
@@ -67,6 +76,11 @@ export function GranularEmissionsWindow({
   const [pickedYear, setPickedYear] = useState<number | null>(null);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const [selectedUnit, setSelectedUnit] = useState("ALL");
+  const [sort, setSort] = useState({
+    sortBy: "Time Interval" as ColumnLabel,
+    sortDir: "asc" as SortDirection,
+  });
+  const head = localSortProps(sort, setSort, (f) => f !== "Time Interval");
 
   const plant = plants.find((p) => p.id === activeFacilityId) ?? plants[0]!;
   const units = plant.units ?? [];
@@ -278,20 +292,25 @@ export function GranularEmissionsWindow({
               <TableHeader className="sticky top-0 z-10 backdrop-blur-xs">
                 <TableRow>
                   {COLUMNS.map(([label, width]) => (
-                    <TableHead
+                    <SortableTableHead
                       key={label}
+                      label={label}
+                      sort={label}
+                      {...head}
                       className={cn(
                         "h-7 px-1.5 py-1 text-right font-sans text-xs",
                         width,
                       )}
-                    >
-                      {label}
-                    </TableHead>
+                    />
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => (
+                {sortRows(
+                  items.map((item, order) => ({ ...item, order })),
+                  COLUMNS.find(([label]) => label === sort.sortBy)![2],
+                  sort.sortDir,
+                ).map((item) => (
                   <TableRow key={item.periodKey} className="font-mono text-xs">
                     <TableCell className="px-2 py-1 font-sans">
                       <span className="text-fg font-semibold">

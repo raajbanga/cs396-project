@@ -1,7 +1,11 @@
 "use client";
 
 import { Scale } from "lucide-react";
-import { Badge, CarbonIntensityBadge, FuelBadge } from "~/components/ui/badge";
+import {
+  CarbonIntensityBadge,
+  FuelBadge,
+  OriginBadge,
+} from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { EmptyState } from "~/components/ui/empty-state";
@@ -18,12 +22,7 @@ import {
 } from "~/components/ui/table";
 import type { SortDirection, UnitSortField } from "~/lib/facility-filters";
 import { formatCountyShort } from "~/lib/plant-narrative";
-import {
-  cn,
-  datasetOriginLabel,
-  formatNumber,
-  formatQuantity,
-} from "~/lib/utils";
+import { cn, formatNumber, formatQuantity } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 import { CompareCheckbox, RankBadge, SELECTED_ROW } from "./facilities-table";
 
@@ -31,22 +30,6 @@ type UnitYearsPage = RouterOutputs["facilities"]["getUnitYears"];
 type UnitYearRow = UnitYearsPage["items"][number];
 
 const NUM = "text-right font-mono text-xs whitespace-nowrap";
-
-/** Which dataset wrote this unit-year: the CAMPD API or a file upload (date and name on hover). */
-function OriginBadge({ row }: { row: UnitYearRow }) {
-  if (!row.origin || !row.datasetImportedAt) {
-    return <span className="text-fg-muted text-xs">—</span>;
-  }
-  const api = row.origin === "API";
-  return (
-    <Badge
-      variant={api ? "sky" : "purple"}
-      title={`${datasetOriginLabel({ source: row.origin, importedAt: row.datasetImportedAt })}${row.datasetName ? `\n${row.datasetName}` : ""}`}
-    >
-      {api ? "API" : "Upload"}
-    </Badge>
-  );
-}
 
 /** Metric columns: header, sort key, and how the row value renders. */
 const METRIC_COLUMNS: {
@@ -240,7 +223,7 @@ export function UnitsTable({
                     {r.year}
                   </TableCell>
                   <TableCell>
-                    <OriginBadge row={r} />
+                    <OriginBadge {...r} />
                   </TableCell>
                   {METRIC_COLUMNS.map((col) => (
                     <TableCell

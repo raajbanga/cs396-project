@@ -1,6 +1,10 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useState, type ReactNode } from "react";
 import { DataPanel } from "~/components/ui/data-panel";
 import {
+  localSortProps,
+  SortableTableHead,
   Table,
   TableBody,
   TableCell,
@@ -8,7 +12,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { cn } from "~/lib/utils";
+import type { SortDirection } from "~/lib/facility-filters";
+import { cn, isNumericValue, sortRows, type SortValue } from "~/lib/utils";
 
 /** Small uppercase caption above a form control or group of controls. */
 export const FIELD_LABEL =
@@ -53,30 +58,72 @@ export function Section({
   );
 }
 
-/** Compact monospace table for validation reports, histories, and record lists. */
+/**
+ * Compact monospace table for validation reports, histories, and record lists. With `sortable`,
+ * headers sort ↑/↓ on click: text and number cells sort by their own value, other cells (badges,
+ * links) by `sortKeys[row][column]`, and a column with no value at all stays fixed. Numeric columns
+ * start highest-first.
+ */
 export function ReportTable({
   head,
   rows,
+  sortable = false,
+  sortKeys,
 }: {
   head: string[];
   rows: ReactNode[][];
+  sortable?: boolean;
+  sortKeys?: SortValue[][];
 }) {
+  const [sort, setSort] = useState({
+    sortBy: "",
+    sortDir: "asc" as SortDirection,
+  });
+  const keyOf = (i: number, j: number): SortValue => {
+    const cell = rows[i]?.[j];
+    return (
+      sortKeys?.[i]?.[j] ??
+      (typeof cell === "string" || typeof cell === "number" ? cell : undefined)
+    );
+  };
+  const column = (j: number) => rows.map((_, i) => keyOf(i, j));
+  const canSort = (j: number) =>
+    sortable && column(j).some((v) => v !== undefined);
+  const numeric = (j: number) => column(j).some(isNumericValue);
+  const order =
+    sortable && sort.sortBy
+      ? sortRows(
+          rows.map((_, i) => i),
+          (i) => keyOf(i, Number(sort.sortBy)),
+          sort.sortDir,
+        )
+      : rows.map((_, i) => i);
   return (
     <DataPanel>
       <Table className="text-xs">
         <TableHeader>
           <TableRow>
-            {head.map((h, i) => (
-              <TableHead key={i} className="whitespace-nowrap">
-                {h}
-              </TableHead>
-            ))}
+            {head.map((h, j) =>
+              canSort(j) ? (
+                <SortableTableHead
+                  key={j}
+                  label={h}
+                  sort={String(j)}
+                  {...localSortProps(sort, setSort, (f) => numeric(Number(f)))}
+                  className="whitespace-nowrap"
+                />
+              ) : (
+                <TableHead key={j} className="whitespace-nowrap">
+                  {h}
+                </TableHead>
+              ),
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((cells, i) => (
+          {order.map((i) => (
             <TableRow key={i}>
-              {cells.map((cell, j) => (
+              {rows[i]!.map((cell, j) => (
                 <TableCell key={j} className="max-w-56 truncate font-mono">
                   {cell}
                 </TableCell>

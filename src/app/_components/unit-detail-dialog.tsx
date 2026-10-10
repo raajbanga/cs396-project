@@ -19,7 +19,7 @@ import {
 } from "~/lib/plant-narrative";
 import { datasetOriginLabel, formatNumber, formatQuantity } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
-import { AuditPanel } from "./audit-logs-table";
+import { AuditPanel, flagsOfRecords } from "./audit-logs-table";
 
 type UnitDetail = NonNullable<RouterOutputs["facilities"]["getUnit"]>;
 
@@ -43,7 +43,7 @@ export function UnitDetailDialog({
 }) {
   const records = unit?.annualRecords ?? [];
   const latest = records[0];
-  const auditLogs = records.flatMap((r) => r.auditLogs);
+  const auditLogs = flagsOfRecords(records, unit?.unitId);
 
   const identification: [string, string | null | undefined][] = unit
     ? [
@@ -213,6 +213,14 @@ export function UnitDetailDialog({
               <EmptyState title="No annual records for this unit." />
             ) : (
               <ReportTable
+                sortable
+                sortKeys={records.map((r) => [
+                  r.year,
+                  ...Array<undefined>(7),
+                  r.co2IntensityLbsMWh,
+                  undefined,
+                  r.dataset?.importedAt,
+                ])}
                 head={[
                   "Year",
                   "Op. hrs",

@@ -20,6 +20,7 @@ import {
   activeCampdFilters,
   campdRetrievalSchema,
   DEFAULT_FILTERS,
+  DEFAULT_AUDIT_TABLE_STATE,
   DEFAULT_TABLE_STATE,
   DEFAULT_UNIT_TABLE_STATE,
   describeCampdFilters,
@@ -36,6 +37,7 @@ import {
   hasAirQualityControls,
   isOperatingStatus,
 } from "./plant-narrative";
+import { isNumericValue, sortRows } from "./utils";
 
 void test("emissions metrics handle valid and missing generation", () => {
   assert.equal(computeCo2IntensityLbsMWh(1, 2), 1000);
@@ -65,6 +67,15 @@ void test("unit status and controls use shared rules", () => {
   assert.equal(isOperatingStatus("Non-Operating"), false);
   assert.equal(hasAirQualityControls({ pmControls: "Baghouse" }), true);
   assert.equal(hasAirQualityControls({}), false);
+  // A blank SO₂ entry must not hide a real NOₓ control (and blanks alone don't count).
+  assert.equal(
+    hasAirQualityControls({ so2Controls: "", noxControls: "SCR" }),
+    true,
+  );
+  assert.equal(
+    hasAirQualityControls({ so2Controls: " ", pmControls: "" }),
+    false,
+  );
   assert.equal(
     cleanOwnerOperator("Acme (Owner) | acme (Operator) | Beta Co (Parent)"),
     "Acme, Beta Co",
@@ -212,6 +223,7 @@ void test("explorer state round-trips through URL query params", () => {
       rankGroup: "state",
     },
     table: DEFAULT_TABLE_STATE,
+    auditTable: DEFAULT_AUDIT_TABLE_STATE,
     unitTable: {
       ...DEFAULT_UNIT_TABLE_STATE,
       sortBy: "noxMassTons" as const,
@@ -278,4 +290,56 @@ void test("nextSort flips on the same field and resets the page", () => {
   });
   assert.equal(nextSort(t, "name", desc).sortDir, "desc"); // already name/asc
   assert.equal(nextSort(t, "id", desc).sortDir, "asc");
+});
+
+void test("sortRows: numbers, formatted numbers, dates, natural text; missing values last", () => {
+  const rows = ["1,250", "987", "—", "12", null, "10,000.5"];
+  assert.deepEqual(
+    sortRows(rows, (r) => r, "asc"),
+    ["12", "987", "1,250", "10,000.5", "—", null],
+  );
+  assert.deepEqual(
+    sortRows(rows, (r) => r, "desc"),
+    ["10,000.5", "1,250", "987", "12", "—", null],
+  );
+  assert.deepEqual(
+    sortRows(["Unit 10", "Unit 2", "unit 1"], (r) => r, "asc"),
+    ["unit 1", "Unit 2", "Unit 10"],
+  );
+  const d = (iso: string) => new Date(iso);
+  assert.deepEqual(
+    sortRows([d("2026-10-07"), d("2025-01-01")], (r) => r, "asc").map((x) =>
+      x.getUTCFullYear(),
+    ),
+    [2025, 2026],
+  );
+  assert.equal(isNumericValue("1,234.5"), true);
+  assert.equal(isNumericValue("CT1"), false);
+});
+
+void test("audit tab sort and page round-trip through the URL", () => {
+  const state = parseExplorerParams({
+    tab: "audit",
+    sort: "severity",
+    dir: "asc",
+    page: "3",
+    auditFlag: "EXTREME_HEAT_RATE",
+  });
+  assert.deepEqual(state.auditTable, {
+    ...DEFAULT_AUDIT_TABLE_STATE,
+    sortBy: "severity",
+    sortDir: "asc",
+    page: 3,
+  });
+  assert.equal(state.filters.auditFlag, "EXTREME_HEAT_RATE");
+  assert.equal(
+    explorerSearchParams(state),
+    "tab=audit&auditFlag=EXTREME_HEAT_RATE&sort=severity&dir=asc&page=3",
+  );
+  // A unit-view sort key is not valid on the Audits tab.
+  assert.equal(
+    parseExplorerParams({ tab: "audit", sort: "co2MassTons" }).auditTable
+      .sortBy,
+    "year",
+  );
 });

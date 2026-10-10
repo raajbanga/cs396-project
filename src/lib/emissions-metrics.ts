@@ -71,12 +71,32 @@ export function deriveRates(totals: EmissionTotals, heatRateDecimals = 2) {
  * Physical-sanity audit thresholds:
  * Operational bounds every stored unit-year is checked against.
  */
-const AUDIT_THRESHOLDS = {
+export const AUDIT_THRESHOLDS = {
   ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU: 1000,
   PHANTOM_GENERATION_MIN_MWH: 0,
   HEAT_RATE_MIN_MMBTU_MWH: 5.0,
   HEAT_RATE_MAX_MMBTU_MWH: 25.0,
 } as const;
+
+/** The physical-sanity rules and the severity each one logs (filter options and labels). */
+export const AUDIT_RULES = [
+  {
+    flagType: "ZERO_EMISSIONS_HIGH_HEAT",
+    severity: "ERROR",
+    label: "Heat input but zero CO₂",
+  },
+  {
+    flagType: "PHANTOM_GENERATION",
+    severity: "ERROR",
+    label: "Generation with zero hours",
+  },
+  {
+    flagType: "EXTREME_HEAT_RATE",
+    severity: "WARN",
+    label: "Heat rate outside 5–25 MMBtu/MWh",
+  },
+] as const;
+export const AUDIT_SEVERITIES = ["ERROR", "WARN"] as const;
 
 export function evaluatePhysicalSanityRules(
   m: EmissionTotals & { heatRateMMBtuMWh: number | null },
