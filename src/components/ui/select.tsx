@@ -34,6 +34,11 @@ export function Select({
   size?: keyof typeof TRIGGER_SIZES;
   className?: string;
 }) {
+  // A value set elsewhere (a shared URL, a parsed description) still shows when it isn't a listed option.
+  const shown =
+    value && !options.some((o) => o.value === value)
+      ? [...options, { value, label: value }]
+      : options;
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
       <SelectPrimitive.Trigger
@@ -57,7 +62,7 @@ export function Select({
             <ChevronUp className="h-4 w-4" />
           </SelectPrimitive.ScrollUpButton>
           <SelectPrimitive.Viewport className="h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] p-1">
-            {options.map((option) => (
+            {shown.map((option) => (
               <SelectPrimitive.Item
                 key={option.value}
                 value={option.value}

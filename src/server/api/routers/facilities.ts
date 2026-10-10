@@ -20,16 +20,19 @@ import {
 import { deriveRates, sumTotals } from "~/lib/emissions-metrics";
 import {
   campdRetrievalSchema,
+  DEFAULT_FILTERS,
   facilityFilterSchema,
   multiValueOptions,
   SORT_FIELDS,
-  UNIT_METRICS,
+  RANGE_FIELDS,
   UNIT_SORT_FIELDS,
+  type FacilityFilters,
   type FilterInput,
   type SortDirection,
   type SortField,
   type UnitSortField,
 } from "~/lib/facility-filters";
+import { parseDescription, type Metric } from "~/lib/describe-search";
 import {
   hasAirQualityControls,
   isOperatingStatus,
@@ -44,6 +47,7 @@ import {
   syncCampdAnnualEmissions,
 } from "~/server/campd/client";
 import { type db as Database } from "~/server/db";
+import { llmFallback } from "~/server/llm-search";
 import {
   annualRecords,
   dataAuditLogs,
@@ -230,6 +234,12 @@ function unitConditions(f: FilterInput): SQL[] {
   for (const [col, value] of containsFilters) {
     if (active(value)) conditions.push(contains(col, value));
   }
+  // Prefix match: "Retired" must not catch "Operating (Retired 04/15/2016)".
+  if (active(f.operatingStatus)) {
+    conditions.push(
+      sql`lower(${units.operatingStatus}) LIKE ${`${f.operatingStatus.trim().toLowerCase()}%`}`,
+    );
+  }
   return conditions;
 }
 
@@ -251,7 +261,7 @@ function recordConditions(f: FilterInput): SQL[] {
       sql`"annual_records"."dataset_id" IN (SELECT "datasets"."id" FROM "datasets" WHERE "datasets"."source" IN ${sources})`,
     );
   }
-  for (const { key } of UNIT_METRICS) {
+  for (const { key } of RANGE_FIELDS) {
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
     if (min !== undefined) conditions.push(gte(annualRecords[key], min));
@@ -435,6 +445,67 @@ async function distinctValues(database: typeof Database, column: SQLiteColumn) {
   return rows.map((r) => String(r.value));
 }
 
+/** Distinct values behind every explorer filter (also the description-search vocabulary). */
+async function filterOptions(database: typeof Database) {
+  const tokens = async (column: SQLiteColumn) =>
+    multiValueOptions(await distinctValues(database, column));
+  return {
+    states: await distinctValues(database, facilities.stateCode),
+    fuels: await tokens(units.primaryFuel),
+    nercRegions: await distinctValues(database, facilities.nercRegion),
+    counties: await database
+      .selectDistinct({
+        county: facilities.county,
+        stateCode: facilities.stateCode,
+      })
+      .from(facilities)
+      .where(notBlank(facilities.county))
+      .orderBy(asc(facilities.county), asc(facilities.stateCode))
+      .then((rows) =>
+        rows.map((r) => ({ county: r.county!, stateCode: r.stateCode })),
+      ),
+    years: (await distinctValues(database, annualRecords.year))
+      .map(Number)
+      .reverse(),
+    secondaryFuels: await tokens(units.secondaryFuel),
+    unitTypes: await tokens(units.unitType),
+    so2Controls: await tokens(units.so2Controls),
+    noxControls: await tokens(units.noxControls),
+    pmControls: await tokens(units.pmControls),
+    operatingStatuses: await tokens(units.operatingStatus),
+  };
+}
+
+/** "high"/"low": the 75th / 25th percentile of `metric` over unit-years matching the other filters (3 significant figures). */
+async function percentileOf(
+  database: typeof Database,
+  filters: FacilityFilters,
+  metric: Metric,
+  level: "high" | "low",
+) {
+  const base = {
+    ...filters,
+    [`${metric}Min`]: "",
+    [`${metric}Max`]: "",
+    topN: "ALL",
+    rankGroup: "ALL",
+  };
+  const { ranked } = rankedUnitYears(database, {
+    ...base,
+    sortBy: metric,
+    sortDir: "asc",
+  });
+  const [{ n } = { n: 0 }] = await database.select({ n: count() }).from(ranked);
+  if (n === 0) return undefined;
+  const [row] = await database
+    .select({ value: ranked[metric] })
+    .from(ranked)
+    .orderBy(asc(ranked[metric]))
+    .limit(1)
+    .offset(Math.floor((n - 1) * (level === "high" ? 0.75 : 0.25)));
+  return row ? Number(row.value.toPrecision(3)) : undefined;
+}
+
 export const facilitiesRouter = createTRPCRouter({
   getStats: publicProcedure.query(async ({ ctx }) => {
     const [stats] = await ctx.db
@@ -468,34 +539,54 @@ export const facilitiesRouter = createTRPCRouter({
     return { ...stats!, coverage, sources };
   }),
 
-  getFilterOptions: publicProcedure.query(async ({ ctx }) => {
-    const tokens = async (column: SQLiteColumn) =>
-      multiValueOptions(await distinctValues(ctx.db, column));
-    return {
-      states: await distinctValues(ctx.db, facilities.stateCode),
-      fuels: await tokens(units.primaryFuel),
-      nercRegions: await distinctValues(ctx.db, facilities.nercRegion),
-      counties: await ctx.db
-        .selectDistinct({
-          county: facilities.county,
-          stateCode: facilities.stateCode,
-        })
-        .from(facilities)
-        .where(notBlank(facilities.county))
-        .orderBy(asc(facilities.county), asc(facilities.stateCode))
-        .then((rows) =>
-          rows.map((r) => ({ county: r.county!, stateCode: r.stateCode })),
-        ),
-      years: (await distinctValues(ctx.db, annualRecords.year))
-        .map(Number)
-        .reverse(),
-      secondaryFuels: await tokens(units.secondaryFuel),
-      unitTypes: await tokens(units.unitType),
-      so2Controls: await tokens(units.so2Controls),
-      noxControls: await tokens(units.noxControls),
-      pmControls: await tokens(units.pmControls),
-    };
-  }),
+  getFilterOptions: publicProcedure.query(({ ctx }) => filterOptions(ctx.db)),
+
+  /**
+   * Rubric §6 description search: the rule-based parser, an optional LLM pass for leftover words,
+   * then "high"/"low" resolved to the 75th / 25th percentile of the metric within the other filters.
+   */
+  describeSearch: publicProcedure
+    .input(z.object({ text: z.string().trim().min(1).max(500) }))
+    .query(async ({ ctx, input }) => {
+      const vocab = await filterOptions(ctx.db);
+      const parsed = parseDescription(input.text, vocab);
+      const notes: string[] = [];
+      let via: "parser" | "parser + LLM" = "parser";
+      if (parsed.unrecognized.length) {
+        const llm = await llmFallback(input.text, parsed, vocab);
+        if (llm.ok && Object.keys(llm.filters).length) {
+          Object.assign(parsed.filters, llm.filters);
+          parsed.unrecognized = llm.unrecognized;
+          via = "parser + LLM";
+        } else if (!llm.ok) {
+          notes.push(llm.note);
+        }
+      }
+
+      const filters = { ...DEFAULT_FILTERS, ...parsed.filters };
+      let sort = parsed.sort;
+      for (const { metric, level } of parsed.qualitative) {
+        const threshold = await percentileOf(ctx.db, filters, metric, level);
+        if (threshold === undefined) {
+          notes.push(`No records to compare for "${level} ${metric}".`);
+          continue;
+        }
+        filters[`${metric}${level === "high" ? "Min" : "Max"}`] =
+          String(threshold);
+        sort ??= { by: metric, dir: level === "high" ? "desc" : "asc" };
+        notes.push(
+          `"${level}" = ${level === "high" ? "top" : "bottom"} 25% of unit-years matching the other filters.`,
+        );
+      }
+      return {
+        filters,
+        tab: parsed.tab,
+        sort,
+        unrecognized: parsed.unrecognized,
+        via,
+        notes,
+      };
+    }),
 
   getFacilities: publicProcedure
     .input(

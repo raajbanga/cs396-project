@@ -201,6 +201,7 @@ void test("CAMPD retrieval filters parse, drop 'ALL', and describe themselves", 
 void test("explorer state round-trips through URL query params", () => {
   const state = {
     tab: "units" as const,
+    q: "coal units in KY",
     filters: {
       ...DEFAULT_FILTERS,
       stateCode: "KY",
@@ -222,7 +223,7 @@ void test("explorer state round-trips through URL query params", () => {
   const qs = explorerSearchParams(state);
   assert.equal(
     qs,
-    "tab=units&stateCode=KY&primaryFuel=Coal&year=2025&topN=10&rankGroup=state&co2MassTonsMin=500000&sort=noxMassTons&dir=asc&page=3&size=25",
+    "tab=units&q=coal+units+in+KY&stateCode=KY&primaryFuel=Coal&year=2025&topN=10&rankGroup=state&co2MassTonsMin=500000&sort=noxMassTons&dir=asc&page=3&size=25",
   );
   assert.deepEqual(
     parseExplorerParams(Object.fromEntries(new URLSearchParams(qs))),

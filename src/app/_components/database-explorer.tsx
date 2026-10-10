@@ -44,7 +44,7 @@ import { EpaPrimer } from "./epa-primer";
 import { FacilitiesMap } from "./facilities-map";
 import { FacilitiesTable } from "./facilities-table";
 import { FacilityDetailDialog } from "./facility-detail-dialog";
-import { FacilityFilterBar } from "./facility-filters";
+import { FacilityFilterBar, type DescribeProps } from "./facility-filters";
 import { PlantComparisonDialog } from "./plant-comparison-dialog";
 import { UnitDetailDialog } from "./unit-detail-dialog";
 import { UnitsTable } from "./units-table";
@@ -81,10 +81,24 @@ export function DatabaseExplorer({
     null,
   );
   const [inspectUnitId, setInspectUnitId] = useState<string | null>(null);
+  const [describeMode, setDescribeMode] = useState<"name" | "describe">(
+    initialState.q ? "describe" : "name",
+  );
+  const [describeText, setDescribeText] = useState(initialState.q);
+  const [describedQuery, setDescribedQuery] = useState(initialState.q);
+  const [describeResult, setDescribeResult] =
+    useState<DescribeProps["result"]>(null);
+  const [isDescribing, setIsDescribing] = useState(false);
 
   const utils = api.useUtils();
 
-  const explorerState = { tab: activeTab, filters, table, unitTable };
+  const explorerState = {
+    tab: activeTab,
+    q: describeMode === "describe" ? describedQuery : "",
+    filters,
+    table,
+    unitTable,
+  };
   const explorerQuery = explorerSearchParams(explorerState);
 
   // §8.4: mirror tab, filters, sort, and page into the URL so views are shareable and reload-safe.
@@ -112,6 +126,51 @@ export function DatabaseExplorer({
     setFilters(DEFAULT_FILTERS);
     resetPages();
   };
+
+  /** Rubric §6: plain text → filters, view, and sort, applied through the same state as manual filters. */
+  const runDescribe = async () => {
+    const text = describeText.trim();
+    if (!text) return;
+    setIsDescribing(true);
+    try {
+      const r = await utils.facilities.describeSearch.fetch({ text });
+      const tab = r.tab ?? (activeTab === "explorer" ? "explorer" : "units");
+      setFilters(r.filters);
+      setActiveTab(tab);
+      setTable((t) => ({
+        ...t,
+        page: 1,
+        ...(r.sort && tab === "explorer"
+          ? { sortBy: "co2" as const, sortDir: r.sort.dir }
+          : {}),
+      }));
+      setUnitTable((t) => ({
+        ...t,
+        page: 1,
+        ...(r.sort ? { sortBy: r.sort.by, sortDir: r.sort.dir } : {}),
+      }));
+      setDescribeResult(r);
+      setDescribedQuery(text);
+    } catch (err) {
+      setDescribeResult({
+        unrecognized: [],
+        via: "parser",
+        notes: [err instanceof Error ? err.message : String(err)],
+      });
+    } finally {
+      setIsDescribing(false);
+    }
+  };
+  const describe: DescribeProps = {
+    mode: describeMode,
+    text: describeText,
+    onModeChange: setDescribeMode,
+    onTextChange: setDescribeText,
+    onSubmit: () => void runDescribe(),
+    isLoading: isDescribing,
+    result: describeResult,
+  };
+
   const handleSortChange = (field: SortField) =>
     setTable((t) => nextSort(t, field, descByDefault));
   const handleUnitSortChange = (field: UnitSortField) =>
@@ -340,6 +399,7 @@ export function DatabaseExplorer({
               onFilterChange={setFilter}
               onResetFilters={resetFilters}
               filterOptions={filterOptions}
+              describe={describe}
               actions={
                 <>
                   <SourceBadge
