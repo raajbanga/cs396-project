@@ -163,6 +163,26 @@ const COMPARATORS: Record<string, "min" | "max" | "between"> = {
   "no more than": "max",
   between: "between",
 };
+/** Comparators that exclude the bound ("over 500k" = > 500,000); the rest are inclusive. */
+const STRICT_COMPARATORS = new Set([
+  ">",
+  "<",
+  "more than",
+  "greater than",
+  "over",
+  "above",
+  "exceeding",
+  "exceeds",
+  "higher than",
+  "larger than",
+  "bigger than",
+  "less than",
+  "fewer than",
+  "under",
+  "below",
+  "lower than",
+  "smaller than",
+]);
 
 const RANK_WORDS: Record<string, SortDirection> = {
   top: "desc",
@@ -282,7 +302,7 @@ type Item =
   | { t: "filter"; key: keyof FacilityFilters; value: string; raw: string }
   | { t: "metric"; metric: Metric; raw: string }
   | { t: "tons"; raw: string }
-  | { t: "cmp"; op: "min" | "max" | "between"; raw: string }
+  | { t: "cmp"; op: "min" | "max" | "between"; strict: boolean; raw: string }
   | { t: "num"; value: number; raw: string; yearLike: boolean }
   | { t: "rank"; dir: SortDirection; raw: string }
   | { t: "level"; level: "high" | "low"; raw: string }
@@ -460,7 +480,7 @@ function buildPhrases(vocab: SearchVocab) {
     add(w, (raw) => ({ t: "metric", metric, raw }));
   for (const w of TON_WORDS) add(w, (raw) => ({ t: "tons", raw }));
   for (const [w, op] of Object.entries(COMPARATORS))
-    add(w, (raw) => ({ t: "cmp", op, raw }));
+    add(w, (raw) => ({ t: "cmp", op, strict: STRICT_COMPARATORS.has(w), raw }));
   for (const [w, dir] of Object.entries(RANK_WORDS))
     add(w, (raw) => ({ t: "rank", dir, raw }));
   for (const [w, level] of Object.entries(LEVEL_WORDS))
@@ -764,9 +784,11 @@ export function parseDescription(
       // "between 2015 and 2025" / "after 2020" written with a comparator: a year range.
       used.add(i).add(first);
       if (second !== undefined) used.add(second);
+      // Years are whole numbers, so a strict bound moves by one ("after 2020" = 2021 on).
+      const step = item.strict ? 1 : 0;
       if (item.op === "between") setYears(a.value, b?.value);
-      else if (item.op === "min") setYears(a.value);
-      else setYears(undefined, a.value);
+      else if (item.op === "min") setYears(a.value + step);
+      else setYears(undefined, a.value - step);
       return;
     }
     const metric =
@@ -780,9 +802,9 @@ export function parseDescription(
       filters[`${metric}Min`] = String(Math.min(a.value, b?.value ?? a.value));
       filters[`${metric}Max`] = String(Math.max(a.value, b?.value ?? a.value));
     } else {
-      filters[`${metric}${item.op === "min" ? "Min" : "Max"}`] = String(
-        a.value,
-      );
+      const bound = item.op === "min" ? "Min" : "Max";
+      filters[`${metric}${bound}`] = String(a.value);
+      if (item.strict) filters[`${metric}${bound}Strict`] = "1";
     }
   });
 

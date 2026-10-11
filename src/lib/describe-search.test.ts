@@ -87,6 +87,7 @@ const KY_COAL_2025_CO2 = {
   primaryFuel: "Coal",
   year: "2025",
   co2MassTonsMin: "500000",
+  co2MassTonsMinStrict: "1",
 };
 
 void test("rubric example: coal units in Kentucky with high CO2", () => {
@@ -107,29 +108,58 @@ void test("spec example and word-order permutations give the same filters", () =
     "KY + Coal + 2025 + CO2 > 500,000",
     "2025 kentucky coal units co2 over 500k",
     "units burning coal in KY, more than 500k tons of CO₂, 2025",
-    "co2 >= 5e5 tons for Kentucky coal units in 2025",
   ]) {
     expect(text, KY_COAL_2025_CO2, { unrecognized: [] });
   }
+  expect(
+    "co2 >= 5e5 tons for Kentucky coal units in 2025",
+    {
+      stateCode: "KY",
+      primaryFuel: "Coal",
+      year: "2025",
+      co2MassTonsMin: "500000",
+    },
+    { unrecognized: [] },
+  );
 });
 
 void test("ranges: less-than, between, units of measure pick the metric", () => {
-  expect("units with SO2 < 500 tons", { so2MassTonsMax: "500" });
+  expect("units with SO2 < 500 tons", {
+    so2MassTonsMax: "500",
+    so2MassTonsMaxStrict: "1",
+  });
   expect("gross load between 100,000 and 1,000,000 MWh", {
     grossGenerationMWhMin: "100000",
     grossGenerationMWhMax: "1000000",
   });
-  expect("heat input > 5,000,000 MMBtu", { heatInputMMBtuMin: "5000000" });
-  expect("operating time over 5000 hours", { operatingHoursMin: "5000" });
-  expect("units that ran more than 5,000 hrs", { operatingHoursMin: "5000" });
-  expect("plants generating over 1.2M MWh", {
-    grossGenerationMWhMin: "1200000",
+  const over = (key: string, value: string) => ({
+    [key]: value,
+    [`${key}Strict`]: "1",
   });
-  expect("more than 500,000 tons", { co2MassTonsMin: "500000" });
+  expect("heat input > 5,000,000 MMBtu", over("heatInputMMBtuMin", "5000000"));
+  expect("operating time over 5000 hours", over("operatingHoursMin", "5000"));
+  expect(
+    "units that ran more than 5,000 hrs",
+    over("operatingHoursMin", "5000"),
+  );
+  expect(
+    "plants generating over 1.2M MWh",
+    over("grossGenerationMWhMin", "1200000"),
+  );
+  expect("more than 500,000 tons", over("co2MassTonsMin", "500000"));
   expect("CO2 above 1 million and NOx under 200", {
-    co2MassTonsMin: "1000000",
-    noxMassTonsMax: "200",
+    ...over("co2MassTonsMin", "1000000"),
+    ...over("noxMassTonsMax", "200"),
   });
+});
+
+void test("rubric §5 operators: at least / at most stay inclusive, strict years shift by one", () => {
+  expect("CO2 at least 1 million tons", { co2MassTonsMin: "1000000" });
+  expect("NOx ≤ 200 tons", { noxMassTonsMax: "200" });
+  expect("no more than 50 tons SO2", { so2MassTonsMax: "50" });
+  expect("years greater than 2020", { yearMin: "2021" });
+  expect("years at least 2020", { yearMin: "2020" });
+  expect("years less than 2018", { yearMax: "2017" });
 });
 
 void test("ranking: top-N, bottom-N, per state, singular = 1", () => {

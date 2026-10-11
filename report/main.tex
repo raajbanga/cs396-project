@@ -239,10 +239,11 @@ fuel, \SOtwo/\NOx/PM control, operating status, audit flag and severity, and rec
 or file upload); it opens by itself whenever one of its filters is set, so no active filter is
 ever hidden.
 
-\paragraph{Multi-constraint and range search.} All filters combine conjunctively. Inclusive
-minimum and maximum bounds are available for reporting year, operating time, gross load, heat
-input, and \COtwo, \SOtwo, and \NOx{} mass, and every active filter appears as a removable chip
-above the results (Section~\ref{sec:feat-ranking}).
+\paragraph{Multi-constraint and range search.} All filters combine conjunctively. Minimum and
+maximum bounds are available for reporting year, operating time, gross load, heat input, and
+\COtwo, \SOtwo, and \NOx{} mass. Each bound is inclusive ($\ge$, $\le$) by default, and a toggle
+beside it makes it strict ($>$, $<$). Every active filter appears as a removable chip above the
+results (Section~\ref{sec:feat-ranking}).
 
 \paragraph{Description-based search.} A sentence typed into the search box, such as ``coal units
 in Kentucky with high CO2'', is translated on submission into the same filters, which appear as
@@ -334,7 +335,7 @@ rubric's description-search item, to the function that satisfies it.
 \S6 Never discard invalid records silently & \code{import\_issues}; invalid-record export & Met\\
 \S7 Dataset, facility, unit, annual-record tables & Six tables, keys and cascades; controls and programs per annual record (Section~\ref{sec:design}) & Met\\
 \S8.1 Basic search fields & Search form; \emph{Advanced} panel & Met\\
-\S8.2 Multi-criteria and range search & AND-combined filters, seven min/max ranges & Met\\
+\S8.2 Multi-criteria and range search & AND-combined filters, seven min/max ranges, inclusive or strict & Met\\
 \S8.3 Top-$N$, bottom-$N$, group-and-rank, comparison, history & Ranking control, comparison, unit details, year range & Met\\
 \S8.4 Readable, paginated, sortable, linked, downloadable, reproducible & Tables, pagination, detail dialog, CSV, URL state & Met\\
 \S8.4 Indexes on searched fields & Fourteen secondary and unique indexes & Met\\
@@ -747,7 +748,7 @@ quality checks (Table~\ref{tab:scripts}).
 \code{npm run db:generate} & Generates a migration after a change to \code{src/server/db/schema.ts}.\\
 \code{npm run db:seed} & Loads facilities and units from CAMPD facility CSV files.\\
 \code{npm run sync:campd} & Retrieves annual emissions for one year or a range and stores them (\code{--year}, \code{--from}, \code{--to}).\\
-\code{npm test} & Runs the 42 unit tests in \code{src/lib/*.test.ts}.\\
+\code{npm test} & Runs the 44 unit tests in \code{src/lib/*.test.ts}.\\
 \code{npm run validate} & Format check, lint, type check, tests, and production build.\\
 \code{npm run report} & Builds this report (\code{report/main.pdf}).\\
 \code{scripts/parse\_import.py FILE} & Prints the validation report of a CSV or Excel file as JSON; called by the upload endpoint.\\
@@ -987,7 +988,7 @@ other filters'').
 parser's interpretation, and the leftover words to an OpenRouter model, requesting structured
 JSON whose schema enumerates the database's own filter values. The model may only \emph{add}
 filters the parser did not set; every returned value is re-validated with Zod against the
-vocabulary; the call times out after 8 seconds; and any failure falls back to the parser's
+vocabulary; the call times out after 20 seconds; and any failure falls back to the parser's
 result with a note. The model therefore cannot introduce a value absent from the database, and
 the search remains fully functional without it.
 
@@ -1005,14 +1006,14 @@ the language model.
 \textbf{Description} & \textbf{Interpreted as} & \textbf{Rows}\\
 \midrule\endhead
 Find coal units in Kentucky with high CO2 emissions. & Units; KY; Coal; \COtwo{} $\ge$ 2{,}720{,}000; sort \COtwo{}$\downarrow$ & 97\\
-coal units in Kentucky in 2025 with CO2 over 500,000 tons & Units; KY; Coal; 2025; \COtwo{} $\ge$ 500{,}000 & 25\\
+coal units in Kentucky in 2025 with CO2 over 500,000 tons & Units; KY; Coal; 2025; \COtwo{} $>$ 500{,}000 & 25\\
 top CO2-emitting facility in each state in 2024 & Facilities; 2024; first 1 per state by \COtwo{}$\downarrow$ & 51\\
 top 20 units by gross generation in 2025 & Units; 2025; first 20 by gross load$\downarrow$ & 20\\
 units with the lowest NOx emissions in 2025 & Units; 2025; first 10 by \NOx{}$\uparrow$ & 10\\
-gas units in TX under 50 tons SO2 & Units; TX; Natural Gas; \SOtwo{} $\le$ 50 & 3{,}857\\
+gas units in TX under 50 tons SO2 & Units; TX; Natural Gas; \SOtwo{} $<$ 50 & 3{,}857\\
 operating gas units in Texas with low NOx since 2020 & Units; TX; Natural Gas; Operating; year $\ge$ 2020; \NOx{} $\le$ 9.37; sort \NOx{}$\uparrow$ & 660\\
 plants owned by Duke Energy with scrubbers & Facilities; text ``Duke Energy''; \SOtwo{} control FGD & 11\\
-units in IN with heat input above 5M MMBtu in 2025 & Units; IN; 2025; heat input $\ge$ 5{,}000{,}000; sort heat input$\downarrow$ & 42\\
+units in IN with heat input above 5M MMBtu in 2025 & Units; IN; 2025; heat input $>$ 5{,}000{,}000; sort heat input$\downarrow$ & 42\\
 Kentuky coal units that are not retired & Units; KY (typo corrected); Coal; \emph{not understood: ``not retired''} & 416\\
 \bottomrule
 \end{longtable}}
@@ -1032,8 +1033,9 @@ prefix, so that ``Retired'' does not also match ``Operating (Retired 04/15/2016)
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.92\linewidth]{units-multi.jpg}
-  \caption{Multi-constraint search: KY, Coal, 2025, \COtwo{} $\ge$ 500{,}000\,t. The chips, the
-  open \emph{Advanced} panel with its range inputs, and the first rows of the 25 results.}
+  \caption{Multi-constraint search: KY, Coal, 2025, \COtwo{} $>$ 500{,}000\,t. The chips, the
+  open \emph{Advanced} panel with its range inputs (the \COtwo{} minimum switched to strict),
+  and the first rows of the 25 results.}
   \label{fig:multi}
 \end{figure}
 
@@ -1151,7 +1153,7 @@ The system was tested at four levels:
         compiler in strict mode, the unit tests, and a production build, and was kept passing
         after every development stage. Because database rows, procedure inputs, and component
         props share types, type checking catches a large class of errors early.
-  \item \textbf{Unit tests.} 42 tests using Node's built-in runner cover the logic in
+  \item \textbf{Unit tests.} 44 tests using Node's built-in runner cover the logic in
         \code{src/lib} and the Python upload parser, which the tests run as a subprocess on
         generated and committed files.
   \item \textbf{Acceptance tests.} For each search in the specification, the application's
@@ -1171,14 +1173,14 @@ three word orders of one request that must yield identical filters.
 
 \begin{table}[H]
 \centering\small
-\caption{Unit tests (\code{npm test}: 42 tests, all passing).}
+\caption{Unit tests (\code{npm test}: 44 tests, all passing).}
 \label{tab:unittests}
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.27\linewidth}cL@{}}
 \toprule
 \textbf{File} & \textbf{Tests} & \textbf{What is checked}\\
 \midrule
-\code{describe-search.test.ts} & 12 & Rubric and specification sentences; word-order permutations; ranges, units of measure, and \emph{between}; top-$N$, bottom-$N$, and per-state ranking; years and year ranges; synonyms, controls, and statuses; state names, codes, and ambiguous lower-case codes; owner names; typos; negation and unknown words; number formats.\\
-\code{domain-utils.test.ts} & 14 & Emissions arithmetic with missing generation; not-reported values in rates, totals, and the four sanity rules; fuel metadata; control rules; reporting-period dates and EPA's published-through quarter; yearly roll-ups; retrieval filters; explorer state round-trip through the URL and rejection of invalid parameters; option splitting; sorting.\\
+\code{describe-search.test.ts} & 13 & Rubric and specification sentences; word-order permutations; ranges, units of measure, and \emph{between}; strict (\emph{over}, \emph{under}) versus inclusive (\emph{at least}, $\le$) comparisons; top-$N$, bottom-$N$, and per-state ranking; years and year ranges; synonyms, controls, and statuses; state names, codes, and ambiguous lower-case codes; owner names; typos; negation and unknown words; number formats.\\
+\code{domain-utils.test.ts} & 15 & Emissions arithmetic with missing generation; not-reported values in rates, totals, and the four sanity rules; fuel metadata; control rules; reporting-period dates and EPA's published-through quarter; yearly roll-ups; retrieval filters; explorer state round-trip through the URL and rejection of invalid parameters; strict-bound flags in the URL; option splitting; sorting.\\
 \code{data-import.test.ts} & 8 & Extension and size checks; rejected rows, duplicates, and sanity flags on a generated file; daily files, whose repeated unit rows are not duplicates; column mapping; refusal of files without IDs; Excel reading; a real CAMPD facility file (skipped when absent); the committed sample files (Section~\ref{sec:feat-upload}).\\
 \code{record-diff.test.ts} & 5 & New, unchanged (including floating-point noise), and changed records with both values; not reported versus zero; per-year controls; counting and natural keys.\\
 \code{csv.test.ts} & 3 & RFC~4180 quoting of commas, quotes, and line breaks; CRLF line endings; export URLs.\\
@@ -1201,7 +1203,8 @@ of the sample file; all counts refer to the committed database unless stated oth
 \toprule
 \textbf{Input} & \textbf{Expected (source)} & \textbf{Actual} & \textbf{Pass}\\
 \midrule\endhead
-Units: KY, Coal, 2025, \COtwo{} $\ge$ 500{,}000 & 25 unit-years (SQL) & 25 & \checkmark\\
+Units: KY, Coal, 2025, \COtwo{} $>$ 500{,}000 & 25 unit-years (SQL) & 25 & \checkmark\\
+Units: operating time $\ge$ 8{,}760\,h, then $>$ 8{,}760\,h & 27, then 18 (leap years) (SQL) & 27, 18 & \checkmark\\
 Facilities: same filters & 8 facilities (SQL) & 8 & \checkmark\\
 Facilities: 2024, top 1 per state by \COtwo & 51, one per state with 2024 data (SQL) & 51 & \checkmark\\
 Units: facility 3, unit 1, 2015--2025 & 11 years (SQL) & 11 & \checkmark\\
@@ -1295,8 +1298,16 @@ them. The carbon-intensity badges, which had named a technology (``High Carbon C
 is only a rate, now read Low, Medium, or High \COtwo{} rate, so some screenshots in
 this report show the earlier labels.
 
-One issue remains: the language-model fallback was tested only on its failure paths (no key,
-invalid key, timeout), since no OpenRouter key was available during testing.
+The language-model fallback was tested on its failure paths (no key, invalid key, timeout)
+and on its success path. Of the free OpenRouter models that accept a JSON schema, only Nemotron~3
+Super (\code{nvidia/nemotron-3-super-120b-a12b:free}) answered reliably; the others returned
+errors, rate limits, or timeouts, so it is the default. Three sentences the parser cannot fully
+resolve (``coal units in the bluegrass state with high CO2'', ``gas plants in the lone star
+state that are shut down'', ``units with scrubbers burning natural gas in the golden state'')
+were each searched five times. The model added the correct state (KY, TX, CA) in 11 of 15
+calls; in the other four it reported the nickname as not understood, and the parser's result
+was shown with that word listed. Calls took 5 to 16~seconds, so the time limit was raised from
+8 to 20~seconds; no call timed out or returned an invalid value.
 
 \subsection{Assessment against the objectives}
 

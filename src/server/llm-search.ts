@@ -12,9 +12,10 @@ import { UNIT_METRICS, type FacilityFilters } from "~/lib/facility-filters";
  */
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-/** OpenRouter's router across free models that support structured outputs. */
-const DEFAULT_MODEL = "openrouter/free";
-const TIMEOUT_MS = 8000;
+/** Free model that supports structured outputs; the only free one that mapped our test sentences reliably. */
+const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+/** The free model takes 6–8 s per request, so allow headroom before falling back to the parser. */
+const TIMEOUT_MS = 20000;
 
 type Additions = Partial<FacilityFilters>;
 type LlmResult =

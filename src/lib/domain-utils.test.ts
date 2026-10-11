@@ -22,12 +22,16 @@ import {
 import {
   activeCampdFilters,
   campdRetrievalSchema,
+  ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
   DEFAULT_AUDIT_TABLE_STATE,
   DEFAULT_TABLE_STATE,
   DEFAULT_UNIT_TABLE_STATE,
   describeCampdFilters,
   explorerSearchParams,
+  filterSearchParams,
+  isFilterActive,
+  isStrictKey,
   multiValueOptions,
   nextSort,
   parseExplorerParams,
@@ -298,6 +302,23 @@ void test("explorer state round-trips through URL query params", () => {
     state,
   );
   assert.equal(explorerSearchParams(parseExplorerParams({})), "");
+});
+
+void test("a strict flag is kept in the URL only while its bound is set", () => {
+  const withBound = {
+    ...DEFAULT_FILTERS,
+    co2MassTonsMin: "500000",
+    co2MassTonsMinStrict: "1",
+  };
+  assert.equal(
+    filterSearchParams(withBound).toString(),
+    "co2MassTonsMin=500000&co2MassTonsMinStrict=1",
+  );
+  assert.equal(isFilterActive(withBound, "co2MassTonsMinStrict"), true);
+  const flagOnly = { ...DEFAULT_FILTERS, co2MassTonsMinStrict: "1" };
+  assert.equal(isFilterActive(flagOnly, "co2MassTonsMinStrict"), false);
+  assert.equal(filterSearchParams(flagOnly).toString(), "");
+  assert.equal(ADVANCED_FILTER_KEYS.some(isStrictKey), false);
 });
 
 void test("explorer params ignore unknown keys and invalid values", () => {

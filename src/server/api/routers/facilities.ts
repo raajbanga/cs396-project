@@ -4,9 +4,11 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
+  lt,
   lte,
   sql,
   type SQL,
@@ -303,8 +305,17 @@ function recordConditions(f: FilterInput): SQL[] {
   for (const { key } of RANGE_FIELDS) {
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
-    if (min !== undefined) conditions.push(gte(annualRecords[key], min));
-    if (max !== undefined) conditions.push(lte(annualRecords[key], max));
+    const column = annualRecords[key];
+    if (min !== undefined) {
+      conditions.push(
+        f[`${key}MinStrict`] ? gt(column, min) : gte(column, min),
+      );
+    }
+    if (max !== undefined) {
+      conditions.push(
+        f[`${key}MaxStrict`] ? lt(column, max) : lte(column, max),
+      );
+    }
   }
   return conditions;
 }
