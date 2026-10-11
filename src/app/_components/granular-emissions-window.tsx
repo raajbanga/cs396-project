@@ -210,6 +210,9 @@ export function GranularEmissionsWindow({
         </div>
       </div>
 
+      {data?.error && items.length > 0 && (
+        <p className="text-warn text-sm">Incomplete: {data.error}</p>
+      )}
       {summary && items.length > 0 && (
         <KpiStrip className="lg:grid-cols-4">
           <StatTile

@@ -326,7 +326,7 @@ and expected numbers.
   - Try “provenance of every dataset” · Download CSV
   - source · date · query parameters · new / updated / unchanged / dropped counts
 - Close with: every record traces to the retrieval or file that wrote it.
-  - hand back to Raaj for challenges
+  - stay on: Raaj presents the challenges next
 
 ## Wrap-up
 

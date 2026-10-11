@@ -278,8 +278,8 @@ controls and programs reported for that year, and any sanity flags.
 \subsection{Comparison, map, and audits}
 
 The comparison (Figure~\ref{fig:compare}) places two to four facilities or units side by side
-for the latest reporting year: capacity, generation, operating hours, capacity factor, carbon
-intensity, heat rate, fuels, and control coverage. The \textbf{Map} page draws every facility
+for the latest reporting year: capacity, generation, the busiest unit's operating hours, capacity
+factor, carbon intensity, heat rate, fuels, and control coverage. The \textbf{Map} page draws every facility
 with coordinates on a three-dimensional globe or a two-dimensional Leaflet map, sized by
 capacity or \COtwo{} and coloured by fuel, with the Explore filters carried over in the URL
 (Figure~\ref{fig:map}); the fuel legend doubles as a filter, and the 37 facilities for which
@@ -604,7 +604,7 @@ redundancies. First, \code{annual\_records.facility\_id} duplicates information 
 through \code{units} for each of the 1,619 facilities. Second, the \SOtwo, \NOx, PM, and mercury
 controls and the program code are stored on each annual record as reported for that year, as
 the specification requires, while the unit also keeps the most recent values for display and
-for records that arrive without them. The per-year values matter: in 16{,}233 of the 50{,}947 unit-years, the year's controls or programs differ from
+for records that arrive without them. The per-year values matter: in 16{,}650 of the 50{,}947 unit-years, the year's controls or programs differ from
 the unit's current ones.
 
 \subsection{Data flow and provenance}
@@ -711,7 +711,7 @@ Python 3, \code{csv}, \code{openpyxl} & Reading, mapping, and validating uploade
 Tailwind CSS 4 & Styling with design tokens for light and dark themes.\\
 Leaflet & Two-dimensional map with CARTO/OpenStreetMap tiles.\\
 D3~\cite{bostock2011d3} and TopoJSON & Orthographic globe drawn on a canvas from bundled U.S.\ and world outlines.\\
-lucide-react, next-themes & Icons; theme switching.\\
+Radix UI Select, lucide-react, next-themes & Accessible dropdowns; icons; theme switching.\\
 \code{node:test} with tsx & Unit-test runner for TypeScript without a separate test framework.\\
 ESLint, Prettier, TypeScript compiler & Static checks run by \code{npm run validate}.\\
 Tectonic & Builds this report from LaTeX.\\
@@ -1284,7 +1284,16 @@ peaking station with a dozen years of records was labelled a baseload plant; the
 the busiest unit's hours in the latest year in scope, as the facility details do. The map's fuel
 legend counted plants by fuel class but filtered by a single fuel name, so the oil chip
 advertised 108 plants and showed 22; the legend now filters by the same class it counts. Finally,
-a one-pixel overflow gave every tab bar a spurious scrollbar.
+a one-pixel overflow gave every tab bar a spurious scrollbar. The audit for this submission
+found three more, also corrected. The comparison's operating time summed the hours of every
+unit, so a plant could appear to run for more hours than a year contains (15{,}595 for Ghent);
+it now reports the busiest unit's hours, as the facility details do. Each map dot took its
+fuel from an arbitrary unit, so a multi-fuel plant's colour could change between queries; it
+now takes the fuel of the plant's largest unit. Third, a granular view whose EPA request
+failed part-way showed the rows it had received without the error, which is now shown with
+them. The carbon-intensity badges, which had named a technology (``High Carbon Coal'') for what
+is only a rate, now read Low, Medium, or High \COtwo{} rate, so some screenshots in
+this report show the earlier labels.
 
 One issue remains: the language-model fallback was tested only on its failure paths (no key,
 invalid key, timeout), since no OpenRouter key was available during testing.
@@ -1554,8 +1563,9 @@ validates every row, the data-quality report of rejected and duplicate rows, the
 endpoint, and the upload page with its preview and approval step, together with its first
 tests.
 
-The presentation and live demonstration are shared: Arnav presents the interface, upload,
-detail, and comparison steps, and Raaj the retrieval, search, ranking, and download steps.
+The presentation and live demonstration are shared: Arnav presents the home page, upload,
+basic search, unit detail, and comparison steps, and Raaj the retrieval, multi-constraint and
+description search, ranking, and download steps.
 
 % ------------------------------------------------------------------------
 \section{References and acknowledgments}

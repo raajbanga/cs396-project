@@ -705,7 +705,7 @@ export const facilitiesRouter = createTRPCRouter({
           primaryFuel: sql<string | null>`(
             SELECT "units"."primary_fuel" FROM "units"
             WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
-            LIMIT 1
+            ORDER BY "units"."nameplate_capacity_mw" DESC LIMIT 1
           )`.as("primary_fuel"),
           ...perFacility(input && filterYear(input)),
         })
@@ -713,21 +713,22 @@ export const facilitiesRouter = createTRPCRouter({
         .where(and(...filterConditions(input)));
 
       // CAMPD has no coordinates for some (mostly retired) plants; the map lists them instead of drawing them.
-      const located = rows.filter(
-        (r) => r.latitude !== null && r.longitude !== null,
-      );
-      return {
-        facilities: located.map((r) => ({
-          ...r,
-          latitude: r.latitude!,
-          longitude: r.longitude!,
-          primaryFuel: r.primaryFuel ?? "Unknown",
-        })),
-        unlocated: rows
-          .filter((r) => r.latitude === null || r.longitude === null)
-          .map(({ id, name, stateCode }) => ({ id, name, stateCode }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      };
+      const facilitiesOut = [];
+      const unlocated = [];
+      for (const r of rows) {
+        if (r.latitude === null || r.longitude === null) {
+          unlocated.push({ id: r.id, name: r.name, stateCode: r.stateCode });
+        } else {
+          facilitiesOut.push({
+            ...r,
+            latitude: r.latitude,
+            longitude: r.longitude,
+            primaryFuel: r.primaryFuel ?? "Unknown",
+          });
+        }
+      }
+      unlocated.sort((a, b) => a.name.localeCompare(b.name));
+      return { facilities: facilitiesOut, unlocated };
     }),
 
   getFacility: publicProcedure
@@ -822,9 +823,10 @@ export const facilitiesRouter = createTRPCRouter({
           ...new Set(plant.annualRecords.map((r) => r.year)),
         ].sort((a, b) => b - a);
         const latestYear = availableYears[0] ?? null;
-        const totals = sumTotals(
-          plant.annualRecords.filter((r) => r.year === latestYear),
+        const latestRecords = plant.annualRecords.filter(
+          (r) => r.year === latestYear,
         );
+        const totals = sumTotals(latestRecords);
         const rates = deriveRates(totals);
 
         return {
@@ -851,7 +853,11 @@ export const facilitiesRouter = createTRPCRouter({
           secondaryFuels: uniqueStrings(
             plant.units.map((u) => u.secondaryFuel),
           ),
-          totalOperatingHours: Math.round(totals.operatingHours),
+          // The busiest unit's hours (a sum over units could exceed a year), as in the detail dialog.
+          peakUnitHours: Math.max(
+            0,
+            ...latestRecords.map((r) => r.operatingHours ?? 0),
+          ),
           totalGenerationMWh: Math.round(totals.grossGenerationMWh),
           totalCo2Tons: Math.round(totals.co2MassTons),
           totalSo2Tons: Math.round(totals.so2MassTons),

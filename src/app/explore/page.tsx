@@ -1,10 +1,6 @@
 import { type Metadata } from "next";
-import { redirect } from "next/navigation";
 import { Explorer } from "~/app/_components/explorer";
-import {
-  explorerSearchParams,
-  parseExplorerParams,
-} from "~/lib/facility-filters";
+import { parseExplorerParams } from "~/lib/facility-filters";
 import { api, HydrateClient } from "~/trpc/server";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +14,6 @@ export default async function ExplorePage({
   // §8.4: the tab, filters, sort, and page come from the URL (see explorerSearchParams).
   const initialState = parseExplorerParams(await searchParams);
   const { tab, filters, table, unitTable, auditTable } = initialState;
-  if (tab === "map") redirect(`/map?${explorerSearchParams(initialState)}`);
 
   await Promise.all([
     api.facilities.getStats.prefetch(),

@@ -40,34 +40,21 @@ export function addTotals(acc: EmissionTotals, rec: ReportedTotals) {
 export const sumTotals = (records: ReportedTotals[]) =>
   records.reduce(addTotals, emptyTotals());
 
-export function computeCo2IntensityLbsMWh(
-  co2Tons: number | null,
-  grossGenMWh: number | null,
-): number | null {
-  return co2Tons !== null && grossGenMWh !== null && grossGenMWh > 0
-    ? Math.round((co2Tons * 2000.0) / grossGenMWh)
-    : null;
-}
-
-export function computeHeatRateMMBtuMWh(
-  heatInputMMBtu: number | null,
-  grossGenMWh: number | null,
-): number | null {
-  return heatInputMMBtu !== null && grossGenMWh !== null && grossGenMWh > 0
-    ? Number((heatInputMMBtu / grossGenMWh).toFixed(2))
-    : null;
-}
-
-export function deriveRates(totals: ReportedTotals) {
+/** CO₂ intensity (lbs/MWh) and heat rate (MMBtu/MWh); null when an input is missing or gross load is 0. */
+export function deriveRates({
+  co2MassTons: co2,
+  heatInputMMBtu: heat,
+  grossGenerationMWh: gen,
+}: Pick<
+  ReportedTotals,
+  "co2MassTons" | "heatInputMMBtu" | "grossGenerationMWh"
+>) {
+  const ok = gen !== null && gen > 0;
   return {
-    co2IntensityLbsMWh: computeCo2IntensityLbsMWh(
-      totals.co2MassTons,
-      totals.grossGenerationMWh,
-    ),
-    heatRateMMBtuMWh: computeHeatRateMMBtuMWh(
-      totals.heatInputMMBtu,
-      totals.grossGenerationMWh,
-    ),
+    co2IntensityLbsMWh:
+      ok && co2 !== null ? Math.round((co2 * 2000) / gen) : null,
+    heatRateMMBtuMWh:
+      ok && heat !== null ? Number((heat / gen).toFixed(2)) : null,
   };
 }
 
