@@ -212,7 +212,7 @@ export function UploadView() {
         <DatasetHistory
           title="Past uploads"
           uploads
-          note="Each upload is its own dataset. New / Updated / Unchanged compare it with what the database held before; Dropped rows are in its invalid-records report on the Download page."
+          note="Each upload is its own dataset. New / Updated / Unchanged compare it with what the database held before; Dropped rows are in its invalid-records report on the Download page. Still in use counts the unit-years the database takes from this file now; Replaced by API counts those a later CAMPD sync took over."
         />
       )}
     </PageView>

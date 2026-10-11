@@ -204,12 +204,12 @@ export function UnitDetail({ unitInternalId }: { unitInternalId: string }) {
                 key="s"
                 title={
                   r.dataset
-                    ? `${datasetOriginLabel(r.dataset)}\n${r.dataset.name}`
+                    ? `${datasetOriginLabel(r.dataset)}\n${r.dataset.name}${r.supersededUpload ? `\nReplaced upload: ${r.supersededUpload.originalFilename}` : ""}`
                     : undefined
                 }
               >
                 {r.dataset
-                  ? `${r.dataset.source === "API" ? "API" : "Upload"}, ${r.dataset.importedAt.toLocaleDateString()}`
+                  ? `${r.dataset.source === "API" ? "API" : "Upload"}, ${r.dataset.importedAt.toLocaleDateString()}${r.supersededUpload ? " (replaced upload)" : ""}`
                   : "—"}
               </span>,
             ])}

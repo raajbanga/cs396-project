@@ -22,6 +22,8 @@ const tracked = (n: number | null) => (n === null ? "—" : formatNumber(n));
 const STATUS_BADGES = {
   Error: "destructive",
   Superseded: "secondary",
+  "Superseded by API": "secondary",
+  "Partly replaced by API": "warning",
   Active: "success",
 } as const;
 
@@ -30,7 +32,13 @@ function DatasetStatus({ row }: { row: DatasetRow }) {
   return (
     <Badge
       variant={STATUS_BADGES[status]}
-      title={status === "Error" ? (row.notes ?? undefined) : undefined}
+      title={
+        status === "Error"
+          ? (row.notes ?? undefined)
+          : row.replacedByApi
+            ? `${formatNumber(row.replacedByApi)} of this file's unit-years were replaced by a CAMPD API sync`
+            : undefined
+      }
     >
       {status}
     </Badge>
@@ -48,9 +56,9 @@ export function DatasetHistory({
   uploads: boolean;
 }) {
   const historyQuery = api.facilities.getDatasets.useQuery({ limit: 200 });
-  const history = (historyQuery.data ?? [])
-    .filter((d) => (d.source !== "API") === uploads)
-    .slice(0, 50);
+  const history = (historyQuery.data ?? []).filter(
+    (d) => (d.source !== "API") === uploads,
+  );
 
   return (
     <Section title={title} note={note}>
@@ -66,7 +74,7 @@ export function DatasetHistory({
             undefined,
             datasetParams(d),
             d.importedAt,
-            ...Array<undefined>(6),
+            ...Array<undefined>(uploads ? 8 : 6),
             datasetStatus(d),
           ])}
           head={[
@@ -80,6 +88,7 @@ export function DatasetHistory({
             "Updated",
             "Unchanged",
             "Dropped",
+            ...(uploads ? ["Still in use", "Replaced by API"] : []),
             "Status",
           ]}
           rows={history.map((d) => [
@@ -95,6 +104,9 @@ export function DatasetHistory({
             tracked(d.updatedRecords),
             tracked(d.unchangedRecords),
             tracked(d.droppedRecords),
+            ...(uploads
+              ? [formatNumber(d.currentRecords), formatNumber(d.replacedByApi)]
+              : []),
             <DatasetStatus key="status" row={d} />,
           ])}
         />

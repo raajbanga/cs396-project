@@ -66,27 +66,43 @@ export function SourceBadge({
   );
 }
 
-/** Which dataset wrote a unit-year: the CAMPD API or a file upload (date and dataset name on hover). */
+/**
+ * Which dataset wrote a unit-year: the CAMPD API or a file upload (date and dataset name on hover),
+ * plus a "Replaced upload" tag when a sync took the record over from a file.
+ */
 export function OriginBadge({
   origin,
   datasetImportedAt,
   datasetName,
+  supersededUpload,
 }: {
   origin: string | null;
   datasetImportedAt: Date | null;
   datasetName?: string | null;
+  supersededUpload?: string | null;
 }) {
   if (!origin || !datasetImportedAt) {
     return <span className="text-fg-muted text-xs">—</span>;
   }
   const api = origin === "API";
   return (
-    <Badge
-      variant={api ? "secondary" : "sky"}
-      title={`${datasetOriginLabel({ source: origin, importedAt: datasetImportedAt })}${datasetName ? `\n${datasetName}` : ""}`}
-    >
-      {api ? "API" : "Upload"}
-    </Badge>
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+      <Badge
+        variant={api ? "secondary" : "sky"}
+        title={`${datasetOriginLabel({ source: origin, importedAt: datasetImportedAt })}${datasetName ? `\n${datasetName}` : ""}`}
+      >
+        {api ? "API" : "Upload"}
+      </Badge>
+      {api && supersededUpload && (
+        <Badge
+          variant="outline"
+          className="font-normal"
+          title={`Originally uploaded from ${supersededUpload}; superseded by this CAMPD sync`}
+        >
+          Replaced upload
+        </Badge>
+      )}
+    </span>
   );
 }
 

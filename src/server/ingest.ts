@@ -230,6 +230,16 @@ async function unitAttributes(unitIds: string[], tx: Executor) {
 }
 
 /**
+ * On conflict: an upload writing the record clears the marker; an API sync taking over an uploaded
+ * record remembers that upload; otherwise the marker is kept.
+ */
+const supersededUpload = sql.raw(`CASE
+  WHEN (SELECT source FROM datasets WHERE id = excluded.dataset_id) != 'API' THEN NULL
+  WHEN (SELECT source FROM datasets WHERE id = annual_records.dataset_id) != 'API' THEN annual_records.dataset_id
+  ELSE annual_records.superseded_upload_id
+END`);
+
+/**
  * Upserts annual records with derived rates and replaces each record's physical-sanity audit flags.
  * Returns how the records compared with what was stored before (inserted / updated / unchanged).
  */
@@ -279,11 +289,14 @@ export async function upsertAnnualRecords(
       .values(chunk)
       .onConflictDoUpdate({
         target: [annualRecords.unitInternalId, annualRecords.year],
-        set: conflictSet(
-          annualRecords,
-          ["id", "facilityId", "unitInternalId", "year"],
-          false,
-        ),
+        set: {
+          ...conflictSet(
+            annualRecords,
+            ["id", "facilityId", "unitInternalId", "year"],
+            false,
+          ),
+          supersededUploadId: supersededUpload,
+        },
       }),
   );
   await insertInChunks(rows, (chunk) =>

@@ -163,6 +163,7 @@ interface AnnualRecordForRollup extends ReportedTotals {
   heatRateMMBtuMWh?: number | null;
   unit?: { unitId: string; primaryFuel?: string | null } | null;
   dataset?: { name: string; source: string; importedAt: Date } | null;
+  supersededUpload?: { originalFilename: string | null } | null;
 }
 
 export type YearlyRollup = ReturnType<typeof buildYearlyRollups>[number];

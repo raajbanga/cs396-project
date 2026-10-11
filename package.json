@@ -8,6 +8,7 @@
     "check": "npm run lint && npm run typecheck",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "db:seed": "tsx --env-file=.env scripts/seed-facilities-from-csv.ts",
+    "db:rebuild": "tsx --env-file=.env scripts/rebuild-db.ts",
     "dev": "next dev --webpack",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\" --cache",

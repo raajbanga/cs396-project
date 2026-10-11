@@ -93,16 +93,24 @@ export const datasetOriginLabel = (d: {
 }) =>
   `${sourceLabel(d.source)} · ${new Date(d.importedAt).toLocaleDateString()}`;
 
-/** A dataset's history status: a failed retrieval, superseded by a later one, or active. */
+/**
+ * A dataset's history status: a failed retrieval, superseded by a later import (for an upload,
+ * by the CAMPD API when a sync took its records), partly replaced by the API, or active.
+ */
 export const datasetStatus = (d: {
   notes: string | null;
   superseded: boolean;
+  replacedByApi?: number;
 }) =>
   d.notes?.startsWith("Error")
     ? ("Error" as const)
     : d.superseded
-      ? ("Superseded" as const)
-      : ("Active" as const);
+      ? d.replacedByApi
+        ? ("Superseded by API" as const)
+        : ("Superseded" as const)
+      : d.replacedByApi
+        ? ("Partly replaced by API" as const)
+        : ("Active" as const);
 
 /** URL params of the inspect dialog (?facility=3, ?unit=…), kept when a page rewrites its own query. */
 export const DETAIL_PARAMS = ["facility", "unit"] as const;

@@ -185,14 +185,19 @@ function rankedView<
 }
 
 /**
- * An API sync whose records were all taken over by a later sync of the same year. Kept as
- * retrieval history. Uploads are never marked: facility files own no annual records by design,
- * and neither are retrievals that matched nothing. Qualified by hand: single-table selects
+ * A dataset whose records were all taken over by a later sync or upload. Kept as history.
+ * Uploads count only when they wrote annual records (facility files own none by design);
+ * retrievals that matched nothing are never marked. Qualified by hand: single-table selects
  * drop table prefixes, which would bind "id" to annual_records inside the subquery.
  */
-const isSuperseded = sql<boolean>`("datasets"."source" = 'API' AND "datasets"."valid_records" > 0 AND NOT EXISTS (
-  SELECT 1 FROM "annual_records" WHERE "annual_records"."dataset_id" = "datasets"."id"
-))`;
+const isSuperseded = sql<boolean>`("datasets"."valid_records" > 0 AND ("datasets"."source" = 'API'
+  OR COALESCE("datasets"."inserted_records", 0) + COALESCE("datasets"."updated_records", 0) + COALESCE("datasets"."unchanged_records", 0) > 0)
+  AND NOT EXISTS (SELECT 1 FROM "annual_records" WHERE "annual_records"."dataset_id" = "datasets"."id"))`;
+
+/** File name of the upload a CAMPD sync took the record over from (hand-qualified like isSuperseded). */
+const supersededUpload = sql<
+  string | null
+>`(SELECT "original_filename" FROM "datasets" "su" WHERE "su"."id" = "annual_records"."superseded_upload_id")`;
 
 const notBlank = (col: SQLiteColumn) =>
   sql`${col} IS NOT NULL AND ${col} != ''`;
@@ -436,6 +441,7 @@ export function rankedUnitYears(
       datasetImportedAt: datasets.importedAt,
       // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
       datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
+      supersededUpload: supersededUpload.as("superseded_upload"),
       operatingHours: annualRecords.operatingHours,
       grossGenerationMWh: annualRecords.grossGenerationMWh,
       heatInputMMBtu: annualRecords.heatInputMMBtu,
@@ -489,6 +495,9 @@ export const datasetHistory = (database: typeof Database) =>
       queryParams: datasets.queryParams,
       notes: datasets.notes,
       superseded: isSuperseded.mapWith(Boolean),
+      // Unit-years this dataset still supplies, and (uploads) how many a CAMPD sync took over.
+      currentRecords: sql<number>`(SELECT COUNT(*) FROM "annual_records" WHERE "annual_records"."dataset_id" = "datasets"."id")`,
+      replacedByApi: sql<number>`(SELECT COUNT(*) FROM "annual_records" WHERE "annual_records"."superseded_upload_id" = "datasets"."id")`,
     })
     .from(datasets)
     .orderBy(desc(datasets.importedAt), desc(datasets.reportingYear))
@@ -759,6 +768,7 @@ export const facilitiesRouter = createTRPCRouter({
               dataset: {
                 columns: { name: true, source: true, importedAt: true },
               },
+              supersededUpload: { columns: { originalFilename: true } },
             },
           },
         },
@@ -780,6 +790,7 @@ export const facilitiesRouter = createTRPCRouter({
               dataset: {
                 columns: { name: true, source: true, importedAt: true },
               },
+              supersededUpload: { columns: { originalFilename: true } },
             },
           },
         },
@@ -922,6 +933,7 @@ export const facilitiesRouter = createTRPCRouter({
           datasetImportedAt: datasets.importedAt,
           // Aliased: an unaliased datasets.name would collide with facilities.name in the subquery.
           datasetName: sql<string | null>`${datasets.name}`.as("dataset_name"),
+          supersededUpload: supersededUpload.as("superseded_upload"),
         })
         .from(dataAuditLogs)
         .innerJoin(

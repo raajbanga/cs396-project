@@ -44,6 +44,7 @@ interface AuditLog {
   origin?: string | null;
   datasetImportedAt?: Date | null;
   datasetName?: string | null;
+  supersededUpload?: string | null;
 }
 
 type AuditPage = RouterOutputs["facilities"]["getAuditLogs"];
@@ -198,6 +199,7 @@ export function AuditTable({
                   origin={log.origin ?? null}
                   datasetImportedAt={log.datasetImportedAt ?? null}
                   datasetName={log.datasetName}
+                  supersededUpload={log.supersededUpload}
                 />
               </TableCell>
             )}
