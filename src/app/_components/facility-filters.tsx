@@ -98,13 +98,21 @@ function activeChips(filters: FacilityFilters) {
     const min = on(`${key}Min`) ? formatBound(filters[`${key}Min`]) : undefined;
     const max = on(`${key}Max`) ? formatBound(filters[`${key}Max`]) : undefined;
     if (!min && !max) continue;
-    const range =
-      key === "year"
-        ? `${label} ${min ?? "…"}–${max ?? "…"}`
-        : min && max
-          ? `${label} ${min}–${max} ${unit}`
-          : `${label} ${min ? `≥ ${min}` : `≤ ${max}`} ${unit}`;
-    chips.push({ label: range, keys: [`${key}Min`, `${key}Max`] });
+    const minStrict = on(`${key}MinStrict`);
+    const maxStrict = on(`${key}MaxStrict`);
+    const bounds =
+      min && max && !minStrict && !maxStrict
+        ? `${min}–${max}`
+        : [
+            min && `${minStrict ? ">" : "≥"} ${min}`,
+            max && `${maxStrict ? "<" : "≤"} ${max}`,
+          ]
+            .filter(Boolean)
+            .join(", ");
+    chips.push({
+      label: `${label} ${bounds}${key === "year" ? "" : ` ${unit}`}`,
+      keys: [`${key}Min`, `${key}Max`, `${key}MinStrict`, `${key}MaxStrict`],
+    });
   }
   if (on("topN") || on("rankGroup")) {
     chips.push({
@@ -296,27 +304,51 @@ function AdvancedFilters({
 
       <fieldset className="space-y-2">
         <legend className={FIELD_LABEL}>
-          Ranges per unit-year (minimum and maximum, inclusive)
+          Ranges per unit-year (click ≥ / ≤ to switch to strict &gt; / &lt;)
         </legend>
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
           {RANGE_FIELDS.map(({ key, label, unit }) => (
-            <div key={key} className="flex items-center gap-2 text-sm">
-              <span className="text-fg-2 w-32 shrink-0">
+            <div key={key} className="flex items-center gap-1 text-sm">
+              <span className="text-fg-2 mr-1 w-32 shrink-0">
                 {label} <span className="text-fg-muted">({unit})</span>
               </span>
-              {(["Min", "Max"] as const).map((bound) => (
-                <Input
-                  key={bound}
-                  value={filters[`${key}${bound}`]}
-                  onChange={(e) =>
-                    onFilterChange(`${key}${bound}`, e.target.value)
-                  }
-                  placeholder={bound === "Min" ? "min" : "max"}
-                  inputMode="decimal"
-                  aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
-                  className="h-8 min-w-0"
-                />
-              ))}
+              {(["Min", "Max"] as const).map((bound) => {
+                const strictKey = `${key}${bound}Strict` as const;
+                const strict = filters[strictKey] === "1";
+                const [inclusiveOp, strictOp] =
+                  bound === "Min" ? ["≥", ">"] : ["≤", "<"];
+                return (
+                  <div key={bound} className="flex min-w-0 items-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        onFilterChange(strictKey, strict ? "" : "1")
+                      }
+                      aria-pressed={strict}
+                      aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"}: ${strict ? "strict" : "inclusive"}`}
+                      title={
+                        strict
+                          ? "Strict (click for inclusive)"
+                          : "Inclusive (click for strict)"
+                      }
+                      className="aria-pressed:bg-surface-2 aria-pressed:text-fg w-6 font-mono"
+                    >
+                      {strict ? strictOp : inclusiveOp}
+                    </Button>
+                    <Input
+                      value={filters[`${key}${bound}`]}
+                      onChange={(e) =>
+                        onFilterChange(`${key}${bound}`, e.target.value)
+                      }
+                      placeholder={bound === "Min" ? "min" : "max"}
+                      inputMode="decimal"
+                      aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
+                      className="h-8 min-w-0"
+                    />
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>

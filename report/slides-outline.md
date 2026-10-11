@@ -239,13 +239,13 @@ and expected numbers.
 - Set four filters on the Unit-years tab.
   - Clear filters · Unit-years tab
   - State = KY · Fuel = Coal · Year = 2025
-  - Advanced → CO₂ min = 500000
+  - Advanced → CO₂ min = 500000 · click ≥ beside it to make it strict (>), as in “greater than”
 - Result: 25 unit-years.
   - switch to Facilities: the same filters give 8 facilities
 - The conditions sit on three tables, combined with AND.
   - state → facility · fuel → unit · year and CO₂ → annual record
 - The whole search lives in the URL.
-  - point at the address bar: /explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000
+  - point at the address bar: /explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000&co2MassTonsMinStrict=1
   - bookmark or share it; the CSV export parses the same URL
 - Fuel and control filters match by substring.
   - CAMPD stores combined values like “Coal, Pipeline Natural Gas”

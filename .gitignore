@@ -6,6 +6,9 @@ rubric.txt
 prompt.txt
 /docs
 
+# Assembled submission (built from the tracked files)
+/BangaRaajSubmission
+
 # dataImports Test Cases
 /dataImports
 /uploads

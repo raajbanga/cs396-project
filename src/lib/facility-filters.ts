@@ -23,6 +23,12 @@ type RangeKey = `${RangeField}${"Min" | "Max"}`;
 const RANGE_KEYS = RANGE_FIELDS.flatMap(
   ({ key }) => [`${key}Min`, `${key}Max`] as const,
 );
+/** Rubric §5 greater-than/less-than: "1" makes the bound strict (> / <) instead of inclusive (≥ / ≤). */
+type StrictKey = `${RangeKey}Strict`;
+const STRICT_KEYS = RANGE_KEYS.map((k) => `${k}Strict` as const);
+/** A strict flag only modifies its bound; it is not a filter of its own. */
+export const isStrictKey = (key: string): key is StrictKey =>
+  key.endsWith("Strict");
 
 /** Unit-year (Units view) sort keys: identity columns, every metric, and the derived rates. */
 export const UNIT_SORT_FIELDS = [
@@ -66,10 +72,9 @@ export const facilityFilterSchema = z.object({
   origin: text, // "API" | "UPLOAD": where the unit-year record came from
   auditFlag: text, // physical-sanity rule (flag_type) the unit-year was flagged with
   auditSeverity: text, // "ERROR" | "WARN"
-  ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, text])) as Record<
-    RangeKey,
-    typeof text
-  >),
+  ...(Object.fromEntries(
+    [...RANGE_KEYS, ...STRICT_KEYS].map((k) => [k, text]),
+  ) as Record<RangeKey | StrictKey, typeof text>),
 });
 export type FilterInput = z.infer<typeof facilityFilterSchema>;
 
@@ -93,10 +98,9 @@ export const DEFAULT_FILTERS = {
   origin: "ALL",
   auditFlag: "ALL",
   auditSeverity: "ALL",
-  ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, ""])) as Record<
-    RangeKey,
-    string
-  >),
+  ...(Object.fromEntries(
+    [...RANGE_KEYS, ...STRICT_KEYS].map((k) => [k, ""]),
+  ) as Record<RangeKey | StrictKey, string>),
 };
 export type FacilityFilters = typeof DEFAULT_FILTERS;
 
@@ -114,12 +118,19 @@ const BASIC_FILTER_KEYS = [
 /** Everything else (grid, controls, ranges, ranking, …), shown under "Advanced". */
 export const ADVANCED_FILTER_KEYS = (
   Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
-).filter((k) => !(BASIC_FILTER_KEYS as readonly string[]).includes(k));
+).filter(
+  (k) =>
+    !(BASIC_FILTER_KEYS as readonly string[]).includes(k) && !isStrictKey(k),
+);
 
+/** Set to a non-default value; a strict flag counts only while its bound is set. */
 export const isFilterActive = (
   filters: FacilityFilters,
   key: keyof FacilityFilters,
-) => filters[key].trim() !== DEFAULT_FILTERS[key];
+): boolean =>
+  filters[key].trim() !== DEFAULT_FILTERS[key] &&
+  (!isStrictKey(key) ||
+    isFilterActive(filters, key.slice(0, -"Strict".length) as RangeKey));
 
 export const DEFAULT_TABLE_STATE = {
   page: 1,

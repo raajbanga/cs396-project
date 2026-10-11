@@ -11,6 +11,7 @@ import {
   DEFAULT_FILTERS,
   filterSearchParams,
   isFilterActive,
+  isStrictKey,
   type ExplorerState,
   type FacilityFilters,
   type FilterChangeHandler,
@@ -84,7 +85,9 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
   // Filters the map has no control for, carried over from Explore.
   const otherFilters = (
     Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
-  ).filter((k) => k !== "stateCode" && isFilterActive(filters, k)).length;
+  ).filter(
+    (k) => k !== "stateCode" && !isStrictKey(k) && isFilterActive(filters, k),
+  ).length;
 
   const fuelCounts = useMemo(() => {
     const counts: Record<string, number> = {};
