@@ -144,7 +144,7 @@ exports.
 
 Tested on macOS with Node.js 26 and Python 3.9. Linux works the same way. On Windows, use WSL,
 or install `openpyxl` into the `python3` on your PATH (the server only looks for a virtual
-environment at `.venv/bin/python3`).
+environment at `epaDataVENV/bin/python3`).
 
 ### Prerequisites
 
@@ -164,8 +164,9 @@ git clone <repository-url> epaData && cd epaData
 npm install
 
 # 3. Python environment for uploads (openpyxl reads .xlsx files)
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+python3 -m venv epaDataVENV
+source epaDataVENV/bin/activate
+pip install -r requirements.txt
 
 # 4. Configuration
 cp .env.example .env

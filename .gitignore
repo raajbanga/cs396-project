@@ -22,6 +22,7 @@ CLAUDE.md
 # dependencies
 /node_modules
 /.venv
+/epaDataVENV
 /.pnp
 .pnp.js
 
