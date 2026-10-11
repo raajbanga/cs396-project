@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
-/** Page-level metrics use variant="card"; in-dialog strips use variant="default". */
+/** A labelled figure. Page-level figures use variant="card" (larger value); in-panel strips use "default". */
 export function StatTile({
   label,
   value,
-  icon,
   subtext,
   valueClassName,
   variant = "default",
@@ -13,7 +12,6 @@ export function StatTile({
 }: {
   label: string;
   value: ReactNode;
-  icon?: ReactNode;
   subtext?: ReactNode;
   valueClassName?: string;
   variant?: "default" | "card";
@@ -21,25 +19,12 @@ export function StatTile({
 }) {
   const card = variant === "card";
   return (
-    <div
-      className={cn(
-        "flex flex-col justify-between rounded-lg border transition-colors",
-        card
-          ? "border-edge/80 bg-surface/30 p-3 sm:p-4"
-          : "border-edge bg-canvas p-3",
-        className,
-      )}
-    >
-      <div className="text-fg-muted flex items-center justify-between gap-1 text-xs font-medium tracking-wider uppercase">
-        <span className="truncate">{label}</span>
-        {icon && <span className="shrink-0 opacity-80">{icon}</span>}
-      </div>
+    <div className={cn("border-edge min-w-0 border-l pl-3", className)}>
+      <div className="text-fg-muted truncate text-xs">{label}</div>
       <div
         className={cn(
-          "text-fg mt-1.5 font-semibold",
-          card
-            ? "text-2xl tracking-tight sm:text-3xl"
-            : "font-mono text-base sm:text-lg",
+          "text-fg mt-0.5 truncate font-semibold tabular-nums",
+          card ? "text-lg sm:text-2xl" : "text-base",
           valueClassName,
         )}
       >
@@ -47,10 +32,7 @@ export function StatTile({
       </div>
       {subtext && (
         <div
-          className={cn(
-            "text-fg-muted mt-1 truncate",
-            card ? "text-sm" : "text-xs",
-          )}
+          className="text-fg-muted mt-0.5 truncate text-xs"
           title={typeof subtext === "string" ? subtext : undefined}
         >
           {subtext}
@@ -70,7 +52,7 @@ export function KpiStrip({
   return (
     <div
       className={cn(
-        "grid grid-cols-2 gap-2 text-xs sm:grid-cols-5 sm:gap-2.5",
+        "grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5",
         className,
       )}
     >

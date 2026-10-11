@@ -23,6 +23,12 @@ type RangeKey = `${RangeField}${"Min" | "Max"}`;
 const RANGE_KEYS = RANGE_FIELDS.flatMap(
   ({ key }) => [`${key}Min`, `${key}Max`] as const,
 );
+/** Rubric §5 greater-than/less-than: "1" makes the bound strict (> / <) instead of inclusive (≥ / ≤). */
+type StrictKey = `${RangeKey}Strict`;
+const STRICT_KEYS = RANGE_KEYS.map((k) => `${k}Strict` as const);
+/** A strict flag only modifies its bound; it is not a filter of its own. */
+export const isStrictKey = (key: string): key is StrictKey =>
+  key.endsWith("Strict");
 
 /** Unit-year (Units view) sort keys: identity columns, every metric, and the derived rates. */
 export const UNIT_SORT_FIELDS = [
@@ -66,10 +72,9 @@ export const facilityFilterSchema = z.object({
   origin: text, // "API" | "UPLOAD": where the unit-year record came from
   auditFlag: text, // physical-sanity rule (flag_type) the unit-year was flagged with
   auditSeverity: text, // "ERROR" | "WARN"
-  ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, text])) as Record<
-    RangeKey,
-    typeof text
-  >),
+  ...(Object.fromEntries(
+    [...RANGE_KEYS, ...STRICT_KEYS].map((k) => [k, text]),
+  ) as Record<RangeKey | StrictKey, typeof text>),
 });
 export type FilterInput = z.infer<typeof facilityFilterSchema>;
 
@@ -93,24 +98,39 @@ export const DEFAULT_FILTERS = {
   origin: "ALL",
   auditFlag: "ALL",
   auditSeverity: "ALL",
-  ...(Object.fromEntries(RANGE_KEYS.map((k) => [k, ""])) as Record<
-    RangeKey,
-    string
-  >),
+  ...(Object.fromEntries(
+    [...RANGE_KEYS, ...STRICT_KEYS].map((k) => [k, ""]),
+  ) as Record<RangeKey | StrictKey, string>),
 };
 export type FacilityFilters = typeof DEFAULT_FILTERS;
 
-/** Filters beyond the toolbar's search + state/grid/fuel selects (shown under "More filters"). */
+/** §8.1 basic search fields, always visible in the explorer toolbar. */
+const BASIC_FILTER_KEYS = [
+  "search",
+  "stateCode",
+  "year",
+  "primaryFuel",
+  "unitType",
+  "facilityId",
+  "unitId",
+] as const satisfies readonly (keyof FacilityFilters)[];
+
+/** Everything else (grid, controls, ranges, ranking, …), shown under "Advanced". */
 export const ADVANCED_FILTER_KEYS = (
   Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
 ).filter(
-  (k) => !["search", "stateCode", "primaryFuel", "nercRegion"].includes(k),
+  (k) =>
+    !(BASIC_FILTER_KEYS as readonly string[]).includes(k) && !isStrictKey(k),
 );
 
+/** Set to a non-default value; a strict flag counts only while its bound is set. */
 export const isFilterActive = (
   filters: FacilityFilters,
   key: keyof FacilityFilters,
-) => filters[key].trim() !== DEFAULT_FILTERS[key];
+): boolean =>
+  filters[key].trim() !== DEFAULT_FILTERS[key] &&
+  (!isStrictKey(key) ||
+    isFilterActive(filters, key.slice(0, -"Strict".length) as RangeKey));
 
 export const DEFAULT_TABLE_STATE = {
   page: 1,
@@ -169,7 +189,7 @@ export type FilterChangeHandler = (
 ) => void;
 
 /** §5 CAMPD retrieval: a year range plus the annual endpoint's filters ("ALL"/empty = no filter). */
-export const campdFilterSchema = facilityFilterSchema
+const campdFilterSchema = facilityFilterSchema
   .pick({ stateCode: true })
   .extend({
     facilityId: z.array(z.number().int().positive()).max(50).optional(),
@@ -189,8 +209,8 @@ export const campdRetrievalSchema = campdFilterSchema
   });
 export type CampdRetrieval = z.infer<typeof campdRetrievalSchema>;
 
-const EXPLORER_TABS = ["explorer", "units", "map", "audit"] as const;
-export type ExplorerTab = (typeof EXPLORER_TABS)[number];
+const EXPLORER_TABS = ["explorer", "units", "audit"] as const;
+type ExplorerTab = (typeof EXPLORER_TABS)[number];
 
 export interface ExplorerState {
   tab: ExplorerTab;
@@ -246,19 +266,28 @@ export function parseExplorerParams(params: Params): ExplorerState {
     unitTable: { ...DEFAULT_UNIT_TABLE_STATE },
     auditTable: { ...DEFAULT_AUDIT_TABLE_STATE },
   };
-  // Paging and sort params belong to the active tab's table (the map has none).
-  if (tab !== "map") {
-    const { key, defaults, sorts } = TAB_TABLES[tab];
-    Object.assign(state[key], {
-      page: positive(get("page")) ?? 1,
-      pageSize:
-        [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
-        defaults.pageSize,
-      sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
-      sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
-    });
-  }
+  // Paging and sort params belong to the active tab's table.
+  const { key, defaults, sorts } = TAB_TABLES[tab];
+  Object.assign(state[key], {
+    page: positive(get("page")) ?? 1,
+    pageSize:
+      [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
+      defaults.pageSize,
+    sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
+    sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
+  });
   return state;
+}
+
+/** The active (non-default) filters as URL params (the Map page's whole query). */
+export function filterSearchParams(
+  filters: FacilityFilters,
+  params = new URLSearchParams(),
+) {
+  for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
+    if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
+  }
+  return params;
 }
 
 /** Query string for the explorer state, keeping only non-default values (the inverse of parseExplorerParams). */
@@ -267,19 +296,14 @@ export function explorerSearchParams(state: ExplorerState) {
   const params = new URLSearchParams();
   if (tab !== "explorer") params.set("tab", tab);
   if (q.trim()) params.set("q", q.trim());
-  for (const key of Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]) {
-    if (isFilterActive(filters, key)) params.set(key, filters[key].trim());
-  }
-  if (tab !== "map") {
-    const { key, defaults } = TAB_TABLES[tab];
-    const current = state[key];
-    if (current.sortBy !== defaults.sortBy) params.set("sort", current.sortBy);
-    if (current.sortDir !== defaults.sortDir)
-      params.set("dir", current.sortDir);
-    if (current.page !== 1) params.set("page", String(current.page));
-    if (current.pageSize !== defaults.pageSize) {
-      params.set("size", String(current.pageSize));
-    }
+  filterSearchParams(filters, params);
+  const { key, defaults } = TAB_TABLES[tab];
+  const current = state[key];
+  if (current.sortBy !== defaults.sortBy) params.set("sort", current.sortBy);
+  if (current.sortDir !== defaults.sortDir) params.set("dir", current.sortDir);
+  if (current.page !== 1) params.set("page", String(current.page));
+  if (current.pageSize !== defaults.pageSize) {
+    params.set("size", String(current.pageSize));
   }
   return params.toString();
 }

@@ -4,7 +4,6 @@ import { cn } from "~/lib/utils";
 interface SegmentedOption<T extends string> {
   value: T;
   label: ReactNode;
-  icon?: ReactNode;
   title?: string;
 }
 
@@ -25,9 +24,11 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
+        // Tabs draw their baseline as an inset shadow under the active tab's border: a real border
+        // plus a -1px tab margin overflows the box and shows a vertical scrollbar.
         tabs
-          ? "border-edge bg-surface/95 sticky top-0 z-10 flex border-b pt-1 text-xs font-medium backdrop-blur-md sm:text-sm"
-          : "border-edge/80 bg-surface/60 flex rounded-md border p-0.5 text-xs",
+          ? "flex overflow-x-auto text-sm shadow-[inset_0_-1px_0_var(--edge)]"
+          : "border-edge bg-surface flex rounded-md border p-0.5 text-sm",
         className,
       )}
     >
@@ -38,18 +39,17 @@ export function SegmentedControl<T extends string>({
           title={option.title}
           onClick={() => onChange(option.value)}
           className={cn(
-            "flex cursor-pointer items-center gap-1 font-medium transition-all",
-            tabs ? "border-b-2 px-3.5 py-2" : "rounded px-2.5 py-1 text-xs",
+            "flex cursor-pointer items-center gap-1.5 font-medium whitespace-nowrap",
+            tabs ? "border-b-2 px-3 py-2" : "rounded-sm px-2.5 py-1",
             value === option.value
               ? tabs
-                ? "text-fg border-emerald-400 font-semibold"
-                : "bg-surface-2 text-fg shadow-xs"
+                ? "text-fg border-fg"
+                : "bg-surface-2 text-fg"
               : tabs
                 ? "text-fg-muted hover:text-fg border-transparent"
                 : "text-fg-muted hover:text-fg",
           )}
         >
-          {option.icon}
           {option.label}
         </button>
       ))}

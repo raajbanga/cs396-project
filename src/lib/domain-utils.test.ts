@@ -12,19 +12,26 @@ import {
 } from "./campd-reporting-period";
 import {
   buildYearlyRollups,
-  computeCo2IntensityLbsMWh,
-  computeHeatRateMMBtuMWh,
+  deriveRates,
+  emptyTotals,
+  evaluatePhysicalSanityRules,
   pickCleanestByCarbonIntensity,
+  sumTotals,
+  type ReportedTotals,
 } from "./emissions-metrics";
 import {
   activeCampdFilters,
   campdRetrievalSchema,
+  ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
   DEFAULT_AUDIT_TABLE_STATE,
   DEFAULT_TABLE_STATE,
   DEFAULT_UNIT_TABLE_STATE,
   describeCampdFilters,
   explorerSearchParams,
+  filterSearchParams,
+  isFilterActive,
+  isStrictKey,
   multiValueOptions,
   nextSort,
   parseExplorerParams,
@@ -40,9 +47,20 @@ import {
 import { isNumericValue, sortRows } from "./utils";
 
 void test("emissions metrics handle valid and missing generation", () => {
-  assert.equal(computeCo2IntensityLbsMWh(1, 2), 1000);
-  assert.equal(computeCo2IntensityLbsMWh(1, 0), null);
-  assert.equal(computeHeatRateMMBtuMWh(75, 10), 7.5);
+  const rates = (co2: number, heat: number, gen: number) =>
+    deriveRates({
+      co2MassTons: co2,
+      heatInputMMBtu: heat,
+      grossGenerationMWh: gen,
+    });
+  assert.deepEqual(rates(1, 75, 2), {
+    co2IntensityLbsMWh: 1000,
+    heatRateMMBtuMWh: 37.5,
+  });
+  assert.deepEqual(rates(1, 75, 0), {
+    co2IntensityLbsMWh: null,
+    heatRateMMBtuMWh: null,
+  });
   assert.equal(
     pickCleanestByCarbonIntensity([
       { carbonIntensityLbsMWh: 900 },
@@ -52,10 +70,52 @@ void test("emissions metrics handle valid and missing generation", () => {
   );
 });
 
+void test("not reported (null) is kept apart from 0 in rates, totals, and sanity rules", () => {
+  const record: ReportedTotals = {
+    ...emptyTotals(),
+    heatInputMMBtu: 38801.9,
+    grossGenerationMWh: 2012,
+    operatingHours: 111,
+    co2MassTons: null,
+    steamLoadKlb: null,
+  };
+  const flags = (r: ReportedTotals) =>
+    evaluatePhysicalSanityRules({ ...r, ...deriveRates(r) }).map(
+      (f) => `${f.flagType}:${f.severity}`,
+    );
+  // Missing CO₂ is a reporting gap (WARN); a reported 0 is implausible (ERROR).
+  assert.deepEqual(flags(record), ["CO2_NOT_REPORTED:WARN"]);
+  assert.deepEqual(flags({ ...record, co2MassTons: 0 }), [
+    "ZERO_EMISSIONS_HIGH_HEAT:ERROR",
+  ]);
+  // Rates need both inputs reported; missing heat input never looks like an extreme heat rate.
+  assert.equal(deriveRates(record).co2IntensityLbsMWh, null);
+  assert.deepEqual(
+    flags({ ...record, heatInputMMBtu: null, co2MassTons: 1 }),
+    [],
+  );
+  // Phantom generation needs a reported 0 hours, not a missing value.
+  assert.deepEqual(
+    flags({ ...record, co2MassTons: 1, operatingHours: null }),
+    [],
+  );
+  // Totals count unreported values as 0.
+  assert.equal(
+    sumTotals([record, { ...record, co2MassTons: 5 }]).co2MassTons,
+    5,
+  );
+});
+
 void test("fuel metadata stays consistent and filters remain distinct", () => {
   assert.equal(getFuelTheme("Pipeline Natural Gas").name, "Natural Gas");
   assert.equal(getFuelTheme("Coal").color, "#f59e0b");
-  assert.ok(FUEL_CATEGORIES.every(({ query }) => String(query) !== "ALL"));
+  // Each chip is a fuel class getFuelTheme assigns, so its count equals what it filters to.
+  assert.deepEqual(
+    FUEL_CATEGORIES.map((c) => c.name),
+    ["Pipeline Natural Gas", "Coal", "Residual Oil"].map(
+      (f) => getFuelTheme(f).name,
+    ),
+  );
   assert.ok(
     getMarkerRadius({ totalCapacityMW: 1000, totalCo2Tons: 100 }, "capacity") >
       3,
@@ -81,7 +141,7 @@ void test("unit status and controls use shared rules", () => {
     "Acme, Beta Co",
   );
   assert.equal(cleanOwnerOperator(null), "Owner unlisted");
-  assert.equal(getCarbonIntensityTier(0).label, "Zero-Carbon");
+  assert.equal(getCarbonIntensityTier(0).label, "Zero CO₂");
   assert.equal(getCarbonIntensityTier(1600).variant, "warning");
   assert.equal(getCarbonIntensityTier(2100).variant, "destructive");
 });
@@ -242,6 +302,23 @@ void test("explorer state round-trips through URL query params", () => {
     state,
   );
   assert.equal(explorerSearchParams(parseExplorerParams({})), "");
+});
+
+void test("a strict flag is kept in the URL only while its bound is set", () => {
+  const withBound = {
+    ...DEFAULT_FILTERS,
+    co2MassTonsMin: "500000",
+    co2MassTonsMinStrict: "1",
+  };
+  assert.equal(
+    filterSearchParams(withBound).toString(),
+    "co2MassTonsMin=500000&co2MassTonsMinStrict=1",
+  );
+  assert.equal(isFilterActive(withBound, "co2MassTonsMinStrict"), true);
+  const flagOnly = { ...DEFAULT_FILTERS, co2MassTonsMinStrict: "1" };
+  assert.equal(isFilterActive(flagOnly, "co2MassTonsMinStrict"), false);
+  assert.equal(filterSearchParams(flagOnly).toString(), "");
+  assert.equal(ADVANCED_FILTER_KEYS.some(isStrictKey), false);
 });
 
 void test("explorer params ignore unknown keys and invalid values", () => {

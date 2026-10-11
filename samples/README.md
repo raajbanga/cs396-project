@@ -24,22 +24,22 @@ rejected rows, an in-file duplicate, and a physical-sanity flag.
 Row numbers count data rows (the header is row 0), as in the upload report. In a
 spreadsheet, add 1.
 
-|   Row | Facility (ID) · unit · year         | Expected result   | Why                                                                                |
-| ----: | :---------------------------------- | :---------------- | :--------------------------------------------------------------------------------- |
-|   1–3 | E W Brown (1355) · 1, 2, 3 · 2014   | New               | 2014 is not in the database (it covers 2015–2026)                                  |
-|   4–7 | Ghent (1356) · 1–4 · 2014           | New               |                                                                                    |
-|  8–11 | Mill Creek (1364) · 1–4 · 2014      | New               |                                                                                    |
-|    12 | Elmer Smith (1374) · _blank_ · 2014 | **Rejected**      | `Unit ID: Missing required value`                                                  |
-| 13–15 | Paradise (1378) · 1, 2, 3 · 2014    | New               |                                                                                    |
-|    16 | Robert Reid (1383) · RT · 2014      | New + **flagged** | 38,801.9 MMBtu heat input but no CO₂ reported → `ZERO_EMISSIONS_HIGH_HEAT` (ERROR) |
-|    17 | East Bend (6018) · 2 · 2014         | New               |                                                                                    |
-|    18 | H L Spurlock (6041) · 1 · 2014      | **Rejected**      | State `KZ` → `Unrecognized US state or territory 'KZ'`                             |
-|    19 | H L Spurlock (6041) · 2 · 2014      | **Rejected**      | CO₂ = −3,603,705.49 → `Must be at least 0`                                         |
-| 20–21 | Trimble County (6071) · 1, 2 · 2014 | New               |                                                                                    |
-|    22 | Trimble County (6071) · 1 · 2023    | **Unchanged**     | Identical to the stored 2023 record                                                |
-|    23 | Trimble County (6071) · 2 · 2023    | **Changed**       | CO₂ 4,098,943.863 in the file vs 4,099,943.863 stored (1,000 t lower)              |
-|    24 | D B Wilson (6823) · W1 · 2014       | New               |                                                                                    |
-|    25 | Ghent (1356) · 1 · 2014             | **Duplicate**     | Same facility-unit-year as row 4; skipped                                          |
+|   Row | Facility (ID) · unit · year         | Expected result   | Why                                                                       |
+| ----: | :---------------------------------- | :---------------- | :------------------------------------------------------------------------ |
+|   1–3 | E W Brown (1355) · 1, 2, 3 · 2014   | New               | 2014 is not in the database (it covers 2015–2026)                         |
+|   4–7 | Ghent (1356) · 1–4 · 2014           | New               |                                                                           |
+|  8–11 | Mill Creek (1364) · 1–4 · 2014      | New               |                                                                           |
+|    12 | Elmer Smith (1374) · _blank_ · 2014 | **Rejected**      | `Unit ID: Missing required value`                                         |
+| 13–15 | Paradise (1378) · 1, 2, 3 · 2014    | New               |                                                                           |
+|    16 | Robert Reid (1383) · RT · 2014      | New + **flagged** | 38,801.9 MMBtu heat input but no CO₂ reported → `CO2_NOT_REPORTED` (WARN) |
+|    17 | East Bend (6018) · 2 · 2014         | New               |                                                                           |
+|    18 | H L Spurlock (6041) · 1 · 2014      | **Rejected**      | State `KZ` → `Unrecognized US state or territory 'KZ'`                    |
+|    19 | H L Spurlock (6041) · 2 · 2014      | **Rejected**      | CO₂ = −3,603,705.49 → `Must be at least 0`                                |
+| 20–21 | Trimble County (6071) · 1, 2 · 2014 | New               |                                                                           |
+|    22 | Trimble County (6071) · 1 · 2023    | **Unchanged**     | Identical to the stored 2023 record                                       |
+|    23 | Trimble County (6071) · 2 · 2023    | **Changed**       | CO₂ 4,098,943.863 in the file vs 4,099,943.863 stored (1,000 t lower)     |
+|    24 | D B Wilson (6823) · W1 · 2014       | New               |                                                                           |
+|    25 | Ghent (1356) · 1 · 2014             | **Duplicate**     | Same facility-unit-year as row 4; skipped                                 |
 
 ## Expected report
 

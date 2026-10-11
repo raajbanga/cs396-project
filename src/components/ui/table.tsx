@@ -17,6 +17,8 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { DataPanel } from "~/components/ui/data-panel";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
 import { Select, toOptions } from "~/components/ui/select";
 import { nextSort, type SortDirection } from "~/lib/facility-filters";
@@ -37,7 +39,7 @@ export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
   return (
     <thead
       className={cn(
-        "border-edge bg-surface/80 text-fg-muted border-b text-xs font-medium tracking-wider uppercase [&_tr]:hover:bg-transparent",
+        "border-edge text-fg-muted border-b text-xs [&_tr]:hover:bg-transparent",
         className,
       )}
       {...props}
@@ -47,47 +49,40 @@ export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
 
 export function TableBody({ className, ...props }: ComponentProps<"tbody">) {
   return (
-    <tbody className={cn("divide-edge/60 divide-y", className)} {...props} />
+    <tbody className={cn("divide-edge/70 divide-y", className)} {...props} />
   );
 }
 
 export function TableRow({ className, ...props }: ComponentProps<"tr">) {
-  return (
-    <tr
-      className={cn("hover:bg-surface-2/40 transition-colors", className)}
-      {...props}
-    />
-  );
+  return <tr className={cn("hover:bg-surface-2/50", className)} {...props} />;
 }
 
 export function TableHead({ className, ...props }: ComponentProps<"th">) {
   return (
     <th
-      className={cn("h-10 px-3 text-left align-middle font-medium", className)}
+      className={cn("h-9 px-3 text-left align-middle font-medium", className)}
       {...props}
     />
   );
 }
 
 export function TableCell({ className, ...props }: ComponentProps<"td">) {
-  return <td className={cn("p-3 align-middle", className)} {...props} />;
+  return <td className={cn("px-3 py-2 align-middle", className)} {...props} />;
 }
 
 /** Pulsing placeholder rows while a table's first page loads. */
 export function TableSkeleton({ rows }: { rows: number }) {
   return (
-    <div className="divide-edge/60 divide-y">
+    <div className="divide-edge/70 divide-y">
       {Array.from({ length: Math.min(rows, 10) }, (_, i) => (
-        <div key={i} className="animate-pulse space-y-2 p-3.5">
-          <div className="bg-surface-2 h-4 w-2/3 rounded" />
-          <div className="bg-surface-2/60 h-3 w-1/3 rounded" />
+        <div key={i} className="animate-pulse px-3 py-3">
+          <div className="bg-surface-2 h-4 w-1/2 rounded-sm" />
         </div>
       ))}
     </div>
   );
 }
 
-/** Header cell that sorts on click; `sort` omitted = plain header. Right-aligns when className has text-right. */
 type LocalSort<F extends string> = { sortBy: F; sortDir: SortDirection };
 
 /**
@@ -103,6 +98,7 @@ export const localSortProps = <F extends string>(
   onSortChange: (field: F) => setSort((s) => nextSort(s, field, descFirst)),
 });
 
+/** Header cell that sorts on click; `sort` omitted = plain header. Right-aligns when className has text-right. */
 export function SortableTableHead<F extends string>({
   label,
   sort,
@@ -122,15 +118,15 @@ export function SortableTableHead<F extends string>({
     sort === undefined ? null : sortBy !== sort ? (
       <ArrowUpDown className="text-fg-muted h-3 w-3 shrink-0 opacity-60" />
     ) : sortDir === "asc" ? (
-      <ArrowUp className="h-3 w-3 shrink-0 text-emerald-400" />
+      <ArrowUp className="text-primary h-3 w-3 shrink-0" />
     ) : (
-      <ArrowDown className="h-3 w-3 shrink-0 text-emerald-400" />
+      <ArrowDown className="text-primary h-3 w-3 shrink-0" />
     );
   return (
     <TableHead
       className={cn(
         className,
-        sort && "hover:text-fg cursor-pointer transition-colors select-none",
+        sort && "hover:text-fg cursor-pointer select-none",
       )}
       onClick={sort ? () => onSortChange(sort) : undefined}
     >
@@ -208,7 +204,7 @@ export function TablePagination({
   );
 
   return (
-    <div className="border-edge/80 bg-surface/30 flex flex-col items-center justify-between gap-3 border-t px-3 py-2.5 sm:flex-row sm:px-4 sm:py-3">
+    <div className="border-edge flex flex-col items-center justify-between gap-3 border-t px-3 py-2 sm:flex-row">
       <div className="text-fg-muted flex w-full items-center justify-between gap-3 text-xs sm:w-auto sm:justify-start">
         <span>
           Showing{" "}
@@ -222,7 +218,7 @@ export function TablePagination({
           <span className="hidden sm:inline">{itemLabel}</span>
         </span>
         <div className="sm:border-edge flex items-center gap-1.5 sm:border-l sm:pl-3">
-          Per page:
+          Per page
           <Select
             value={String(pageSize)}
             onValueChange={(val) => onPageSizeChange(Number(val))}
@@ -245,7 +241,7 @@ export function TablePagination({
           }}
           className="border-edge text-fg-muted hidden items-center gap-1 border-r pr-2 text-xs sm:flex"
         >
-          Go to:
+          Go to
           <Input
             type="number"
             min={1}
@@ -291,7 +287,7 @@ export function TablePagination({
             ),
           )}
         </div>
-        <span className="text-fg-2 font-mono text-xs sm:hidden">
+        <span className="text-fg-2 text-xs tabular-nums sm:hidden">
           Page {page} of {totalPages}
         </span>
         {navButton(
@@ -307,5 +303,63 @@ export function TablePagination({
         )}
       </div>
     </div>
+  );
+}
+
+/** Paging state and handlers of a server-paged table, as the explorer passes them down. */
+export interface Paging {
+  page: number;
+  pageSize: number;
+  isLoading: boolean;
+  isPlaceholderData: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
+
+/**
+ * A server-paged result table: skeleton rows while the first page loads, a "no matches" state
+ * with a Clear filters button, otherwise `children`; pagination below.
+ */
+export function ResultsPanel({
+  paging,
+  data,
+  itemLabel,
+  onResetFilters,
+  children,
+}: {
+  paging: Paging;
+  data?: { items: unknown[]; totalCount: number; totalPages: number };
+  itemLabel: string;
+  onResetFilters?: () => void;
+  children: ReactNode;
+}) {
+  const { isLoading, pageSize, ...pageProps } = paging;
+  return (
+    <DataPanel>
+      {isLoading ? (
+        <TableSkeleton rows={pageSize} />
+      ) : !data?.items.length ? (
+        <EmptyState
+          title={`No ${itemLabel} match these filters.`}
+          description="Remove a filter above, or clear them all."
+          action={
+            onResetFilters && (
+              <Button variant="outline" size="sm" onClick={onResetFilters}>
+                Clear filters
+              </Button>
+            )
+          }
+        />
+      ) : (
+        children
+      )}
+      <TablePagination
+        {...pageProps}
+        pageSize={pageSize}
+        totalCount={data?.totalCount ?? 0}
+        totalPages={Math.max(data?.totalPages ?? 1, 1)}
+        itemLabel={itemLabel}
+      />
+    </DataPanel>
   );
 }

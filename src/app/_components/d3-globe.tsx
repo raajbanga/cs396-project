@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import {
   Compass,
-  MapPin,
   Maximize2,
   Minimize2,
   Pause,
@@ -14,17 +13,18 @@ import {
 import { useTheme } from "next-themes";
 import * as topojson from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
-import { FuelBadge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   getFuelTheme,
   getMarkerRadius,
   MAP_FRAME,
+  readThemeColors,
+  withAlpha,
   type MapFacility,
   type MetricMode,
 } from "~/lib/map-utils";
-import { formatCountyShort } from "~/lib/plant-narrative";
 import { cn } from "~/lib/utils";
+import { MapHoverCard } from "./map-hover-card";
 
 type Rotation = [number, number, number];
 type Projection = ReturnType<typeof createProjection>;
@@ -48,42 +48,32 @@ const PRESETS = [
 ];
 const HUD_BUTTON = "text-fg-2 hover:text-fg hover:bg-surface-2/60 h-7 px-2";
 const HUD_PANEL =
-  "border-edge/80 bg-surface/90 pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-xs backdrop-blur-md";
+  "border-edge bg-surface pointer-events-auto flex items-center gap-1 rounded-md border p-1";
 
-/** Canvas stroke/fill colors per theme: [dark, light]. */
-const PALETTE = {
-  rim: [
-    [
-      "rgba(16, 185, 129, 0.0)",
-      "rgba(16, 185, 129, 0.04)",
-      "rgba(52, 211, 153, 0.12)",
-    ],
-    [
-      "rgba(16, 185, 129, 0.0)",
-      "rgba(16, 185, 129, 0.03)",
-      "rgba(16, 185, 129, 0.10)",
-    ],
-  ],
-  sphere: [
-    ["#18181b", "#09090b", "#040405"],
-    ["#ffffff", "#f4f4f5", "#e4e4e7"],
-  ],
-  sphereEdge: ["rgba(255, 255, 255, 0.15)", "rgba(24, 24, 27, 0.2)"],
-  graticule: ["rgba(255, 255, 255, 0.08)", "rgba(24, 24, 27, 0.08)"],
-  equator: ["rgba(52, 211, 153, 0.2)", "rgba(16, 185, 129, 0.25)"],
-  landFill: ["rgba(24, 24, 27, 0.75)", "rgba(228, 228, 231, 0.75)"],
-  landEdge: ["rgba(161, 161, 170, 0.3)", "rgba(113, 113, 122, 0.4)"],
-  states: ["rgba(52, 211, 153, 0.35)", "rgba(16, 185, 129, 0.45)"],
-  nation: ["rgba(52, 211, 153, 0.95)", "rgba(5, 150, 105, 0.95)"],
-  hoverHalo: ["rgba(255, 255, 255, 0.5)", "rgba(15, 23, 42, 0.25)"],
-  dotEdge: ["#09090b", "#ffffff"],
-  hoverRing: ["#ffffff", "#0f172a"],
-} as const;
+/** Canvas colors, derived from the theme tokens at draw time. */
+function globePalette() {
+  const t = readThemeColors();
+  const ink = (alpha: number) => withAlpha(t.fg, alpha);
+  return {
+    rim: [ink(0), ink(0.02), ink(0.06)],
+    sphere: [t.surface, t.canvas, t.surface2],
+    sphereEdge: ink(0.18),
+    graticule: ink(0.07),
+    equator: ink(0.12),
+    landFill: t.surface2,
+    landEdge: ink(0.25),
+    states: ink(0.2),
+    nation: ink(0.5),
+    hoverHalo: ink(0.25),
+    dotEdge: t.canvas,
+    hoverRing: t.fg,
+  };
+}
 
 export function MapSpinner({ label }: { label: string }) {
   return (
     <div className="text-fg-muted flex items-center gap-2 text-xs">
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <div className="border-fg-muted h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" />
       {label}
     </div>
   );
@@ -214,9 +204,7 @@ export function D3Globe({
     const height = canvas.height / dpr;
     const cx = width / 2;
     const cy = height / 2;
-    const theme = isDark ? 0 : 1;
-    const color = (key: Exclude<keyof typeof PALETTE, "rim" | "sphere">) =>
-      PALETTE[key][theme];
+    const palette = globePalette();
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
@@ -254,11 +242,9 @@ export function D3Globe({
       cy,
       scale * 1.06,
     );
-    const [rim0, rim1, rim2] = PALETTE.rim[theme];
-    rim.addColorStop(0, rim0);
-    rim.addColorStop(0.7, rim1);
-    rim.addColorStop(0.95, rim2);
-    rim.addColorStop(1, rim0);
+    [0, 0.7, 0.95, 1].forEach((stop, i) =>
+      rim.addColorStop(stop, palette.rim[i % 3]!),
+    );
     ctx.beginPath();
     ctx.arc(cx, cy, scale * 1.06, 0, Math.PI * 2);
     ctx.fillStyle = rim;
@@ -273,7 +259,7 @@ export function D3Globe({
       cy,
       scale,
     );
-    PALETTE.sphere[theme].forEach((stop, i) =>
+    palette.sphere.forEach((stop, i) =>
       sphere.addColorStop([0, 0.8, 1][i]!, stop),
     );
     ctx.beginPath();
@@ -281,9 +267,9 @@ export function D3Globe({
     ctx.fillStyle = sphere;
     ctx.fill();
     ctx.lineWidth = 1.25;
-    ctx.strokeStyle = color("sphereEdge");
+    ctx.strokeStyle = palette.sphereEdge;
     ctx.stroke();
-    strokePath(d3.geoGraticule10(), 0.5, color("graticule"));
+    strokePath(d3.geoGraticule10(), 0.5, palette.graticule);
     strokePath(
       {
         type: "LineString",
@@ -293,14 +279,14 @@ export function D3Globe({
         ],
       },
       0.75,
-      color("equator"),
+      palette.equator,
     );
 
     // Land, US states, and the US national outline
     if (geo) {
-      strokePath(geo.land, 0.75, color("landEdge"), color("landFill"));
-      strokePath(geo.states, 0.6, color("states"));
-      strokePath(geo.nation, 2.4, color("nation"));
+      strokePath(geo.land, 0.75, palette.landEdge, palette.landFill);
+      strokePath(geo.states, 0.6, palette.states);
+      strokePath(geo.nation, 1.4, palette.nation);
     }
 
     // Facilities (back-face culled)
@@ -322,7 +308,7 @@ export function D3Globe({
 
       ctx.beginPath();
       ctx.arc(px, py, r + (isHovered ? 3 : 1), 0, Math.PI * 2);
-      ctx.fillStyle = isHovered ? color("hoverHalo") : fuelTheme.glow;
+      ctx.fillStyle = isHovered ? palette.hoverHalo : fuelTheme.glow;
       ctx.fill();
 
       ctx.beginPath();
@@ -330,14 +316,14 @@ export function D3Globe({
       ctx.fillStyle = fuelTheme.color;
       ctx.fill();
       ctx.lineWidth = isDark ? 0.75 : 1;
-      ctx.strokeStyle = color("dotEdge");
+      ctx.strokeStyle = palette.dotEdge;
       ctx.stroke();
 
       if (isHovered) {
         ctx.beginPath();
         ctx.arc(px, py, r + 5, 0, Math.PI * 2);
         ctx.lineWidth = 1.75;
-        ctx.strokeStyle = color("hoverRing");
+        ctx.strokeStyle = palette.hoverRing;
         ctx.stroke();
       }
     }
@@ -478,7 +464,7 @@ export function D3Globe({
     >
       {isLoadingGeo && (
         <div className="bg-canvas/80 absolute inset-0 z-20 flex items-center justify-center backdrop-blur-xs">
-          <MapSpinner label="Rendering Wireframe Projections..." />
+          <MapSpinner label="Loading the globe…" />
         </div>
       )}
 
@@ -496,11 +482,7 @@ export function D3Globe({
             variant="ghost"
             size="sm"
             onClick={() => setAutoRotate(!autoRotate)}
-            className={cn(
-              HUD_BUTTON,
-              autoRotate &&
-                "bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-300",
-            )}
+            className={cn(HUD_BUTTON, autoRotate && "bg-surface-2 text-fg")}
           >
             {autoRotate ? (
               <Pause className="h-3 w-3" />
@@ -508,7 +490,7 @@ export function D3Globe({
               <Play className="h-3 w-3" />
             )}
             <span className="hidden sm:inline">
-              {autoRotate ? "Spinning" : "Auto-Rotate"}
+              {autoRotate ? "Stop" : "Rotate"}
             </span>
           </Button>
           <div className="bg-edge h-3.5 w-px" />
@@ -520,9 +502,7 @@ export function D3Globe({
               onClick={() => goTo(preset)}
               className={cn(HUD_BUTTON, i > 0 && "hidden md:inline-flex")}
             >
-              {i === 0 && (
-                <Compass className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
-              )}
+              {i === 0 && <Compass className="h-3 w-3" />}
               {preset.label}
             </Button>
           ))}
@@ -560,66 +540,19 @@ export function D3Globe({
         </div>
       </div>
 
-      <div className="border-edge/80 bg-surface/90 text-fg-muted pointer-events-none absolute bottom-4 left-4 rounded-md border px-2.5 py-1 text-xs backdrop-blur-md">
-        Click & drag to rotate globe • Scroll to zoom • Click dot for plant
-        profile
+      <div className="text-fg-muted pointer-events-none absolute bottom-3 left-4 text-xs">
+        Drag to rotate, scroll to zoom; click a dot for details.
       </div>
 
-      {hoveredPlant && hoverPos && (
-        <div
-          style={{
-            left: Math.max(
-              8,
-              Math.min(hoverPos.x + 16, (container?.clientWidth ?? 800) - 270),
-            ),
-            top: Math.max(
-              8,
-              Math.min(hoverPos.y - 40, (container?.clientHeight ?? 600) - 200),
-            ),
+      {hoveredPlant && hoverPos && container && (
+        <MapHoverCard
+          plant={hoveredPlant}
+          {...hoverPos}
+          frame={{
+            width: container.clientWidth,
+            height: container.clientHeight,
           }}
-          className="border-edge bg-surface/95 animate-in fade-in zoom-in-95 pointer-events-none absolute z-30 w-64 rounded-lg border p-3 shadow-2xl backdrop-blur-md transition-all duration-75"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h4 className="text-fg text-sm font-semibold tracking-tight">
-                {hoveredPlant.name}
-              </h4>
-              <p className="text-fg-muted text-xs">
-                {hoveredPlant.county &&
-                  `${formatCountyShort(hoveredPlant.county)}, `}
-                {hoveredPlant.stateCode} • ORISPL #{hoveredPlant.id}
-              </p>
-            </div>
-            <FuelBadge fuel={hoveredPlant.primaryFuel} />
-          </div>
-
-          <div className="border-edge mt-2.5 grid grid-cols-2 gap-1.5 border-t pt-2 text-xs">
-            {[
-              [
-                "Capacity",
-                `${hoveredPlant.totalCapacityMW.toLocaleString()} MW`,
-              ],
-              [
-                "Annual CO₂",
-                `${Math.round(hoveredPlant.totalCo2Tons).toLocaleString()} tons`,
-              ],
-              ["NERC Grid", hoveredPlant.nercRegion ?? "Unassigned"],
-              ["Generators", `${hoveredPlant.unitCount} units`],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <span className="text-fg-muted">{label}:</span>
-                <p className="text-fg font-mono font-medium">{value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-edge/80 mt-2.5 flex items-center justify-between border-t pt-2 text-xs">
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-              Click dot to open profile
-            </span>
-            <MapPin className="text-fg-muted h-3 w-3" />
-          </div>
-        </div>
+        />
       )}
     </div>
   );

@@ -11,7 +11,7 @@ export function DataPanel({
   return (
     <div
       className={cn(
-        "border-edge bg-canvas overflow-hidden rounded-xl border",
+        "border-edge bg-surface overflow-hidden rounded-md border",
         className,
       )}
     >

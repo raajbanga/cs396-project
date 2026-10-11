@@ -6,13 +6,26 @@ rubric.txt
 prompt.txt
 /docs
 
+# Coding-agent instructions (local only)
+AGENTS.md
+CLAUDE.md
+
+# Assembled submission (built from the tracked files)
+/BangaRaajSubmission
+/BangaRaajSubmission.zip
+/BawankuleArnavSubmission.zip
+
 # dataImports Test Cases
 /dataImports
 /uploads
 
+# Bulk CAMPD files (input to db:rebuild)
+/csv
+
 # dependencies
 /node_modules
 /.venv
+/epaDataVENV
 /.pnp
 .pnp.js
 

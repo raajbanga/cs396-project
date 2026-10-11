@@ -8,6 +8,9 @@ export interface EmissionTotals {
   noxMassTons: number;
 }
 
+/** A unit-year's metrics as reported: null when the source left the value out (not the same as 0). */
+export type ReportedTotals = { [K in keyof EmissionTotals]: number | null };
+
 export const TOTAL_KEYS = [
   "operatingHours",
   "grossGenerationMWh",
@@ -28,42 +31,30 @@ export const emptyTotals = (): EmissionTotals => ({
   noxMassTons: 0,
 });
 
-export function addTotals(acc: EmissionTotals, rec: EmissionTotals) {
-  for (const key of TOTAL_KEYS) acc[key] += rec[key];
+/** Adds `rec` into `acc`; values that weren't reported count as 0 in a total. */
+export function addTotals(acc: EmissionTotals, rec: ReportedTotals) {
+  for (const key of TOTAL_KEYS) acc[key] += rec[key] ?? 0;
   return acc;
 }
 
-export const sumTotals = (records: EmissionTotals[]) =>
+export const sumTotals = (records: ReportedTotals[]) =>
   records.reduce(addTotals, emptyTotals());
 
-export function computeCo2IntensityLbsMWh(
-  co2Tons: number,
-  grossGenMWh: number,
-): number | null {
-  return grossGenMWh > 0 ? Math.round((co2Tons * 2000.0) / grossGenMWh) : null;
-}
-
-export function computeHeatRateMMBtuMWh(
-  heatInputMMBtu: number,
-  grossGenMWh: number,
-  decimals = 2,
-): number | null {
-  return grossGenMWh > 0
-    ? Number((heatInputMMBtu / grossGenMWh).toFixed(decimals))
-    : null;
-}
-
-export function deriveRates(totals: EmissionTotals, heatRateDecimals = 2) {
+/** CO₂ intensity (lbs/MWh) and heat rate (MMBtu/MWh); null when an input is missing or gross load is 0. */
+export function deriveRates({
+  co2MassTons: co2,
+  heatInputMMBtu: heat,
+  grossGenerationMWh: gen,
+}: Pick<
+  ReportedTotals,
+  "co2MassTons" | "heatInputMMBtu" | "grossGenerationMWh"
+>) {
+  const ok = gen !== null && gen > 0;
   return {
-    co2IntensityLbsMWh: computeCo2IntensityLbsMWh(
-      totals.co2MassTons,
-      totals.grossGenerationMWh,
-    ),
-    heatRateMMBtuMWh: computeHeatRateMMBtuMWh(
-      totals.heatInputMMBtu,
-      totals.grossGenerationMWh,
-      heatRateDecimals,
-    ),
+    co2IntensityLbsMWh:
+      ok && co2 !== null ? Math.round((co2 * 2000) / gen) : null,
+    heatRateMMBtuMWh:
+      ok && heat !== null ? Number((heat / gen).toFixed(2)) : null,
   };
 }
 
@@ -86,6 +77,11 @@ export const AUDIT_RULES = [
     label: "Heat input but zero CO₂",
   },
   {
+    flagType: "CO2_NOT_REPORTED",
+    severity: "WARN",
+    label: "Heat input but no CO₂ reported",
+  },
+  {
     flagType: "PHANTOM_GENERATION",
     severity: "ERROR",
     label: "Generation with zero hours",
@@ -99,7 +95,7 @@ export const AUDIT_RULES = [
 export const AUDIT_SEVERITIES = ["ERROR", "WARN"] as const;
 
 export function evaluatePhysicalSanityRules(
-  m: EmissionTotals & { heatRateMMBtuMWh: number | null },
+  m: ReportedTotals & { heatRateMMBtuMWh: number | null },
 ) {
   const { HEAT_RATE_MIN_MMBTU_MWH: minRate, HEAT_RATE_MAX_MMBTU_MWH: maxRate } =
     AUDIT_THRESHOLDS;
@@ -109,17 +105,28 @@ export function evaluatePhysicalSanityRules(
     details: string;
   }[] = [];
 
+  const heat = m.heatInputMMBtu;
+  // A reported 0 is implausible (ERROR); a missing value is a reporting gap (WARN).
   if (
-    m.heatInputMMBtu > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU &&
-    m.co2MassTons === 0
+    heat !== null &&
+    heat > AUDIT_THRESHOLDS.ZERO_EMISSIONS_MIN_HEAT_INPUT_MMBTU
   ) {
-    flags.push({
-      flagType: "ZERO_EMISSIONS_HIGH_HEAT",
-      severity: "ERROR",
-      details: `Heat input was ${m.heatInputMMBtu.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
-    });
+    if (m.co2MassTons === 0) {
+      flags.push({
+        flagType: "ZERO_EMISSIONS_HIGH_HEAT",
+        severity: "ERROR",
+        details: `Heat input was ${heat.toLocaleString()} MMBtu, but CO2 reported was 0.0 tons.`,
+      });
+    } else if (m.co2MassTons === null) {
+      flags.push({
+        flagType: "CO2_NOT_REPORTED",
+        severity: "WARN",
+        details: `Heat input was ${heat.toLocaleString()} MMBtu, but no CO2 mass was reported.`,
+      });
+    }
   }
   if (
+    m.grossGenerationMWh !== null &&
     m.grossGenerationMWh > AUDIT_THRESHOLDS.PHANTOM_GENERATION_MIN_MWH &&
     m.operatingHours === 0
   ) {
@@ -149,13 +156,14 @@ export function pickCleanestByCarbonIntensity<
     .sort((a, b) => a.carbonIntensityLbsMWh! - b.carbonIntensityLbsMWh!)[0];
 }
 
-interface AnnualRecordForRollup extends EmissionTotals {
+interface AnnualRecordForRollup extends ReportedTotals {
   id: string | number;
   year: number;
   co2IntensityLbsMWh?: number | null;
   heatRateMMBtuMWh?: number | null;
   unit?: { unitId: string; primaryFuel?: string | null } | null;
   dataset?: { name: string; source: string; importedAt: Date } | null;
+  supersededUpload?: { originalFilename: string | null } | null;
 }
 
 export type YearlyRollup = ReturnType<typeof buildYearlyRollups>[number];
@@ -174,12 +182,12 @@ export function buildYearlyRollups(records: AnnualRecordForRollup[] = []) {
       const totals = sumTotals(yearRecords);
       return {
         ...totals,
-        ...deriveRates(totals, 1),
+        ...deriveRates(totals),
         year,
         records: yearRecords,
         unitCount: yearRecords.length,
         maxOperatingHours: Math.max(
-          ...yearRecords.map((r) => r.operatingHours),
+          ...yearRecords.map((r) => r.operatingHours ?? 0),
         ),
       };
     });

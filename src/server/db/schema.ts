@@ -114,7 +114,7 @@ export const datasets = sqliteTable("datasets", {
 });
 
 export const datasetsRelations = relations(datasets, ({ many }) => ({
-  annualRecords: many(annualRecords),
+  annualRecords: many(annualRecords, { relationName: "dataset" }),
   importIssues: many(importIssues),
 }));
 
@@ -130,6 +130,11 @@ export const annualRecords = sqliteTable(
     datasetId: text("dataset_id").references(() => datasets.id, {
       onDelete: "cascade",
     }),
+    // The upload this record last came from before a CAMPD sync took it over (null once an upload owns it again).
+    supersededUploadId: text("superseded_upload_id").references(
+      () => datasets.id,
+      { onDelete: "set null" },
+    ),
     facilityId: integer("facility_id")
       .notNull()
       .references(() => facilities.id, { onDelete: "cascade" }),
@@ -137,13 +142,21 @@ export const annualRecords = sqliteTable(
       .notNull()
       .references(() => units.id, { onDelete: "cascade" }),
     year: integer("year").notNull(),
-    operatingHours: real("operating_hours").default(0.0).notNull(),
-    grossGenerationMWh: real("gross_generation_mwh").default(0.0).notNull(),
-    heatInputMMBtu: real("heat_input_mmbtu").default(0.0).notNull(),
-    steamLoadKlb: real("steam_load_klb").default(0.0).notNull(), // Steam load (1000 lb)
-    co2MassTons: real("co2_mass_tons").default(0.0).notNull(),
-    so2MassTons: real("so2_mass_tons").default(0.0).notNull(),
-    noxMassTons: real("nox_mass_tons").default(0.0).notNull(),
+    // Metrics are NULL when the source did not report them (distinct from a reported 0).
+    operatingHours: real("operating_hours"),
+    grossGenerationMWh: real("gross_generation_mwh"),
+    heatInputMMBtu: real("heat_input_mmbtu"),
+    steamLoadKlb: real("steam_load_klb"), // Steam load (1000 lb)
+    co2MassTons: real("co2_mass_tons"),
+    so2MassTons: real("so2_mass_tons"),
+    noxMassTons: real("nox_mass_tons"),
+
+    // §7 control and program information as reported for this year (units hold the latest values)
+    so2Controls: text("so2_controls"),
+    noxControls: text("nox_controls"),
+    pmControls: text("pm_controls"),
+    hgControls: text("hg_controls"),
+    programCode: text("program_code"),
 
     // Derived rates, computed on write by deriveRates (~/lib/emissions-metrics)
     co2IntensityLbsMWh: real("co2_intensity_lbs_mwh"), // (co2MassTons * 2000) / grossGenerationMWh
@@ -154,6 +167,9 @@ export const annualRecords = sqliteTable(
     // (facility, year) serves the per-facility year subqueries; with only (year, co2) SQLite scanned a whole year per facility.
     index("annual_record_facility_year_idx").on(t.facilityId, t.year),
     index("annual_record_year_co2_idx").on(t.year, t.co2MassTons),
+    // Per-dataset record counts in the dataset history (owned, and taken over by a sync).
+    index("annual_record_dataset_idx").on(t.datasetId),
+    index("annual_record_superseded_upload_idx").on(t.supersededUploadId),
   ],
 );
 
@@ -170,6 +186,11 @@ export const annualRecordsRelations = relations(
     }),
     dataset: one(datasets, {
       fields: [annualRecords.datasetId],
+      references: [datasets.id],
+      relationName: "dataset",
+    }),
+    supersededUpload: one(datasets, {
+      fields: [annualRecords.supersededUploadId],
       references: [datasets.id],
     }),
     auditLogs: many(dataAuditLogs),
@@ -188,7 +209,7 @@ export const dataAuditLogs = sqliteTable(
     annualRecordId: text("annual_record_id")
       .notNull()
       .references(() => annualRecords.id, { onDelete: "cascade" }),
-    flagType: text("flag_type").notNull(), // "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE"
+    flagType: text("flag_type").notNull(), // one of AUDIT_RULES (~/lib/emissions-metrics)
     severity: text("severity").notNull(), // "WARN" | "ERROR"
     details: text("details").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })

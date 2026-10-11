@@ -9,13 +9,14 @@ Built for **CS396 Phase 1 (Data Management Website)** by Raaj Banga and Arnav Ba
 Environmental evaluation (TRACI factors, indicators, scoring) is Phase 2 and not part of this
 repository.
 
-| Document                                                     | Contents                                                                 |
-| :----------------------------------------------------------- | :----------------------------------------------------------------------- |
-| This README                                                  | Setup, configuration, how to reproduce the results                       |
-| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)             | Column-level schema, which view reads which table, ingestion flow        |
-| [samples/README.md](./samples/README.md)                     | The sample upload file, row by row, with the expected validation report  |
-| [presentation/demo-script.md](./presentation/demo-script.md) | The live demo: steps, inputs, expected results, timings                  |
-| [report/main.pdf](./report/main.pdf)                         | Project report (LaTeX sources in `report/`, build with `npm run report`) |
+| Document                                                   | Contents                                                                     |
+| :--------------------------------------------------------- | :--------------------------------------------------------------------------- |
+| This README                                                | Setup, configuration, how to reproduce the results                           |
+| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)           | Column-level schema, which view reads which table, ingestion flow            |
+| [samples/README.md](./samples/README.md)                   | The sample upload file, row by row, with the expected validation report      |
+| [report/epaData-slides.pptx](./report/epaData-slides.pptx) | Presentation slides (speaker notes in each slide)                            |
+| [report/slides-outline.md](./report/slides-outline.md)     | Speaker notes and live-demo script: steps, inputs, expected results, timings |
+| [report/main.pdf](./report/main.pdf)                       | Project report (LaTeX sources in `report/`, build with `npm run report`)     |
 
 ---
 
@@ -23,51 +24,56 @@ repository.
 
 `db.sqlite` is committed, so the app works right after setup without an API key or seeding.
 
-| Table             |   Rows | Notes                                                                                                   |
-| :---------------- | -----: | :------------------------------------------------------------------------------------------------------ |
-| `facilities`      |  1,619 | 50 states, DC, and Puerto Rico                                                                          |
-| `units`           |  5,204 | 1,067.5 GW nameplate capacity                                                                           |
-| `annual_records`  | 50,947 | One row per facility-unit-year, reporting years 2015–2026 (2026 is partial; EPA publishes it quarterly) |
-| `datasets`        |     18 | All from the CAMPD API; 12 own records, 6 were superseded by later re-syncs                             |
-| `data_audit_logs` |  6,960 | Physical-sanity flags: 6,105 ERROR, 855 WARN                                                            |
-| `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                               |
+| Table             |   Rows | Notes                                                                                                                                                                               |
+| :---------------- | -----: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `facilities`      |  1,777 | 50 states, DC, and Puerto Rico                                                                                                                                                      |
+| `units`           |  6,031 | 1,108.2 GW nameplate capacity                                                                                                                                                       |
+| `annual_records`  | 57,414 | One row per facility-unit-year: 6,467 from uploads (1996–98, 2006–08) and 50,947 from the CAMPD API (2015–2026; 2026 is partial). 176 API records replaced uploaded 2023–25 records |
+| `datasets`        |    151 | 12 CAMPD API syncs, 13 facility-file uploads, and 126 daily-emissions uploads (14 superseded by the API sync)                                                                       |
+| `data_audit_logs` |  7,603 | Physical-sanity flags on 7,056 records: 6,516 CO₂ not reported, 963 extreme heat rates (WARN), 124 zero emissions with high heat input (ERROR)                                      |
+| `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                                                                                                           |
 
 ---
 
 ## Features
 
-The course specification calls for separate pages. epaData is a single page; the "pages"
-are the home view, four explorer tabs, and dialogs opened from the header.
+The specification's pages are real routes, ordered by workflow in the navigation bar: **Home**,
+**Explore**, **Map**, then **Retrieve**, **Upload**, **Download**. Facility, unit, and
+comparison details open in one dialog over any page; the open item is kept in the URL
+(`?facility=3`, `?unit=…`), so it survives a reload and can be shared.
 
-| Specification (`epaData_requirements` §) | Where it is in epaData                                                                                                                                                                                                                                                                                                                                                                                 |
-| :--------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| §9.1 Home page                           | Introduction, data sources, coverage strip (records per year and source), summary tiles, numbered links to each function                                                                                                                                                                                                                                                                               |
-| §5, §9.2 Retrieval                       | **Retrieve** dialog. Method: EPA CAM API, apportioned annual emissions. Filters: year range, state, facility IDs, fuel, unit type, control technology. Shows what the database already holds, previews what the API returns (New / Changed / Unchanged / Dropped, with database → API values for changed fields), then saves on approval. Past retrievals are listed with their parameters and counts. |
-| §6, §9.3 Upload                          | **Upload** dialog. CSV or Excel (≤ 100 MB), read by `scripts/parse_import.py`. Shows the column mapping, missing values, rejected rows with reasons, duplicate facility-unit-years, sanity flags, and New/Changed/Unchanged counts. Approve or cancel. Rejected and duplicate rows are stored in `import_issues`; the original file is archived in `uploads/`.                                         |
-| §8.1 Basic search                        | **Facilities** and **Units** tabs: name/operator/county text search, facility ID, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control, operating status, NERC region, origin                                                                                                                                                                                           |
-| §8.2 Multi-criteria and range search     | All filters combine with AND. Min/max ranges for year, operating time, gross load, heat input, CO₂, SO₂, NOₓ (under **More filters**)                                                                                                                                                                                                                                                                  |
-| Rubric 6: Description search             | **Name \| Describe** toggle in the search box. A sentence such as "Find coal units in Kentucky with high CO2 emissions" becomes ordinary filters, shown as removable chips. See [Description search](#description-search).                                                                                                                                                                             |
-| §8.3 Ranking and comparison              | **Ranking**: sort by any metric, keep the first N, overall or per state (`ROW_NUMBER() OVER (PARTITION BY state)`). **Compare**: tick 2–4 facilities or units. **History**: the unit dialog lists every reporting year.                                                                                                                                                                                |
-| §8.4 Result requirements                 | Sortable, paginated tables; each unit row opens a detail dialog; **CSV** exports the current search; the tab, filters, sort, and page live in the URL                                                                                                                                                                                                                                                  |
-| §9.5 Facility / unit detail              | Facility and unit dialogs: identification, operating data and emissions per year, fuels and controls, source dataset and origin per year, audit flags. The facility dialog also opens a granular time series (hourly to yearly).                                                                                                                                                                       |
-| §9.6, §10 Download                       | **Download** dialog: complete dataset, valid records, invalid-record report, search results, selected facilities/units, provenance. CSV only.                                                                                                                                                                                                                                                          |
-| Data quality                             | **Audits** tab: every physical-sanity flag, paginated and filterable by rule and severity                                                                                                                                                                                                                                                                                                              |
-| Extras                                   | Leaflet map and D3 globe of all facilities; DB-vs-API source labels throughout                                                                                                                                                                                                                                                                                                                         |
+| Specification (`epaData_requirements` §) | Where it is in epaData                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| :--------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §9.1 Home page                           | `/`: introduction and summary figures, links to every function, unit-years per reporting year, data sources, glossary                                                                                                                                                                                                                                                                                                                                          |
+| §5, §9.2 Retrieval                       | **Retrieve** page (`/retrieve`). Method: EPA CAM API, apportioned annual emissions. Filters: year range, state, facility IDs, fuel, unit type, control technology. Shows what the database already holds, previews what the API returns (New / Changed / Unchanged / Dropped, with database → API values for changed fields), then saves on approval. Past retrievals are listed with their parameters and counts. **Try** samples fill the form in one click. |
+| §6, §9.3 Upload                          | **Upload** page (`/upload`). CSV or Excel (≤ 100 MB), read by `scripts/parse_import.py`. Shows the column mapping, missing values, rejected rows with reasons, duplicate facility-unit-years, sanity flags, and New/Changed/Unchanged counts. Approve or cancel. Rejected and duplicate rows are stored in `import_issues`; the original file is archived in `uploads/`. Past uploads are listed below the drop zone.                                          |
+| §8.1 Basic search                        | **Explore** page (`/explore`), **Facilities** and **Unit-years** tabs. Always visible: one search box (description or name), state, year, fuel, unit type, facility ID, unit ID. **Advanced**: county, NERC region, secondary fuel, SO₂/NOₓ/PM control, operating status, audit flag/severity, origin                                                                                                                                                          |
+| §8.2 Multi-criteria and range search     | All filters combine with AND. Min/max ranges for year, operating time, gross load, heat input, CO₂, SO₂, NOₓ, each inclusive (≥/≤) or strict (>/<) via the toggle beside it (under **Advanced**, which opens by itself when one of its filters is set)                                                                                                                                                                                                         |
+| Rubric 6: Description search             | The Explore search box. A sentence such as "coal units in Kentucky with high CO2" becomes ordinary filters, shown as removable **Interpreted as** chips; text with nothing recognizable falls back to a name search. See [Description search](#description-search).                                                                                                                                                                                            |
+| §8.3 Ranking and comparison              | **Ranking**: sort by any metric, keep the first N, overall or per state (`ROW_NUMBER() OVER (PARTITION BY state)`). **Compare**: tick 2–4 facilities or units, then **Compare** in the dock. **History**: the unit details list every reporting year.                                                                                                                                                                                                          |
+| §8.4 Result requirements                 | Sortable, paginated tables; every row opens its details; **Download CSV** exports the current search; the tab, filters, sort, and page live in the URL                                                                                                                                                                                                                                                                                                         |
+| §9.5 Facility / unit detail              | One detail dialog (`?facility=` / `?unit=`): identification, operating data and emissions per year, fuels and controls, source dataset and origin per year, audit flags. Facilities also have a granular time series (hourly to yearly, live API).                                                                                                                                                                                                             |
+| §9.6, §10 Download                       | **Download** page (`/download`): complete dataset, valid records, invalid-record report, search results, selected facilities/units, provenance. CSV only.                                                                                                                                                                                                                                                                                                      |
+| Data quality                             | **Audit flags** tab on Explore: every physical-sanity flag, paginated, sortable, and filtered by the same search form; each row links to its unit                                                                                                                                                                                                                                                                                                              |
+| Extras                                   | **Map** page (`/map`): D3 globe and Leaflet map of all facilities with the Explore filters; DB-vs-API source labels throughout                                                                                                                                                                                                                                                                                                                                 |
 
 ### Physical-sanity rules
 
 Applied to every annual record written by a retrieval, an upload, or the CLI sync
 (`AUDIT_THRESHOLDS` in `src/lib/emissions-metrics.ts`). Flagged records are stored, not
-dropped, and appear in the Audits tab and the invalid-record report.
+dropped, and appear in the Audit flags tab and the invalid-record report.
 
-| Flag                       | Severity | Condition                                     |
-| :------------------------- | :------- | :-------------------------------------------- |
-| `ZERO_EMISSIONS_HIGH_HEAT` | ERROR    | heat input > 1,000 MMBtu and CO₂ = 0          |
-| `PHANTOM_GENERATION`       | ERROR    | gross load > 0 MWh and operating time = 0 h   |
-| `EXTREME_HEAT_RATE`        | WARN     | heat input ÷ gross load < 5 or > 25 MMBtu/MWh |
+| Flag                       | Severity | Condition                                          |
+| :------------------------- | :------- | :------------------------------------------------- |
+| `ZERO_EMISSIONS_HIGH_HEAT` | ERROR    | heat input > 1,000 MMBtu and CO₂ reported as 0     |
+| `CO2_NOT_REPORTED`         | WARN     | heat input > 1,000 MMBtu and no CO₂ value reported |
+| `PHANTOM_GENERATION`       | ERROR    | gross load > 0 MWh and operating time reported 0 h |
+| `EXTREME_HEAT_RATE`        | WARN     | heat input ÷ gross load < 5 or > 25 MMBtu/MWh      |
 
-Derived values stored with each record: CO₂ intensity = CO₂ (short tons) × 2,000 ÷ gross load
-(lb/MWh), and heat rate = heat input ÷ gross load (MMBtu/MWh).
+Metrics the source leaves blank are stored as `NULL` ("not reported"), not 0, so the rules
+can tell a missing value from a reported zero. Derived values stored with each record: CO₂
+intensity = CO₂ (short tons) × 2,000 ÷ gross load (lb/MWh), and heat rate = heat input ÷
+gross load (MMBtu/MWh); both are `NULL` when an input is missing or gross load is 0.
 
 ### Description search
 
@@ -93,7 +99,7 @@ and shared by URL like any other search.
 
 ## Where the data comes from
 
-The explorer, detail dialogs, comparisons, audits, and downloads read **only the local
+Explore, Map, the detail dialog, comparisons, audit flags, and downloads read **only the local
 database**. Two features call the **EPA API live**: Retrieve (which then writes to the
 database) and the granular time series.
 
@@ -104,7 +110,7 @@ flowchart LR
     PY["scripts/parse_import.py<br/>column mapping + validation"]
     W["Shared write path<br/>src/server/ingest.ts<br/>diff · upsert · sanity audits"]
     DB[("SQLite<br/>db.sqlite")]
-    UI["Browser<br/>explorer, dialogs, downloads"]
+    UI["Browser<br/>pages, detail dialog, downloads"]
     LLM["OpenRouter (optional)<br/>leftover words only"]
 
     EPA -- "Retrieve: preview, then save" --> W
@@ -129,7 +135,7 @@ flowchart LR
 
 Each panel carries a label saying which source it shows ("Local database · last import …"
 or "Live EPA CAMPD API"). Every unit-year also records the dataset that last wrote it, shown
-as its **Origin** (CAMPD API or file upload) in the Units table, the unit dialog, and the CSV
+as its **Origin** (CAMPD API or file upload) in the Unit-years table, the unit details, and the CSV
 exports.
 
 ---
@@ -138,7 +144,7 @@ exports.
 
 Tested on macOS with Node.js 26 and Python 3.9. Linux works the same way. On Windows, use WSL,
 or install `openpyxl` into the `python3` on your PATH (the server only looks for a virtual
-environment at `.venv/bin/python3`).
+environment at `epaDataVENV/bin/python3`).
 
 ### Prerequisites
 
@@ -158,8 +164,9 @@ git clone <repository-url> epaData && cd epaData
 npm install
 
 # 3. Python environment for uploads (openpyxl reads .xlsx files)
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+python3 -m venv epaDataVENV
+source epaDataVENV/bin/activate
+pip install -r requirements.txt
 
 # 4. Configuration
 cp .env.example .env
@@ -189,28 +196,29 @@ required. Keys are read on the server only and never sent to the browser.
 | `DATABASE_AUTH_TOKEN`   | no       | Only for a remote libSQL/Turso database; leave empty                                                      |
 | `CAMPD_API`             | no       | EPA API key, sent as the `x-api-key` header. Enables Retrieve, `sync:campd`, and the granular time series |
 | `OPENROUTER_API_KEY`    | no       | Enables the language-model fallback in description search                                                 |
-| `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `openrouter/free`                                                            |
-| `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the 2D map; public tiles are used without it                                        |
+| `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `nvidia/nemotron-3-super-120b-a12b:free`                                     |
+| `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the flat map: light or dark tiles to match the theme. Without it, public dark tiles |
+| `READ_ONLY`             | no       | `true` on a hosted build (Vercel): Upload and Retrieve show a "run it locally" notice and refuse writes   |
 
 ---
 
 ## Reproducing the results
 
-With the committed `db.sqlite` and `npm run dev` running, each link opens the explorer in a
+With the committed `db.sqlite` and `npm run dev` running, each link opens Explore in a
 known state (the URL holds the whole search). The counts below were checked against
 hand-written SQL.
 
-| Check                                                               | Link                                                                                                                                                                                  | Expected                                                                                   |
-| :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------- |
-| Multi-criteria (spec §8.2 example): KY, coal, 2025, CO₂ ≥ 500,000 t | [`/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)         | 25 unit-years                                                                              |
-| Same search, facility level                                         | [`/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)                             | 8 facilities                                                                               |
-| Group-and-rank: top CO₂ facility in each state, 2024                | [`/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc`](http://localhost:3000/?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc)                                                   | 51 facilities, one per state with 2024 data                                                |
-| Historical: one unit, 2015–2025                                     | [`/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc`](http://localhost:3000/?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc) | 11 rows (Barry unit 1)                                                                     |
-| Description search                                                  | Units tab → **Describe** → "Find coal units in Kentucky with high CO2 emissions."                                                                                                     | KY · Coal · CO₂ ≥ 2,660,000 (top 25 %), sorted by CO₂, 103 unit-years                      |
-| Retired units                                                       | [`/?tab=units&operatingStatus=Retired`](http://localhost:3000/?tab=units&operatingStatus=Retired)                                                                                     | 31 unit-years                                                                              |
-| Sample upload                                                       | **Upload** → `samples/annual-emissions-sample.csv`                                                                                                                                    | 25 rows: 21 valid (19 new, 1 changed, 1 unchanged), 3 rejected, 1 duplicate, 1 sanity flag |
+| Check                                                               | Link                                                                                                                                                                                                | Expected                                                                                   |
+| :------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------- |
+| Multi-criteria (spec §8.2 example): KY, coal, 2025, CO₂ ≥ 500,000 t | [`/explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)         | 25 unit-years                                                                              |
+| Same search, facility level                                         | [`/explore?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/explore?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)                             | 8 facilities                                                                               |
+| Group-and-rank: top CO₂ facility in each state, 2024                | [`/explore?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc`](http://localhost:3000/explore?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc)                                                   | 51 facilities, one per state with 2024 data                                                |
+| Historical: one unit, 2015–2025                                     | [`/explore?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc`](http://localhost:3000/explore?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc) | 11 rows (Barry unit 1)                                                                     |
+| Description search                                                  | Explore → type "coal units in Kentucky with high CO2" → **Search** (or click it under **Try**)                                                                                                      | KY · Coal · CO₂ ≥ 2,720,000 (top 25 %), sorted by CO₂, 97 unit-years                       |
+| Retired units                                                       | [`/explore?tab=units&operatingStatus=Retired`](http://localhost:3000/explore?tab=units&operatingStatus=Retired)                                                                                     | 31 unit-years                                                                              |
+| Sample upload                                                       | **Upload** → `samples/annual-emissions-sample.csv`                                                                                                                                                  | 25 rows: 21 valid (19 new, 1 changed, 1 unchanged), 3 rejected, 1 duplicate, 1 sanity flag |
 
-The **CSV** button next to the results downloads exactly the rows the table shows (all pages).
+The **Download CSV** button next to the results downloads exactly the rows the table shows (all pages).
 
 Uploading the sample or approving a retrieval changes `db.sqlite`. Restore the committed copy
 with `git restore db.sqlite`, then the numbers above apply again.
@@ -227,9 +235,13 @@ npm run sync:campd                           # last calendar year
 npm run sync:campd -- --year 2024            # one year
 npm run sync:campd -- --from 2015 --to 2025  # a range (one dataset per year)
 npm run db:seed -- --csv-dir "../CAMPD DATA" # facilities + units from CAMPD facility CSVs
+# Full rebuild (delete db.sqlite first): facility CSVs, then every csv/emissions-daily-*.csv rolled
+# up to unit-year totals, each imported as an upload; then the API years on top
+npm run db:rebuild -- --facility-dir ../epaData/csv --csv-dir csv
+npm run sync:campd -- --from 2015 --to 2026
 ```
 
-`sync:campd` writes directly. The **Retrieve** dialog does the same with a preview and an
+`sync:campd` writes directly. The **Retrieve** page does the same with a preview and an
 approval step, and records the same dataset history.
 
 After editing `src/server/db/schema.ts`, generate a migration with `npm run db:generate` and
@@ -326,6 +338,11 @@ erDiagram
         real co2_mass_tons
         real so2_mass_tons
         real nox_mass_tons
+        text so2_controls "as reported that year"
+        text nox_controls
+        text pm_controls
+        text hg_controls
+        text program_code
         real co2_intensity_lbs_mwh
         real heat_rate_mmbtu_mwh
     }
@@ -351,8 +368,11 @@ erDiagram
 
 Design assumptions to be aware of:
 
-- **Controls and program codes are stored per unit, not per unit-year.** The specification
-  lists them with the annual record; CAMPD reports them per unit, and the latest import wins.
+- **Controls and program codes are stored per unit-year** on `annual_records`, as the
+  specification asks; `units` keeps the latest values for display. Fuel and unit type are
+  still per unit, so the latest import wins for those.
+- **Metrics are `NULL` when not reported.** Totals treat them as 0; range filters and
+  percentile thresholds skip them; CSV exports leave them blank.
 - **`annual_records.dataset_id` is the dataset that last wrote the record.** Re-importing a
   year moves its records to the new dataset; the older dataset stays in the history as
   "superseded". Values are overwritten, not versioned.
@@ -395,23 +415,22 @@ Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide
 
 ## Repository layout
 
-| Path                                                                            | Contents                                                                                                                          |
-| :------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/page.tsx`, `src/app/_components/`                                      | The page and its views: explorer, tables, filter bar, map, globe, and the retrieve, upload, download, detail, and compare dialogs |
-| `src/app/api/`                                                                  | Route handlers: tRPC endpoint, `upload` (preview and commit), `export` (CSV downloads)                                            |
-| `src/components/ui/`                                                            | Shared UI primitives (buttons, dialogs, tables, badges, report sections)                                                          |
-| `src/server/api/routers/facilities.ts`                                          | All tRPC queries and the retrieval mutation                                                                                       |
-| `src/server/db/`                                                                | Drizzle schema and database client                                                                                                |
-| `src/server/campd/client.ts`                                                    | EPA API client: retrieval, preview, granular time series                                                                          |
-| `src/server/ingest.ts`                                                          | Shared write path: diff against stored records, upserts, sanity audits                                                            |
-| `src/server/data-import.ts`, `src/server/export.ts`, `src/server/llm-search.ts` | Upload, CSV export, optional OpenRouter fallback                                                                                  |
-| `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer                         |
-| `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `sync_campd`) and `parse_import.py`                                      |
-| `drizzle/`                                                                      | SQL migrations                                                                                                                    |
-| `samples/`                                                                      | Sample upload files and their expected results                                                                                    |
-| `report/`                                                                       | Project report: LaTeX sources, figures, bibliography, PDF                                                                         |
-| `presentation/`                                                                 | Demo script                                                                                                                       |
-| `uploads/`                                                                      | Archived original upload files (not committed)                                                                                    |
+| Path                                                                            | Contents                                                                                                                                                                       |
+| :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/*/page.tsx`, `src/app/_components/`                                    | The six pages (`/`, `/explore`, `/map`, `/retrieve`, `/upload`, `/download`) and their views; `app-shell.tsx` holds the navigation, the detail dialog, and the comparison dock |
+| `src/app/api/`                                                                  | Route handlers: tRPC endpoint, `upload` (preview and commit), `export` (CSV downloads)                                                                                         |
+| `src/components/ui/`                                                            | Shared UI primitives (page layout, buttons, dialog, tables, badges, report sections)                                                                                           |
+| `src/server/api/routers/facilities.ts`                                          | All tRPC queries and the retrieval mutation                                                                                                                                    |
+| `src/server/db/`                                                                | Drizzle schema and database client                                                                                                                                             |
+| `src/server/campd/client.ts`                                                    | EPA API client: retrieval, preview, granular time series                                                                                                                       |
+| `src/server/ingest.ts`                                                          | Shared write path: diff against stored records, upserts, sanity audits                                                                                                         |
+| `src/server/data-import.ts`, `src/server/export.ts`, `src/server/llm-search.ts` | Upload, CSV export, optional OpenRouter fallback                                                                                                                               |
+| `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer                                                                      |
+| `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `sync_campd`) and `parse_import.py`                                                                                   |
+| `drizzle/`                                                                      | SQL migrations                                                                                                                                                                 |
+| `samples/`                                                                      | Sample upload files and their expected results                                                                                                                                 |
+| `report/`                                                                       | Project report (LaTeX sources, figures, bibliography, PDF), presentation slides, speaker notes and demo script                                                                 |
+| `uploads/`                                                                      | Archived original upload files (not committed)                                                                                                                                 |
 
 ## Data and credits
 

@@ -21,6 +21,7 @@ import {
   sumTotals,
   TOTAL_KEYS,
   type EmissionTotals,
+  type ReportedTotals,
 } from "~/lib/emissions-metrics";
 import {
   activeCampdFilters,
@@ -32,24 +33,21 @@ import {
   diffRecord,
   emptyDiffCounts,
   recordKey,
+  RECORD_ATTRIBUTE_KEYS,
   type DiffStatus,
   type FieldChange,
+  type RecordAttributes,
 } from "~/lib/record-diff";
 import { uniqueStrings } from "~/lib/utils";
 import { db } from "~/server/db";
+import { annualRecords, datasets, facilities, units } from "~/server/db/schema";
 import {
-  annualRecords,
-  datasets,
-  facilities,
-  importIssues,
-  units,
-} from "~/server/db/schema";
-import {
-  insertInChunks,
+  insertImportIssues,
   insertMissingFacilities,
   storedRecords,
   upsertAnnualRecords,
   upsertUnits,
+  type Executor,
 } from "~/server/ingest";
 
 const CAMPD_BASE_URL =
@@ -88,93 +86,50 @@ const pick = (row: CampdRow, ...keys: string[]) =>
     .map((k) => row[k])
     .find((v) => v !== undefined && v !== null && v !== "");
 
-/**
- * Field aliases across the CAMPD REST API (camelCase), snake_case, and bulk EPA
- * Custom Data Download (CDD) CSV headers.
- */
-const METRIC_ALIASES: Record<keyof EmissionTotals, string[]> = {
-  operatingHours: [
-    "opTime",
-    "sumOpTime",
-    "operatingTime",
-    "operatingHours",
-    "Operating Time",
-    "countOpTime",
-  ],
-  grossGenerationMWh: ["grossLoad", "grossGenerationMWh", "Gross Load (MW-h)"],
-  heatInputMMBtu: ["heatInput", "heatInputMMBtu", "Heat Input (MMBtu)"],
-  steamLoadKlb: ["steamLoad", "steamLoadKlb", "Steam Load (1000 lb)"],
-  co2MassTons: ["co2Mass", "co2MassTons", "CO2 (short tons)"],
-  so2MassTons: ["so2Mass", "so2MassTons", "SO2 (short tons)"],
-  noxMassTons: ["noxMass", "noxMassTons", "NOx (short tons)"],
+/** CAMPD apportioned-emissions fields per metric (annual/daily/monthly report sumOpTime, hourly opTime). */
+const METRIC_FIELDS: Record<keyof EmissionTotals, string[]> = {
+  operatingHours: ["sumOpTime", "opTime"],
+  grossGenerationMWh: ["grossLoad"],
+  heatInputMMBtu: ["heatInput"],
+  steamLoadKlb: ["steamLoad"],
+  co2MassTons: ["co2Mass"],
+  so2MassTons: ["so2Mass"],
+  noxMassTons: ["noxMass"],
 };
 
-const UNIT_ALIASES = {
-  unitType: ["unitType", "unit_type", "Unit Type"],
-  primaryFuel: [
-    "primaryFuelInfo",
-    "primaryFuel",
-    "primary_fuel",
-    "Primary Fuel Type",
-  ],
-  secondaryFuel: [
-    "secondaryFuelInfo",
-    "secondaryFuel",
-    "secondary_fuel",
-    "Secondary Fuel Type",
-  ],
-  so2Controls: [
-    "so2ControlInfo",
-    "so2Controls",
-    "so2_controls",
-    "SO2 Controls",
-  ],
-  noxControls: [
-    "noxControlInfo",
-    "noxControls",
-    "nox_controls",
-    "NOx Controls",
-  ],
-  pmControls: ["pmControlInfo", "pmControls", "pm_controls", "PM Controls"],
-  hgControls: ["hgControlInfo", "hgControls", "hg_controls", "Hg Controls"],
-  programCode: [
-    "programCodeInfo",
-    "programCode",
-    "program_code",
-    "Program Code",
-  ],
+/** CAMPD fields of the unit attributes reported with each row. */
+const UNIT_FIELDS = {
+  unitType: "unitType",
+  primaryFuel: "primaryFuelInfo",
+  secondaryFuel: "secondaryFuelInfo",
+  so2Controls: "so2ControlInfo",
+  noxControls: "noxControlInfo",
+  pmControls: "pmControlInfo",
+  hgControls: "hgControlInfo",
+  programCode: "programCodeInfo",
 };
 
-function readMetrics(row: CampdRow, missingHours = 0): EmissionTotals {
-  const totals = emptyTotals();
+/** A row's metrics; null where CAMPD left the value out (`missingHours` stands in for absent hours). */
+function readMetrics(
+  row: CampdRow,
+  missingHours: number | null = null,
+): ReportedTotals {
+  const totals: ReportedTotals = { ...emptyTotals() };
   for (const key of TOTAL_KEYS) {
-    totals[key] = parseNum(
-      pick(row, ...METRIC_ALIASES[key]),
-      key === "operatingHours" ? missingHours : 0,
-    );
+    const n = parseNum(pick(row, ...METRIC_FIELDS[key]), Number.NaN);
+    totals[key] = Number.isNaN(n)
+      ? key === "operatingHours"
+        ? missingHours
+        : null
+      : n;
   }
   return totals;
 }
 
 const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
-  const str = (...keys: string[]) => toStr(pick(raw, ...keys));
-  const facilityId = Math.round(
-    parseNum(
-      pick(
-        raw,
-        "facilityId",
-        "facility_id",
-        "Facility ID (ORISPL)",
-        "Facility ID",
-      ),
-    ),
-  );
-  const unitId = str("unitId", "unit_id", "Unit ID");
-  const year = Math.round(
-    parseNum(
-      pick(raw, "year", "Year", "reportingYear", "opYear", "calendarYear"),
-    ),
-  );
+  const facilityId = Math.round(parseNum(raw.facilityId));
+  const unitId = toStr(raw.unitId);
+  const year = Math.round(parseNum(raw.year));
 
   if (!facilityId || !unitId || !year) {
     ctx.addIssue({
@@ -188,19 +143,15 @@ const rawCampdRecordSchema = z.record(z.unknown()).transform((raw, ctx) => {
     facilityId,
     unitId,
     year,
-    facilityName:
-      str("facilityName", "facility_name", "Facility Name") ??
-      `Facility #${facilityId}`,
-    stateCode: (str("stateCode", "state", "State") ?? "US")
-      .toUpperCase()
-      .slice(0, 2),
+    facilityName: toStr(raw.facilityName) ?? `Facility #${facilityId}`,
+    stateCode: (toStr(raw.stateCode) ?? "US").toUpperCase().slice(0, 2),
     metrics: readMetrics(raw),
     unit: Object.fromEntries(
-      Object.entries(UNIT_ALIASES).map(([field, keys]) => [
+      Object.entries(UNIT_FIELDS).map(([field, key]) => [
         field,
-        str(...keys),
+        toStr(raw[key]),
       ]),
-    ) as Record<keyof typeof UNIT_ALIASES, string | null>,
+    ) as Record<keyof typeof UNIT_FIELDS, string | null>,
   };
 });
 
@@ -278,7 +229,7 @@ async function fetchAllCampdPages(
 }
 
 /** A CAMPD row that wasn't stored: it failed validation or repeated a facility-unit-year. */
-export interface DroppedCampdRow {
+interface DroppedCampdRow {
   rowNumber: number;
   kind: "REJECTED" | "DUPLICATE";
   reason: string;
@@ -302,7 +253,7 @@ function annualQuery(year: number, filters: CampdFilters) {
  * validation, or repeat a facility-unit-year already seen in this run (the first is kept, as with
  * uploads), come back in `dropped` so they can be reported instead of silently discarded.
  */
-export async function fetchCampdAnnual(year: number, filters: CampdFilters) {
+async function fetchCampdAnnual(year: number, filters: CampdFilters) {
   const records = new Map<
     string,
     NormalizedCampdRecord & { rowNumber: number }
@@ -343,13 +294,13 @@ type FetchedCampdYear = Awaited<ReturnType<typeof fetchCampdAnnual>>;
 
 const PREVIEW_ROWS = 50;
 
-export interface CampdPreviewRow {
+interface CampdPreviewRow {
   year: number;
   facilityId: number;
   facilityName: string;
   unitId: string;
-  grossGenerationMWh: number;
-  co2MassTons: number;
+  grossGenerationMWh: number | null;
+  co2MassTons: number | null;
   changes: FieldChange[];
 }
 
@@ -368,7 +319,7 @@ export async function previewCampdAnnual(year: number, filters: CampdFilters) {
   };
   for (const r of fetched.records) {
     const { status, changes } = diffRecord(
-      r.metrics,
+      { ...r.metrics, ...recordAttributes(r.unit) },
       stored.get(recordKey(r.facilityId, r.unitId, year)),
     );
     countDiff(counts, status);
@@ -394,27 +345,27 @@ export async function previewCampdAnnual(year: number, filters: CampdFilters) {
   };
 }
 
+/** The year's control and program information, as stored on each annual record (§7). */
+const recordAttributes = (unit: Record<string, string | null>) =>
+  Object.fromEntries(
+    RECORD_ATTRIBUTE_KEYS.map((k) => [k, unit[k] ?? null]),
+  ) as RecordAttributes;
+
 /** Writes one fetched year into `datasetId`: dropped rows to import_issues, records via the shared upsert. */
 async function storeCampdAnnual(
+  tx: Executor,
   datasetId: string,
   year: number,
   { records, dropped }: FetchedCampdYear,
 ) {
-  await insertInChunks(dropped, (chunk) =>
-    db.insert(importIssues).values(
-      chunk.map(({ data, ...issue }) => ({
-        ...issue,
-        datasetId,
-        rawRow: data,
-      })),
-    ),
-  );
+  await insertImportIssues(tx, datasetId, dropped);
   await insertMissingFacilities(
     records.map((r) => ({
       id: r.facilityId,
       name: r.facilityName,
       stateCode: r.stateCode,
     })),
+    tx,
   );
   const unitIds = await upsertUnits(
     records.map(({ facilityId, unitId, unit }) => ({
@@ -422,15 +373,18 @@ async function storeCampdAnnual(
       unitId,
       ...unit,
     })),
+    tx,
   );
   return upsertAnnualRecords(
     datasetId,
     records.map((r) => ({
       ...r.metrics,
+      ...recordAttributes(r.unit),
       facilityId: r.facilityId,
       unitInternalId: unitIds.get(`${r.facilityId}:${r.unitId}`)!,
       year,
     })),
+    tx,
   );
 }
 
@@ -438,8 +392,9 @@ async function storeCampdAnnual(
  * Ingestion engine: fetches and validates one year of CAMPD annual records, then stores them as a new
  * dataset with physical-sanity flags and derived rates. `filters` narrow the request (CAMPD matches
  * them against unit attributes) and are stored with the year in `datasets.query_params`; the dataset
- * also records how its records compared with the database and how many rows were dropped. A failure
- * is saved to `notes`.
+ * also records how its records compared with the database and how many rows were dropped. The year
+ * is fetched completely, then written in one transaction; a failed attempt is kept in the history as
+ * a dataset with no records and the error in `notes`.
  */
 export async function syncCampdAnnualEmissions({
   year,
@@ -450,9 +405,8 @@ export async function syncCampdAnnualEmissions({
 }) {
   const active = activeCampdFilters(filters);
   const label = describeCampdFilters(active);
-  const datasetId = crypto.randomUUID();
-  await db.insert(datasets).values({
-    id: datasetId,
+  const dataset = {
+    id: crypto.randomUUID(),
     name: `CAMPD API ${year}${label ? ` [${label}]` : ""} Ingestion Batch`,
     source: "API",
     reportingYear: year,
@@ -462,46 +416,49 @@ export async function syncCampdAnnualEmissions({
       perPage: CAMPD_PAGE_SIZE,
       ...active,
     },
-  });
+  };
 
-  let counts: Partial<typeof datasets.$inferInsert> = {};
-  let anomalyCount = 0;
   try {
     const fetched = await fetchCampdAnnual(year, active);
-    const stored = await storeCampdAnnual(datasetId, year, fetched);
-    anomalyCount = stored.anomalyCount;
-    counts = {
+    const stored = await db.transaction(async (tx) => {
+      await tx.insert(datasets).values(dataset);
+      const stored = await storeCampdAnnual(tx, dataset.id, year, fetched);
+      await tx
+        .update(datasets)
+        .set({
+          rawRecordCount: fetched.received,
+          validRecords: fetched.records.length,
+          flaggedRecords: stored.flaggedRecords,
+          insertedRecords: stored.inserted,
+          updatedRecords: stored.updated,
+          unchangedRecords: stored.unchanged,
+          droppedRecords: fetched.dropped.length,
+          notes: fetched.dropped.length
+            ? `${fetched.dropped.length} CAMPD rows dropped (see the invalid-records report)`
+            : null,
+        })
+        .where(eq(datasets.id, dataset.id));
+      return stored;
+    });
+    return {
+      datasetId: dataset.id,
+      year,
       rawRecordCount: fetched.received,
       validRecords: fetched.records.length,
       flaggedRecords: stored.flaggedRecords,
-      insertedRecords: stored.inserted,
-      updatedRecords: stored.updated,
-      unchangedRecords: stored.unchanged,
-      droppedRecords: fetched.dropped.length,
-      notes: fetched.dropped.length
-        ? `${fetched.dropped.length} CAMPD rows dropped (see the invalid-records report)`
-        : null,
+      inserted: stored.inserted,
+      updated: stored.updated,
+      unchanged: stored.unchanged,
+      dropped: fetched.dropped.length,
+      anomalyCount: stored.anomalyCount,
     };
   } catch (err) {
     const message = `CAMPD API error: ${err instanceof Error ? err.message : String(err)}`;
-    counts = { notes: `Error: ${message}` };
+    await db
+      .insert(datasets)
+      .values({ ...dataset, notes: `Error: ${message}` });
     throw new Error(message);
-  } finally {
-    await db.update(datasets).set(counts).where(eq(datasets.id, datasetId));
   }
-
-  return {
-    datasetId,
-    year,
-    rawRecordCount: counts.rawRecordCount ?? 0,
-    validRecords: counts.validRecords ?? 0,
-    flaggedRecords: counts.flaggedRecords ?? 0,
-    inserted: counts.insertedRecords ?? 0,
-    updated: counts.updatedRecords ?? 0,
-    unchanged: counts.unchangedRecords ?? 0,
-    dropped: counts.droppedRecords ?? 0,
-    anomalyCount,
-  };
 }
 
 async function fetchMasterDataList(path: string, field: string) {
@@ -652,7 +609,7 @@ interface GranularPlan {
 }
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const rowDate = (row: CampdRow) => toStr(row.date ?? row.opDate) ?? "";
+const rowDate = (row: CampdRow) => toStr(row.date) ?? "";
 const monthName = (m: number) =>
   new Date(Date.UTC(2000, m - 1)).toLocaleString("en-US", {
     month: "long",
@@ -851,9 +808,7 @@ export async function fetchGranularEmissionsForFacility(options: {
   const result = await fetchWithPublishedRetry(publishedThrough, plan.request);
   const rows = unitId
     ? result.items.filter(
-        (row) =>
-          toStr(row.unitId ?? row.unit_id)?.toLowerCase() ===
-          unitId.toLowerCase(),
+        (row) => toStr(row.unitId)?.toLowerCase() === unitId.toLowerCase(),
       )
     : result.items;
 
@@ -874,5 +829,12 @@ export async function fetchGranularEmissionsForFacility(options: {
     const bucket = totals[plan.periodIndex(row)];
     if (bucket) addTotals(bucket, readMetrics(row, plan.missingHours));
   }
-  return buildResult(granularity, "EPA_CAMPD_API", current(), periods, totals);
+  return buildResult(
+    granularity,
+    "EPA_CAMPD_API",
+    current(),
+    periods,
+    totals,
+    result.error, // a failure part-way: the rows received, plus why the rest are missing
+  );
 }
