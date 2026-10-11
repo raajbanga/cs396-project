@@ -114,7 +114,7 @@ export const datasets = sqliteTable("datasets", {
 });
 
 export const datasetsRelations = relations(datasets, ({ many }) => ({
-  annualRecords: many(annualRecords),
+  annualRecords: many(annualRecords, { relationName: "dataset" }),
   importIssues: many(importIssues),
 }));
 
@@ -130,6 +130,11 @@ export const annualRecords = sqliteTable(
     datasetId: text("dataset_id").references(() => datasets.id, {
       onDelete: "cascade",
     }),
+    // The upload this record last came from before a CAMPD sync took it over (null once an upload owns it again).
+    supersededUploadId: text("superseded_upload_id").references(
+      () => datasets.id,
+      { onDelete: "set null" },
+    ),
     facilityId: integer("facility_id")
       .notNull()
       .references(() => facilities.id, { onDelete: "cascade" }),
@@ -162,6 +167,9 @@ export const annualRecords = sqliteTable(
     // (facility, year) serves the per-facility year subqueries; with only (year, co2) SQLite scanned a whole year per facility.
     index("annual_record_facility_year_idx").on(t.facilityId, t.year),
     index("annual_record_year_co2_idx").on(t.year, t.co2MassTons),
+    // Per-dataset record counts in the dataset history (owned, and taken over by a sync).
+    index("annual_record_dataset_idx").on(t.datasetId),
+    index("annual_record_superseded_upload_idx").on(t.supersededUploadId),
   ],
 );
 
@@ -178,6 +186,11 @@ export const annualRecordsRelations = relations(
     }),
     dataset: one(datasets, {
       fields: [annualRecords.datasetId],
+      references: [datasets.id],
+      relationName: "dataset",
+    }),
+    supersededUpload: one(datasets, {
+      fields: [annualRecords.supersededUploadId],
       references: [datasets.id],
     }),
     auditLogs: many(dataAuditLogs),

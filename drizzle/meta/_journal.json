@@ -50,6 +50,20 @@
       "when": 1791644081300,
       "tag": "0006_chilly_sabretooth",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791692274890,
+      "tag": "0007_panoramic_clea",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791693322716,
+      "tag": "0008_useful_network",
+      "breakpoints": true
     }
   ]
 }

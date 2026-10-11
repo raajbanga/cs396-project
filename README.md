@@ -24,14 +24,14 @@ repository.
 
 `db.sqlite` is committed, so the app works right after setup without an API key or seeding.
 
-| Table             |   Rows | Notes                                                                                                   |
-| :---------------- | -----: | :------------------------------------------------------------------------------------------------------ |
-| `facilities`      |  1,619 | 50 states, DC, and Puerto Rico                                                                          |
-| `units`           |  5,204 | 1,067.5 GW nameplate capacity                                                                           |
-| `annual_records`  | 50,947 | One row per facility-unit-year, reporting years 2015–2026 (2026 is partial; EPA publishes it quarterly) |
-| `datasets`        |     30 | All from the CAMPD API; 12 own records, 18 were superseded by later re-syncs                            |
-| `data_audit_logs` |  6,909 | Physical-sanity flags on 6,432 records: 6,105 CO₂ not reported, 804 extreme heat rates (all WARN)       |
-| `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                               |
+| Table             |   Rows | Notes                                                                                                                                                                               |
+| :---------------- | -----: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `facilities`      |  1,777 | 50 states, DC, and Puerto Rico                                                                                                                                                      |
+| `units`           |  6,031 | 1,108.2 GW nameplate capacity                                                                                                                                                       |
+| `annual_records`  | 57,414 | One row per facility-unit-year: 6,467 from uploads (1996–98, 2006–08) and 50,947 from the CAMPD API (2015–2026; 2026 is partial). 176 API records replaced uploaded 2023–25 records |
+| `datasets`        |    151 | 12 CAMPD API syncs, 13 facility-file uploads, and 126 daily-emissions uploads (14 superseded by the API sync)                                                                       |
+| `data_audit_logs` |  7,603 | Physical-sanity flags on 7,056 records: 6,516 CO₂ not reported, 963 extreme heat rates (WARN), 124 zero emissions with high heat input (ERROR)                                      |
+| `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                                                                                                           |
 
 ---
 
@@ -235,6 +235,10 @@ npm run sync:campd                           # last calendar year
 npm run sync:campd -- --year 2024            # one year
 npm run sync:campd -- --from 2015 --to 2025  # a range (one dataset per year)
 npm run db:seed -- --csv-dir "../CAMPD DATA" # facilities + units from CAMPD facility CSVs
+# Full rebuild (delete db.sqlite first): facility CSVs, then every csv/emissions-daily-*.csv rolled
+# up to unit-year totals, each imported as an upload; then the API years on top
+npm run db:rebuild -- --facility-dir ../epaData/csv --csv-dir csv
+npm run sync:campd -- --from 2015 --to 2026
 ```
 
 `sync:campd` writes directly. The **Retrieve** page does the same with a preview and an

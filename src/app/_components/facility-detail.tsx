@@ -339,9 +339,10 @@ function EmissionsPanel({ rollups }: { rollups: YearlyRollup[] }) {
                         {rec.dataset && (
                           <span
                             className="text-fg-muted ml-2"
-                            title={rec.dataset.name}
+                            title={`${rec.dataset.name}${rec.supersededUpload ? `\nReplaced upload: ${rec.supersededUpload.originalFilename}` : ""}`}
                           >
                             {datasetOriginLabel(rec.dataset)}
+                            {rec.supersededUpload && " · replaced upload"}
                           </span>
                         )}
                       </TableCell>

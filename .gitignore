@@ -19,6 +19,9 @@ CLAUDE.md
 /dataImports
 /uploads
 
+# Bulk CAMPD files (input to db:rebuild)
+/csv
+
 # dependencies
 /node_modules
 /.venv

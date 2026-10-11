@@ -85,6 +85,7 @@ const UNIT_YEAR_COLUMNS: CsvColumn<UnitYearRow & { auditFlags: string }>[] = [
   ["audit_flags", (r) => r.auditFlags],
   ["dataset_id", (r) => r.datasetId],
   ["origin", (r) => (r.origin ? sourceLabel(r.origin) : null)],
+  ["replaced_upload", (r) => r.supersededUpload],
   ["dataset_imported_at", (r) => r.datasetImportedAt],
 ];
 
@@ -112,6 +113,8 @@ const PROVENANCE_COLUMNS: CsvColumn<DatasetRow & { currentRecords: number }>[] =
     ["source", (r) => r.source],
     ["reporting_year", (r) => r.reportingYear],
     ["imported_at", (r) => r.importedAt],
+    ["current_records", (r) => r.currentRecords],
+    ["replaced_by_api", (r) => r.replacedByApi],
     ["status", datasetStatus],
     ["raw_record_count", (r) => r.rawRecordCount],
     ["valid_records", (r) => r.validRecords],
