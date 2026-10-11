@@ -6,6 +6,10 @@ rubric.txt
 prompt.txt
 /docs
 
+# Coding-agent instructions (local only)
+AGENTS.md
+CLAUDE.md
+
 # Assembled submission (built from the tracked files)
 /BangaRaajSubmission
 
