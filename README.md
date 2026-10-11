@@ -197,6 +197,7 @@ required. Keys are read on the server only and never sent to the browser.
 | `OPENROUTER_API_KEY`    | no       | Enables the language-model fallback in description search                                                 |
 | `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `nvidia/nemotron-3-super-120b-a12b:free`                                     |
 | `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the flat map: light or dark tiles to match the theme. Without it, public dark tiles |
+| `READ_ONLY`             | no       | `true` on a hosted build (Vercel): Upload and Retrieve show a "run it locally" notice and refuse writes   |
 
 ---
 

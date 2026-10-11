@@ -472,12 +472,9 @@ export function FacilityFilterBar({
           {text && (
             <button
               type="button"
-              onClick={() => {
-                describe?.onTextChange("");
-                onFilterChange("search", "");
-              }}
+              onClick={onResetFilters}
               className="text-fg-muted hover:text-fg absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer"
-              aria-label="Clear search text"
+              aria-label="Clear search and filters"
             >
               <X className="h-4 w-4" />
             </button>

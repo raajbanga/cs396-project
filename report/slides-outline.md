@@ -1,393 +1,411 @@
-# epaData presentation outline
+# epaData presentation script
 
-Speaker notes for [`epaData-slides.pptx`](epaData-slides.pptx); the same text is in each slide's notes pane.
-This file is also the demo script: slides 8–17 are the ten live-demo steps, with the exact clicks, inputs,
-and expected numbers.
+Script for [`epaData-slides.pptx`](epaData-slides.pptx). Slides 8–17 are the live demo.
 
-- **Timing:** about 5:30 of slides + 7:30 of live demo = 13:00. Steps 4 and 9 can be cut.
-- **Reading this file:** top-level bullets are what to say; sub-bullets are cues. **Bold** terms are
-  defined the first time they appear.
-- **Speakers:** listed in each heading (and in the slide notes), not on the slides.
-- **Expected numbers** assume the demo starts from the committed `db.sqlite` and the steps run in order.
-  They were checked by replaying the steps on a copy of the database.
+- **How to read it:** every bullet is a sentence to say out loud, broken into short pieces. Lines in
+  _italics_ are actions (clicks, typing, pointing), not lines to say.
+- **Timing:** about 5:30 of slides and 7:30 of demo, 13:00 in total. Steps 4 and 9 can be skipped.
+- **Numbers** assume a fresh `db.sqlite` and the demo steps run in order.
 
 ## Before the demo (not timed)
 
-1. `git restore db.sqlite`, so the database matches the committed copy (rehearsals change it).
-2. Check `.env` has `CAMPD_API`.
-   - optional: `npm run sync:campd -- --year 2026` picks up a newly published EPA quarter; then re-check
-     the numbers in slides 8 and 10
-3. Start a production server, which has no first-visit compile delays: `npm run build && npm start`.
-4. Open <http://localhost:3000>, then open each page in the navigation bar (Explore and its three tabs,
-   Map, Retrieve, Upload, Download) once, so the first live click is fast.
-5. Rehearsal check: Retrieve → State KY, Facility IDs `6071`, 2023 to 2023 → **Preview year from the EPA**.
-   - it should list 8 Unchanged: the API key and network work
-   - click **Cancel**
-6. Have `samples/annual-emissions-sample.csv` visible in Finder for drag-and-drop.
-7. Zoom the browser to about 110 % so tables are readable from the back of the room.
+1. Run `git restore db.sqlite` to undo any changes from rehearsals.
+2. Check that `.env` contains `CAMPD_API`.
+3. Start the production server, which has no loading delays: `npm run build && npm start`.
+4. Open <http://localhost:3000> and visit every page once (Explore and its three tabs, Map, Retrieve,
+   Upload, Download), so the first live click is quick.
+5. Test the EPA connection: on Retrieve, enter State KY, Facility IDs `6071`, 2023 to 2023, and click
+   **Preview year from the EPA**. It should show 8 Unchanged. Then click **Cancel**.
+6. Have `samples/annual-emissions-sample.csv` open in Finder, ready to drag.
+7. Zoom the browser to about 110 % so the back of the room can read the tables.
 
 ## Introduction
 
 ### 1. Title — Raaj + Arnav (0:15)
 
-- Good afternoon. We are Raaj Banga and Arnav Bawankule.
-  - both stand; Raaj opens
-- This is epaData, our Phase 1 project for CS396.
-- It collects EPA power-plant emissions data, checks it, and stores it in SQLite.
-  - **SQLite** = a relational database kept in one file, with no separate database server
-- You can then search, compare, and download that data.
-  - one-sentence pitch; don't elaborate yet
-- Plan: about five minutes of design, seven of live demo, then challenges and who did what.
+_Both stand; Raaj speaks._
+
+- Hi everyone, we're Raaj Banga and Arnav Bawankule, and our project is called epaData.
+- epaData collects emissions data about U.S. power plants from the EPA.
+  - It checks that data for errors and stores it in a database.
+  - The database is SQLite, which keeps everything in a single file.
+- Once the data is stored, you can search it, compare plants, and download the results.
+- We'll spend about five minutes on how it's designed and seven minutes on a live demo.
+  - After that, we'll cover the challenges we hit and who built what.
 
 ### 2. EPA emissions data is authoritative but hard to use — Arnav (0:40)
 
-- Power plants report their fuel use, generation, and emissions to the EPA.
-  - **SO₂** = sulfur dioxide · **NOₓ** = nitrogen oxides · **CO₂** = carbon dioxide
-- The EPA publishes those reports through CAMPD and its CAM API.
-  - **CAMPD** = Clean Air Markets Program Data, the EPA's emissions data for power plants
-  - **CAM API** = CAMPD's web interface for downloading that data in code
-- The data is authoritative, but a simple question is hard to answer.
-  - e.g. “Which Kentucky coal units emitted over 500,000 t of CO₂ in 2025?”
-  - needs the right endpoint, a join with facility data, and a hand-applied threshold
-  - and one API call per year for any history
-- Spreadsheet extracts arrive with no easy way to check them.
-  - missing values · negative numbers · the same unit-year twice
-  - **unit** = one boiler or turbine inside a plant (a **facility**)
-  - **unit-year** = one unit's totals for one year; the main record in our database
-- Once sources are mixed, nobody knows which file a number came from.
-- epaData stores 1,619 facilities, 5,204 units, and 50,947 unit-years from 2015 to 2026.
-  - point at the figures under the home page title
-  - 6,909 audit flags = records our data-quality rules marked as questionable
+- Every large power plant in the U.S. reports to the EPA how much fuel it burns, how much electricity
+  it makes, and how much it emits.
+  - The emissions we track are carbon dioxide (CO₂), sulfur dioxide (SO₂), and nitrogen oxides (NOₓ).
+- The EPA publishes all of this in a database called CAMPD, the Clean Air Markets Program Data.
+  - Programs can download it through the EPA's web service, the CAM API.
+- The data is reliable, but answering even a simple question with it takes real work.
+  - For example: which Kentucky coal units emitted more than 500,000 tons of CO₂ in 2025?
+  - The API only hands back raw yearly records, so you still have to filter them by fuel and compare
+    each one against 500,000 yourself.
+  - And if you want several years, you have to make a separate API call for each year.
+- People also share this data as spreadsheets, and there's no easy way to check those for mistakes.
+  - Typical problems are missing values, negative numbers, and the same record appearing twice.
+- Once data from different sources gets mixed together, nobody can tell where a number came from.
+- Before we go on, two terms we'll use a lot.
+  - A facility is a power plant, and a unit is one boiler or turbine inside that plant.
+  - A unit-year is one unit's totals for one year, and it's the main record in our database.
+- Right now, epaData holds 1,619 facilities, 5,204 units, and 50,947 unit-years, from 2015 to 2026.
+  - _Point at the figures under the home page title._
+  - It also has 6,909 audit flags, which are records our quality checks marked as suspicious.
 
 ## System design
 
 ### 3. One Next.js app, one SQLite file — Raaj (0:50)
 
-- epaData is one Next.js application containing both the interface and the server.
-  - **Next.js** = a web framework that runs React pages and server code in one project
-  - **React** = the library that builds the interface from components
-  - one codebase, one process to run
-- The first page arrives already rendered by the server, with its data filled in.
-- After that, every search is a typed tRPC call.
-  - **tRPC** = typed remote procedure calls: the browser calls server functions, and both sides share the same types
-  - 17 procedures in total
-- Every input is validated with Zod before it reaches the database.
-  - **Zod** = a library that checks data against a declared schema and rejects anything else
-- Two plain HTTP routes handle file upload and CSV export.
-- All logic sits in shared server modules.
-  - query builders · CAMPD client · one write path (ingest.ts) used by every import
-- Every query goes through Drizzle ORM to one SQLite file.
-  - **ORM** = object-relational mapper: builds SQL from TypeScript code
-  - **Drizzle** = the ORM we use; it also runs the schema migrations
-- Only two things leave the server process.
-  - uploaded files → a Python parser
-  - retrievals → the EPA CAM API
-  - optional: **OpenRouter** = a gateway to hosted large language models (**LLM**s); dashed because it is optional
-- API keys stay on the server; the browser never calls the EPA or OpenRouter itself.
+- epaData is built as a single Next.js application.
+  - Next.js is a web framework where the web pages and the server code live in the same project.
+  - The pages themselves are built with React, a library for building user interfaces.
+- When you open a page, the server sends it already filled in with data.
+- After that, every search calls a function on the server through a tool called tRPC.
+  - tRPC lets the browser call server functions directly, and it checks that both sides agree on the
+    data types.
+  - There are 17 of these server functions in total.
+- Before any input reaches the database, it's checked with a library called Zod.
+  - Zod rejects anything that doesn't match the shape we declared, such as a year that isn't a
+    number.
+- File uploads and CSV downloads go through two ordinary web routes instead.
+- All database access goes through Drizzle, which talks to our one SQLite file.
+  - Drizzle is an ORM: we write our queries in TypeScript, and it generates the SQL for us.
+- Only two kinds of requests ever leave our server.
+  - Uploaded files are handed to a Python program that parses them.
+  - Retrievals go out to the EPA's API.
+  - There's also an optional third one, OpenRouter, a service for calling AI language models, which
+    is why it's drawn with a dashed line.
+- All API keys stay on the server, so the browser never talks to the EPA or OpenRouter directly.
 
 ### 4. Two ways in, one write path, approval first — Raaj (0:40)
 
-- Data enters two ways: Retrieve and Upload.
-  - Retrieve calls the EPA CAM API
-  - Upload accepts CSV or Excel files in the CAMPD column layout
-  - a third path, the **CLI** (command-line) script sync:campd, skips the approval step
-- Both paths validate every row first.
-  - API rows → Zod · files → the Python parser
-  - both drop repeated facility-unit-years (**dedupe**)
-- Each incoming record is then compared with what the database already holds.
-  - result: new · changed · unchanged counts
-  - this is the DB-vs-API preview in demo step 3
-- Nothing is written until the user approves.
-- On approval, one shared write path saves everything in a single transaction.
-  - **upsert** = insert a record, or update it if it already exists
-  - computes **heat rate** (fuel energy per MWh generated) and **CO₂ intensity** (lb of CO₂ per MWh)
-  - runs the sanity audits and records a **dataset** row (one per retrieval or upload)
-  - **transaction** = all writes succeed together or none do
-- Rejected and duplicate rows go to import_issues, so nothing is dropped silently.
-- Everything you browse reads only the local database.
-  - only Retrieve and the granular time series call the API live
-  - point at the two source badges at the bottom
+- There are two ways to get data into epaData.
+  - You can retrieve it from the EPA's API, or you can upload a CSV or Excel file.
+  - There's also a command-line script for loading data in bulk, and that one skips the approval
+    step.
+- Both ways check every single row before anything else happens.
+  - API rows are checked with Zod, and uploaded files are checked by the Python parser.
+  - Both also remove repeated rows for the same unit and year.
+- Next, each incoming record is compared with what's already in the database.
+  - The result tells you how many records are new, how many changed, and how many are unchanged.
+  - You'll see this comparison in step 3 of the demo.
+- Nothing is saved until the user looks at that comparison and approves it.
+- Once approved, one shared piece of code saves everything.
+  - It adds new records and updates existing ones, which is called an upsert.
+  - It calculates the heat rate, meaning how much fuel was burned per megawatt-hour, and the CO₂
+    intensity, meaning how many pounds of CO₂ were emitted per megawatt-hour.
+  - It runs our quality checks and records which import the data came from, which we call a
+    dataset.
+  - And it does all of this in one transaction, so either every write succeeds or none of them do.
+- Rows that were rejected or duplicated are kept in their own table, so nothing disappears silently.
+- When you browse the site, you're only reading our own database.
+  - The only features that call the EPA live are Retrieve and the detailed time series.
+  - _Point at the two source labels at the bottom of the slide._
 
 ### 5. Six tables follow the shape of the data — Raaj (0:40)
 
-- The schema follows the real hierarchy of the data.
-  - facility → units → one annual record per unit per year
-  - facilities.id is the EPA **ORISPL** code: the EPA's permanent plant ID, also used in URLs
-- Two tables record provenance.
-  - **provenance** = where each record came from
-  - datasets: one row per retrieval or upload
-  - import_issues: every rejected or duplicate source row, kept verbatim
-  - the sixth table, data_audit_logs, holds the sanity flags
-- An annual record is unique per unit and year.
-  - its id is built from that pair, so re-importing a year updates the row instead of duplicating it
-  - UNIQUE(unit_internal_id, year) is also the upsert target
-- Metric columns may be NULL on purpose.
-  - **NULL** = no value: the source did not report one, which differs from a measured zero
-- Controls and program codes are stored per year, as the spec asks.
-- Indexes match the real query shapes.
-  - **index** = a sorted lookup structure that lets the database skip scanning whole tables
-  - adding (facility_id, year) took the per-state ranking from 9.5 s to 22 ms
+- Our tables mirror how the data is actually organized.
+  - A facility has several units, and each unit has one record per year.
+  - Each facility is identified by the EPA's own plant number, called the ORISPL code, and that same
+    number appears in our URLs.
+- Two of the tables track where the data came from.
+  - The datasets table has one row for every retrieval or upload.
+  - The import_issues table keeps every rejected or duplicate row exactly as it arrived.
+  - The sixth table, data_audit_logs, holds the quality flags.
+- Each unit can only have one record per year.
+  - So if you import the same year again, the existing record is updated instead of copied.
+- When a value is missing, we store it as empty, not as zero.
+  - That's because "not reported" and "measured zero" mean very different things.
+- Pollution controls and program memberships are stored separately for each year, as the
+  specification asks.
+- We also added indexes for the searches people actually run.
+  - An index is a lookup structure that saves the database from scanning every row.
+  - One index alone brought the per-state ranking down from 9.5 seconds to 22 milliseconds.
 
 ### 6. Implementation choices and why — Raaj (0:40)
 
-- The course suggests Flask; we used Next.js with tRPC and Drizzle.
-  - **Flask** = a Python web framework, usually paired with Jinja templates and the SQLAlchemy ORM
-  - ours covers the same objectives (routes, templates, forms, ORM) in one typed codebase
-- SQLite in one file means the database ships with the submission.
-  - it also supports the window functions we use for ranking (slide 14)
-- File parsing runs in Python.
-  - its csv and **openpyxl** (Excel reader) libraries treat CSV and Excel the same way
-  - returns a full validation report as JSON · Arnav's import feature
-- Description search is rule-based first.
-  - works offline, gives the same answer every time, covered by unit tests
-  - a language model is only an optional fallback
-- Retrieval previews before it saves.
-  - the user sees the differences first
-  - a failed fetch never leaves half a dataset behind
+- The course suggests Flask, but we chose Next.js, tRPC, and Drizzle.
+  - Flask is a Python web framework that's usually paired with the SQLAlchemy ORM.
+  - Our stack meets the same goals, with routes, pages, forms, and an ORM, and it also checks data
+    types from the database all the way to the page.
+- We chose SQLite because the whole database is one file that ships with our submission.
+  - It also supports the ranking query you'll see on slide 14.
+- File parsing is written in Python because Python reads CSV and Excel files the same way.
+  - Excel files are read with a library called openpyxl.
+  - The parser returns a complete validation report, and this import feature is Arnav's work.
+- Our description search relies on rules first, not AI.
+  - That means it works offline, gives the same answer every time, and is covered by unit tests.
+  - An AI model is only used as an optional backup for words the rules don't understand.
+- Retrieval always shows a preview before it saves anything.
+  - So you see the differences first, and a failed download never leaves half the data saved.
 
 ## Live demo
 
 ### 7. Ten steps, one story — Arnav (0:15)
 
-- The demo has ten steps, each mapped to a rubric row.
-  - we alternate presenters by who built that part
-  - switch to the browser after this slide
-- The steps tell one story.
-  - step 2's sample upload deliberately edits one Trimble County CO₂ value
-  - step 3's Retrieve catches that difference against the EPA API and restores EPA's number
-  - shows both data paths and the DB-vs-API comparison together
-- Steps 4 and 9 can be cut if we run long.
-  - network down? see “If something goes wrong” at the end of this outline
+- Our demo has ten steps, and each one matches an item on the rubric.
+  - Whoever built a feature will be the one presenting it.
+- The steps also tell one connected story.
+  - In step 2, we upload a sample file in which we deliberately changed one CO₂ value for Trimble
+    County.
+  - In step 3, we compare against the EPA's API, which catches that change and restores the EPA's
+    original value.
+- If we run short on time, we'll skip steps 4 and 9.
+
+_Switch to the browser. If the network is down, see "If something goes wrong" at the end._
 
 ### 8. Home page: what it is and where data comes from — Arnav (0:40)
 
-- The intro paragraph says what epaData does and where its data comes from.
-  - sources: the EPA CAMPD API and CSV or Excel uploads
-  - **TRACI** = the EPA's method for turning emissions into environmental-impact scores; that is Phase 2
-- The coverage chart shows unit-years per reporting year, 2015–2026.
-  - hover a column for its count
-  - data sources: “EPA CAMPD API: 12 active datasets and 18 superseded”
-  - **superseded** = an earlier retrieval whose records a re-sync replaced; kept as history
-- The figures show 1,619 facilities, 5,204 units, 50,947 unit-years, and 6,909 data-quality flags.
-- Everything you browse reads the local database; only Retrieve and the granular time series call the API live.
-  - say this verbatim: it is the rubric's “data source explanation”
-  - each panel is labelled with its source
-- The navigation bar follows the workflow: look at the data (Explore, Map), then move it in and out
-  (Retrieve, Upload, Download).
-  - “What you can do” lists the same functions · then click Upload in the navigation bar → step 2
+- This is the home page, and the introduction explains what epaData does and where its data comes
+  from.
+  - The data comes from two places: the EPA's CAMPD API, and CSV or Excel files that users upload.
+  - Scoring the environmental impact with the EPA's TRACI method is Phase 2, so it isn't part of
+    this project yet.
+- This chart shows how many unit-years we have for each year from 2015 to 2026.
+  - _Hover over a bar to show its count._
+  - Below it, you can see we have 12 active datasets from the EPA API and 18 superseded ones.
+  - A superseded dataset is an older retrieval that a newer one replaced, and we keep it as history.
+- In total, we hold 1,619 facilities, 5,204 units, 50,947 unit-years, and 6,909 quality flags.
+- Everything you browse comes from our local database, and only Retrieve and the time series call the
+  EPA live.
+  - _Say this clearly: it's the rubric's "data source explanation."_
+  - Each panel on the site is labelled with where its data comes from.
+- The menu follows the workflow: first you explore the data, then you bring data in or take it out.
+  - Explore and Map are for looking at data, and Retrieve, Upload, and Download are for moving it.
+  - _Click Upload to start step 2._
 
 ### 9. Upload: validate first, then import — Arnav (1:30)
 
-- Upload accepts CSV and Excel files up to 100 MB.
-  - click Upload in the navigation bar
-  - drag in samples/annual-emissions-sample.csv (already open in Finder)
-- The Python parser maps CAMPD column headers to database columns.
-  - 5 columns stay unmapped: stack IDs, the operating-time count, and 3 rates epaData recomputes
-  - Columns tab, if anyone asks
-- Summary: 25 rows, 21 valid, 3 rejected, 1 duplicate, 1 audit flag.
-- Compared with the database: 19 new, 1 changed, 1 unchanged.
-  - Already in database (2): the two Trimble County 2023 rows; one “Will update co2MassTons”
-- Each rejected row keeps its reason.
-  - row 12: no unit ID · row 18: state “KZ” · row 19: negative CO₂
-  - Duplicates in file (1): row 25 repeats row 4 (Ghent unit 1, 2014)
-- Row 16 reported heat input but no CO₂, and that is real EPA data.
-  - Robert Reid unit RT: 38,801.9 **MMBtu** (million British thermal units of fuel energy)
-  - stored as “not reported” (NULL), not zero
-  - flagged CO2_NOT_REPORTED, severity WARN
-- Approve and import the 21 records.
-  - click Approve and import 21 records
-  - “Import complete” shows the dataset and the archived file under uploads/
-- Download the rejected rows: nothing is dropped silently.
-  - click Download rejected rows (4)
-  - 3 rejected + 1 duplicate + the flagged record, each with its original columns
+- The Upload page accepts CSV and Excel files up to 100 megabytes.
+  - _Drag samples/annual-emissions-sample.csv in from Finder._
+- First, the parser matches the column names in the file to the columns in our database.
+  - Five columns are ignored: stack IDs, an operating-time count, and three rates that we calculate
+    ourselves.
+  - _If asked, open the Columns tab._
+- The summary shows the file had 25 rows: 21 valid, 3 rejected, 1 duplicate, and 1 flagged.
+- Compared with the database, 19 of the records are new, 1 is changed, and 1 is unchanged.
+  - The two Trimble County 2023 rows are already in the database, and one of them will update its
+    CO₂ value.
+- Every rejected row comes with a reason.
+  - Row 12 has no unit ID, row 18 has the state "KZ", which doesn't exist, and row 19 has a
+    negative CO₂ value.
+  - Row 25 is a duplicate of row 4, which is Ghent unit 1 in 2014.
+- Row 16 reports fuel burned but no CO₂, and that actually comes from real EPA data.
+  - That unit, Robert Reid RT, burned 38,801.9 MMBtu of fuel, which means million British thermal
+    units.
+  - We store its CO₂ as "not reported", not as zero, and flag it with a warning.
+- When we approve, the 21 valid records are imported.
+  - _Click "Approve and import 21 records"._
+  - The confirmation shows the new dataset and where the original file was saved.
+- We can also download the rejected rows, so nothing is ever lost.
+  - _Click "Download rejected rows (4)"._
+  - That file has the 3 rejected rows, the duplicate, and the flagged record, each with its original
+    columns.
 
 ### 10. Retrieve: compare with the EPA API before saving — Raaj (1:15)
 
-- Retrieve names its method: the EPA CAM API's apportioned annual emissions.
-  - **apportioned** = the EPA splits a shared stack's emissions across the units behind it
-  - the API key stays on the server
-- Enter the parameters.
-  - State = KY · Facility IDs = 6071 (Trimble County) · From year = 2023 · To year = 2023
-- “Already in the local database” fills in on its own: 8 unit-years for 2023.
-  - 2 written by the upload we just did · 6 by the EPA API
-- Preview fetches from the API without writing anything.
-  - click Preview year from the EPA
-  - received 8 · new 0 · changed 1 · unchanged 7 · dropped 0
-- The Changed tab shows the value our upload edited.
-  - Trimble County unit 2 CO₂: 4,098,943.863 → 4,099,943.863
-  - the API still has EPA's number: the punchline of the demo story
-- Approve and save; the history gains a row.
-  - click Approve and save year (1 new or changed)
-  - status tiles: 0 new · 1 changed · 7 unchanged · 0 dropped
-  - Past retrievals gains the row, with the exact query parameters
+- The Retrieve page pulls annual emissions straight from the EPA's API.
+  - The EPA reports these as apportioned emissions, which means that when several units share one
+    smokestack, the EPA splits the emissions between them.
+  - The API key stays on our server the whole time.
+- Let's ask for Trimble County in 2023.
+  - _Enter State KY, Facility IDs 6071, From 2023, To 2023._
+- Before fetching anything, the page shows what we already have: 8 unit-years for 2023.
+  - Two of those came from the upload we just did, and six came from the EPA API.
+- The preview downloads the data from the EPA without saving anything.
+  - _Click "Preview year from the EPA"._
+  - We received 8 records: none are new, 1 changed, 7 are unchanged, and none were dropped.
+- The Changed tab catches exactly the value our upload edited.
+  - For Trimble County unit 2, our database now says 4,098,943.863 tons of CO₂, but the EPA says
+    4,099,943.863, which is 1,000 tons more.
+  - The EPA still has the original number, and that's the point of this whole story.
+- When we approve, the EPA's value is saved and the retrieval is logged.
+  - _Click "Approve and save year (1 new or changed)"._
+  - The result confirms 1 changed and 7 unchanged.
+  - And the past-retrievals table now has a new row recording exactly what we searched for.
 
 ### 11. Basic search: name, filters, sort, page — Arnav (0:30)
 
-- Searching by name finds plants, operators, and counties.
-  - Explore · Facilities tab · type Ghent → Search → 1 facility
-  - the box takes names too: text with no filter words becomes a name search
-- Dropdowns filter the list.
-  - clear the search (✕) · State = KY → 28 facilities
-- Headers sort, and the footer pages through results.
-  - page size + go-to-page control
-  - optional step: cut if running long
-- The server pages the results itself.
-  - one ranked **subquery** (a query nested inside another) gives both the page of rows and the total count, so they always agree
+- On the Explore page, you can search by plant name, owner, or county.
+  - _Facilities tab: type Ghent and click Search._
+  - That finds exactly one facility.
+- The dropdowns narrow the list down.
+  - _Clear the search with the ✕, then set State to KY._
+  - Kentucky has 28 facilities.
+- You can click any column header to sort, and use the footer to change pages.
+  - _Show the page size and go-to-page controls. Skip this step if running long._
+- The paging happens on the server, so the row count and the page you see always agree.
 
 ### 12. Multi-constraint search across three tables — Raaj (0:40)
 
-- Set four filters on the Unit-years tab.
-  - Clear filters · Unit-years tab
-  - State = KY · Fuel = Coal · Year = 2025
-  - Advanced → CO₂ min = 500000 · click ≥ beside it to make it strict (>), as in “greater than”
-- Result: 25 unit-years.
-  - switch to Facilities: the same filters give 8 facilities
-- The conditions sit on three tables, combined with AND.
-  - state → facility · fuel → unit · year and CO₂ → annual record
-- The whole search lives in the URL.
-  - point at the address bar: /explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000&co2MassTonsMinStrict=1
-  - bookmark or share it; the CSV export parses the same URL
-- Fuel and control filters match by substring.
-  - CAMPD stores combined values like “Coal, Pipeline Natural Gas”
-  - if asked
+- Now let's answer the question from the beginning: which Kentucky coal units emitted more than
+  500,000 tons of CO₂ in 2025?
+  - _Click Clear filters and switch to the Unit-years tab._
+  - _Set State to KY, Fuel to Coal, and Year to 2025._
+  - _Open Advanced, type 500000 as the CO₂ minimum, and click ≥ to switch it to >._
+  - We switched it to "greater than" because the question says "more than."
+- The answer is 25 unit-years.
+  - _Switch to the Facilities tab._
+  - With the same filters, that's 8 plants.
+- This one search combines conditions from three different tables.
+  - The state belongs to the facility, the fuel belongs to the unit, and the year and CO₂ belong to
+    the yearly record.
+- The whole search is saved in the URL.
+  - _Point at the address bar:
+    /explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000&co2MassTonsMinStrict=1_
+  - That means you can bookmark it or share it, and the CSV download reads the same URL.
+- If asked: the fuel and control filters match part of the text, because the EPA stores combined
+  values like "Coal, Pipeline Natural Gas."
 
 ### 13. Description search: a sentence becomes filters — Raaj (0:40)
 
-- The same search box turns a sentence into filters.
-  - Clear filters · under the box, click Try “coal units in Kentucky with high CO2” → Search
-- The sentence becomes “Interpreted as” chips: KY, Coal, and CO₂ ≥ 2,780,000.
-  - sorted by CO₂ · 99 unit-years
-  - “(parser; …)”: no language model was needed
-  - without the upload: 2,720,000 and 97
-- “High” has no fixed number, so we use a percentile.
-  - **75th percentile (P75)** = the value 75% of the matching unit-years fall below
-  - computed over the other filters only, here Kentucky coal
-  - the note under the chips states the rule
-- The parser matches the longest known phrase at each position.
-  - **parser** = code that reads the sentence and maps words to filter values
-  - “natural gas” beats “gas” · word order doesn't matter
-  - tolerates one-letter typos (“Kentuky”) · reports what it didn't understand
-- Every chip is an ordinary filter.
-  - click ✕ on Coal, then set Fuel back to Coal
-  - first row: Paradise unit 3 in 2014, from our upload
+- The same search box also understands plain English.
+  - _Click Clear filters, then under the box click the example "coal units in Kentucky with high
+    CO2" and click Search._
+- The sentence is turned into filter chips: Kentucky, Coal, and CO₂ of at least 2,780,000 tons.
+  - The results are sorted by CO₂, and there are 99 unit-years.
+  - The word "parser" next to the chips means our rules understood everything, so no AI was needed.
+  - _Without the upload from step 2, it would be 2,720,000 tons and 97 unit-years._
+- "High" isn't a fixed number, so we define it as the top quarter.
+  - The threshold is the 75th percentile, meaning 75% of the matching records are below it.
+  - It's measured only among Kentucky coal units, the other filters in the sentence.
+  - The note under the chips explains this rule to the user.
+- The parser always looks for the longest phrase it recognizes.
+  - So "natural gas" wins over just "gas", and the order of the words doesn't matter.
+  - It also forgives small typos like "Kentuky" and lists any words it didn't understand.
+- Each chip is a normal filter that you can remove or change.
+  - _Click ✕ on Coal, then set Fuel back to Coal._
+  - The first row is Paradise unit 3 in 2014, which came from our upload.
 
 ### 14. Ranking with one window function — Raaj (0:30)
 
-- Ranking also works from a sentence.
-  - Clear filters · Facilities tab
-  - type: top CO2-emitting facility in each state in 2024 → Search
-- Result: 51 facilities, one per state, sorted by CO₂.
-  - chips show what was set: Year 2024 · First 1 per state (Advanced has the same controls)
-  - Kentucky's row is Ghent (page 2 at 10 per page)
-- In SQL this is one window function.
-  - **window function** = a calculation over a group of rows that keeps every row, unlike GROUP BY
-  - ROW_NUMBER() numbers the rows · PARTITION BY state restarts the numbering for each state
-  - keep rank 1 · point at PARTITION BY on the slide
-- The page, count, and CSV export all come from this one subquery.
-  - missing values sort last
+- You can also ask for rankings in a sentence.
+  - _Click Clear filters and switch to the Facilities tab._
+  - _Type "top CO2-emitting facility in each state in 2024" and click Search._
+- The result is 51 plants: the biggest CO₂ emitter in each state.
+  - The chips show Year 2024 and "First 1 per state", and the same controls are under Advanced.
+  - Kentucky's top emitter is Ghent, which is on page 2 at 10 rows per page.
+- In SQL, this ranking is a single window function.
+  - A window function numbers rows within groups, without merging the rows together.
+  - ROW_NUMBER counts 1, 2, 3, and PARTITION BY state restarts that count for every state.
+  - Then we keep only rank 1.
+  - _Point at PARTITION BY on the slide._
+- The table, the total count, and the CSV download all come from this same query.
+  - Missing values are always sorted last.
 
 ### 15. Unit detail: thirteen years of history — Arnav (0:30)
 
-- Open a unit to see its full history.
-  - Clear filters · Unit-years tab · type Ghent → Search · click a Ghent Unit 1 row
-- The details dialog shows identification, fuel, and each year's controls and programs.
-  - its URL (?unit=…) reopens it on reload
-  - **controls** = pollution equipment, e.g. a scrubber for SO₂
-- It lists 13 reporting years, 2014–2026.
-  - 2014 came from our upload · the rest from CAMPD API datasets
-  - covers the spec's “same unit, 2015–2025” history search
-- Audit flags for the unit, if any, are listed at the bottom.
+- You can open any unit to see its full history.
+  - _Click Clear filters, go to Unit-years, type Ghent, click Search, and click a Ghent Unit 1
+    row._
+- The details show what the unit is, what fuel it burns, and its pollution controls in each year.
+  - A pollution control is equipment like a scrubber, which removes SO₂ from the exhaust.
+  - The URL ends with ?unit=…, so the same details reopen after a reload.
+- It lists 13 years of records, from 2014 to 2026.
+  - The 2014 record came from our upload, and the rest came from the EPA API.
+  - This covers the specification's example of looking up the same unit from 2015 to 2025.
+- If the unit has any quality flags, they're listed at the bottom.
 
 ### 16. Compare plants side by side — Arnav (0:30)
 
-- Pick plants to compare.
-  - Facilities · search Ghent → tick it · search Paradise → tick it
-  - click Compare in the dock
-- Capacity, generation, CO₂, carbon intensity, and controls appear side by side.
-- Paradise comes out cleanest.
-  - 861 vs 1,929 lb/MWh (pounds of CO₂ per megawatt-hour generated)
-  - its current units burn gas
-- The limit is four plants.
-  - optional: tick 3 more → the dock says “Up to 4; remove one first”
-  - optional step: cut if running long
+- You can also pick plants and compare them.
+  - _On Facilities, search Ghent and tick it, then search Paradise and tick it._
+  - _Click Compare in the dock that appears._
+- Their capacity, electricity, CO₂, carbon intensity, and pollution controls appear side by side.
+- Paradise is much cleaner than Ghent.
+  - Paradise emits 861 pounds of CO₂ per megawatt-hour, compared with 1,929 for Ghent.
+  - That's because Paradise's current units burn natural gas.
+- You can compare up to four plants at a time.
+  - _Optional: tick three more, and the dock says "Up to 4; remove one first." Skip if running
+    long._
 
 ### 17. Download: every record traces to its source — Raaj (0:45)
 
-- Any result can be downloaded as CSV.
-  - e.g. rerun step 5's search → click Download CSV next to the result count
-  - every matching row, across all pages
-- The Download page offers six types, in three numbered steps.
-  - More options next to Download CSV opens it with the current search
-  - complete dataset · valid records · invalid records · search results · selection · provenance
-- Invalid records for the upload reproduce step 2's report.
-  - pick Invalid records · select the upload dataset (“… CSV upload …”; the latest dataset is now step 3's retrieval) · Download CSV
-  - rejected rows + the duplicate + the flagged record
-- Provenance lists every dataset.
-  - Try “provenance of every dataset” · Download CSV
-  - source · date · query parameters · new / updated / unchanged / dropped counts
-- Close with: every record traces to the retrieval or file that wrote it.
-  - stay on: Raaj presents the challenges next
+- Any search result can be downloaded as a CSV file.
+  - _For example, rerun step 5's search and click Download CSV next to the result count._
+  - The file includes every matching row, not just the page you're looking at.
+- The Download page offers six kinds of file.
+  - _Click More options next to Download CSV; it opens with the current search._
+  - You can download the complete dataset, only the valid records, only the invalid records, search
+    results, a selection, or the provenance.
+- The invalid-records file reproduces the upload report from step 2.
+  - _Pick Invalid records, choose the "… CSV upload …" dataset, and click Download CSV._
+  - _Note: the newest dataset is now step 3's retrieval, so pick the upload explicitly._
+  - It contains the rejected rows, the duplicate, and the flagged record.
+- The provenance file lists every import we've ever done.
+  - Provenance means where each record came from.
+  - _Click the example "provenance of every dataset" and click Download CSV._
+  - For each import, it shows the source, the date, the search used, and how many records were new,
+    updated, unchanged, or dropped.
+- So every record in epaData can be traced back to the retrieval or file that wrote it.
+  - _Stay up front; Raaj presents the challenges next._
 
 ## Wrap-up
 
 ### 18. Technical challenges — Raaj (0:50)
 
-- Combined values broke our filters.
-  - CAMPD lists “Coal”, but units hold “Coal, Pipeline Natural Gas”
-  - fix: split the options, match by substring
-- Missing is not zero.
-  - the first schema stored blanks as 0 → 6,105 false errors
-  - fix: nullable metrics + a separate “not reported” warning
-  - lesson: model absence explicitly
-- Re-syncs left old datasets owning nothing.
-  - deleting them would erase history
-  - fix: keep them, labelled superseded
-- The ORM generated wrong SQL.
-  - an unqualified id bound to the wrong table
-  - fix: qualify it · lesson: read the SQL an ORM writes
-- “IN” and “OR” are both state codes and English words.
-  - fix: two-letter codes count only in capitals
-- One query shape was slow.
-  - year-filtered rankings took up to 10 s
-  - fix: an index on (facility_id, year) → 22 ms
+- Our first challenge was that combined values broke our filters.
+  - The EPA's list of fuels says "Coal", but many units store something like "Coal, Pipeline
+    Natural Gas."
+  - We fixed it by splitting those values into separate options and matching part of the text.
+- The second was learning that missing is not the same as zero.
+  - At first we saved blank values as 0, and that created 6,105 false errors.
+  - Now we store them as "not reported" and give them their own warning.
+- The third was that re-downloading data left old datasets with no records.
+  - Deleting them would have erased our history, so we keep them and mark them as superseded.
+- The fourth was that our database library generated the wrong SQL.
+  - A column named "id" matched the wrong table, so we now name the table explicitly.
+  - The lesson was to always check the SQL that an ORM writes for you.
+- The fifth was that "IN" and "OR" are state codes but also ordinary English words.
+  - So two-letter state codes only count when they're typed in capitals.
+- And finally, one kind of search was slow.
+  - Rankings filtered by year took up to 10 seconds.
+  - An index on facility and year brought that down to 22 milliseconds.
 
 ### 19. Who built what — Arnav (0:30)
 
 - Raaj led the backend.
-  - schema, migrations, indexes
-  - CAMPD client with preview and diff
-  - shared write path, audits, provenance
-  - search backend incl. description search · CSV export
-  - also most of the Explore page, map, detail dialog, pages, tests, README, report
+  - He designed the database and its indexes.
+  - He built the EPA retrieval with its preview and comparison, the shared save path, the quality
+    checks, and the source tracking.
+  - He also built the search, including description search, and the CSV export.
+  - On top of that, he did most of the Explore page, the map, the details dialog, the tests, the
+    README, and the report.
 - Arnav led the frontend and built the CSV and Excel import.
-  - Python parser and validation
-  - data-quality report
-  - upload endpoint and page with preview and approval
-- We shared the API contracts, integration testing, sample data, and documentation.
-  - each of us presented the parts we built
+  - That includes the Python parser and its validation, the data-quality report, and the upload page
+    with its preview and approval.
+- We shared the integration testing, the sample data, and the documentation.
+  - And each of us presented the parts we built.
 
 ### 20. Questions? — Raaj + Arnav (0:10)
 
-- Phase 2 builds on this foundation.
-  - TRACI factors · environmental indicators from the stored records · a weighted scoring model
-  - the same ranked queries and CSV path will serve the indicators
-- Everything is reproducible from the README.
-  - install, migrate, run · committed database and sample files included
-- Thank you; we are happy to take questions.
-  - likely: why Next.js not Flask (slide 6) · LLM safety (slide 13) · missing vs zero (slide 18)
+- Phase 2 will build directly on this work.
+  - It adds the EPA's TRACI impact factors, environmental indicators calculated from the stored
+    records, and a weighted scoring model.
+  - The same searches and CSV downloads will serve those indicators.
+- Anyone can set up the project by following our README.
+  - You install it, set up the database, and run it, and the database and sample files are included.
+- Thank you for listening, and we're happy to take any questions.
+  - _Likely questions: why not Flask (slide 6), whether the AI is safe (slide 13), and missing versus
+    zero (slide 18)._
 
 ## If something goes wrong
 
-- **No network:** everything except Retrieve, the granular time series, and the 2D map tiles works offline.
-  - skip slide 10's live preview: open Retrieve only to show the past-retrievals table
-  - narrate the preview from the slide; the upload in slide 9 still shows “1 changed”
-- **Retrieve preview fails** (EPA API down or rate-limited): same as above.
-  - the preview writes nothing, so the database is unaffected
-- **Counts differ from these notes:** a rehearsal changed the database.
-  - stop the server, `git restore db.sqlite`, start again
-- **A page is slow on first open:** you are running `npm run dev`; use `npm run build && npm start`.
+- **No network:** everything works except Retrieve, the time series, and the flat map's background
+  tiles.
+  - On slide 10, open Retrieve only to show the past-retrievals table.
+  - Explain the preview using the slide; the upload on slide 9 still shows "1 changed".
+- **The Retrieve preview fails** because the EPA API is down or rate-limited: do the same as above.
+  - The preview saves nothing, so the database is unaffected.
+- **The numbers don't match these notes:** a rehearsal changed the database.
+  - Stop the server, run `git restore db.sqlite`, and start it again.
+- **A page is slow the first time it opens:** you're running `npm run dev`; use
+  `npm run build && npm start` instead.
 
 ## After the demo
 
-- `git restore db.sqlite` returns to the committed data.
-- Uploaded files are archived in `uploads/`, which is not committed; delete them if you like.
+- Run `git restore db.sqlite` to bring back the committed data.
+- Uploaded files are copied into `uploads/`, which isn't committed, so you can delete them.

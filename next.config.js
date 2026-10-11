@@ -5,6 +5,9 @@
 import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
-const config = {};
+const config = {
+  // The committed database ships with every server route, so a hosted read-only build has data.
+  outputFileTracingIncludes: { "/*": ["./db.sqlite"] },
+};
 
 export default config;

@@ -14,6 +14,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import {
@@ -36,6 +37,7 @@ import {
   type SortField,
   type UnitSortField,
 } from "~/lib/facility-filters";
+import { env } from "~/env";
 import { parseDescription, type Metric } from "~/lib/describe-search";
 import {
   hasAirQualityControls,
@@ -1057,11 +1059,17 @@ export const facilitiesRouter = createTRPCRouter({
   /** Pulls CAMPD annual emissions for each year in the range, one dataset per year; stops at the first error. */
   retrieveCampd: publicProcedure
     .input(campdRetrievalSchema)
-    .mutation(({ input: { fromYear, toYear, ...filters } }) =>
-      eachYear(fromYear, toYear, (year) =>
+    .mutation(({ input: { fromYear, toYear, ...filters } }) => {
+      if (env.READ_ONLY) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Retrieval is disabled on the hosted read-only build.",
+        });
+      }
+      return eachYear(fromYear, toYear, (year) =>
         syncCampdAnnualEmissions({ year, filters }),
-      ),
-    ),
+      );
+    }),
 
   getCampdPublishedThrough: publicProcedure
     .input(z.object({ facilityId: z.number().optional() }).optional())
