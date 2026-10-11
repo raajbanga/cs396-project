@@ -439,7 +439,7 @@ export function FacilityDetail({ facilityId }: { facilityId: number }) {
     ["Grid region (NERC)", facility.nercRegion ?? "—"],
     ["EPA region", facility.epaRegion ?? "—"],
     ["Source category", facility.sourceCategory ?? "—"],
-    ["Operating role", story.roleInfo.badgeLabel],
+    ["Operating role", story.roleInfo.label],
     [
       "Primary fuels",
       fuels.length ? (

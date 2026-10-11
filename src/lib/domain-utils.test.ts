@@ -12,8 +12,6 @@ import {
 } from "./campd-reporting-period";
 import {
   buildYearlyRollups,
-  computeCo2IntensityLbsMWh,
-  computeHeatRateMMBtuMWh,
   deriveRates,
   emptyTotals,
   evaluatePhysicalSanityRules,
@@ -45,9 +43,20 @@ import {
 import { isNumericValue, sortRows } from "./utils";
 
 void test("emissions metrics handle valid and missing generation", () => {
-  assert.equal(computeCo2IntensityLbsMWh(1, 2), 1000);
-  assert.equal(computeCo2IntensityLbsMWh(1, 0), null);
-  assert.equal(computeHeatRateMMBtuMWh(75, 10), 7.5);
+  const rates = (co2: number, heat: number, gen: number) =>
+    deriveRates({
+      co2MassTons: co2,
+      heatInputMMBtu: heat,
+      grossGenerationMWh: gen,
+    });
+  assert.deepEqual(rates(1, 75, 2), {
+    co2IntensityLbsMWh: 1000,
+    heatRateMMBtuMWh: 37.5,
+  });
+  assert.deepEqual(rates(1, 75, 0), {
+    co2IntensityLbsMWh: null,
+    heatRateMMBtuMWh: null,
+  });
   assert.equal(
     pickCleanestByCarbonIntensity([
       { carbonIntensityLbsMWh: 900 },
@@ -128,7 +137,7 @@ void test("unit status and controls use shared rules", () => {
     "Acme, Beta Co",
   );
   assert.equal(cleanOwnerOperator(null), "Owner unlisted");
-  assert.equal(getCarbonIntensityTier(0).label, "Zero-Carbon");
+  assert.equal(getCarbonIntensityTier(0).label, "Zero CO₂");
   assert.equal(getCarbonIntensityTier(1600).variant, "warning");
   assert.equal(getCarbonIntensityTier(2100).variant, "destructive");
 });

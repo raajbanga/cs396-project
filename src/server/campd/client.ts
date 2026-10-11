@@ -829,5 +829,12 @@ export async function fetchGranularEmissionsForFacility(options: {
     const bucket = totals[plan.periodIndex(row)];
     if (bucket) addTotals(bucket, readMetrics(row, plan.missingHours));
   }
-  return buildResult(granularity, "EPA_CAMPD_API", current(), periods, totals);
+  return buildResult(
+    granularity,
+    "EPA_CAMPD_API",
+    current(),
+    periods,
+    totals,
+    result.error, // a failure part-way: the rows received, plus why the rest are missing
+  );
 }

@@ -3,17 +3,18 @@
 import { useState } from "react";
 import { AuditSeverityBadge, OriginBadge } from "~/components/ui/badge";
 import { DataPanel } from "~/components/ui/data-panel";
-import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
+import { EmptyState } from "~/components/ui/empty-state";
 import {
   localSortProps,
+  ResultsPanel,
   SortableTableHead,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TablePagination,
   TableRow,
+  type Paging,
 } from "~/components/ui/table";
 import { AUDIT_RULES, AUDIT_THRESHOLDS } from "~/lib/emissions-metrics";
 import type { AuditSortField, SortDirection } from "~/lib/facility-filters";
@@ -210,26 +211,16 @@ export function AuditTable({
 /** Audits tab: flags matching the explorer filters, server-sorted and paged, with per-rule counts. */
 export function AuditLogsTable({
   data,
-  page,
-  pageSize,
+  paging,
   sortBy,
   sortDir,
   onSortChange,
-  isLoading,
-  isPlaceholderData,
-  onPageChange,
-  onPageSizeChange,
 }: {
   data?: AuditPage;
-  page: number;
-  pageSize: number;
+  paging: Paging;
   sortBy: AuditSortField;
   sortDir: SortDirection;
   onSortChange: (field: AuditSortField) => void;
-  isLoading: boolean;
-  isPlaceholderData: boolean;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
 }) {
   const logs = data?.items ?? [];
   return (
@@ -255,52 +246,25 @@ export function AuditLogsTable({
           </>
         )}
       </p>
-      <DataPanel>
-        {isLoading ? (
-          <InlineLoading title="Loading flags…" />
-        ) : logs.length === 0 ? (
-          <EmptyState
-            title="No flags match these filters"
-            description="Clear filters, or retrieve or upload data to run the checks."
-          />
-        ) : (
-          <>
-            <div className="hidden sm:block">
-              <AuditTable
-                logs={logs}
-                sort={{ sortBy, sortDir, onSortChange }}
-              />
+      <ResultsPanel paging={paging} data={data} itemLabel="flags">
+        <div className="hidden sm:block">
+          <AuditTable logs={logs} sort={{ sortBy, sortDir, onSortChange }} />
+        </div>
+        <div className="divide-edge/70 divide-y sm:hidden">
+          {logs.map((log) => (
+            <div key={log.id} className="space-y-1 px-3 py-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-fg truncate">{log.facilityName}</span>
+                <AuditSeverityBadge severity={log.severity} />
+              </div>
+              <div className="text-fg-muted text-xs">
+                Unit {log.unitId}, {log.year} · {RULE_LABELS[log.flagType]}
+              </div>
+              <p className="text-fg-2 tabular-nums">{flaggedValue(log)}</p>
             </div>
-            <div className="divide-edge/70 divide-y sm:hidden">
-              {logs.map((log) => (
-                <div key={log.id} className="space-y-1 px-3 py-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-fg truncate">{log.facilityName}</span>
-                    <AuditSeverityBadge severity={log.severity} />
-                  </div>
-                  <div className="text-fg-muted text-xs">
-                    Unit {log.unitId}, {log.year} · {RULE_LABELS[log.flagType]}
-                  </div>
-                  <p className="text-fg-2 tabular-nums">{flaggedValue(log)}</p>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {data && data.totalCount > 0 && (
-          <TablePagination
-            page={page}
-            pageSize={pageSize}
-            totalCount={data.totalCount}
-            totalPages={Math.max(data.totalPages, 1)}
-            itemLabel="flags"
-            isPlaceholderData={isPlaceholderData}
-            onPageChange={onPageChange}
-            onPageSizeChange={onPageSizeChange}
-          />
-        )}
-      </DataPanel>
+          ))}
+        </div>
+      </ResultsPanel>
     </div>
   );
 }

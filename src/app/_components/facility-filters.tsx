@@ -441,7 +441,7 @@ export function FacilityFilterBar({
             <button
               type="button"
               onClick={() => {
-                setText("");
+                describe?.onTextChange("");
                 onFilterChange("search", "");
               }}
               className="text-fg-muted hover:text-fg absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer"

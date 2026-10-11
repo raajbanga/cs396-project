@@ -1,6 +1,13 @@
 "use client";
 
-import { use, useDeferredValue, useEffect, useState } from "react";
+import {
+  use,
+  useDeferredValue,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Link from "next/link";
 import { SourceBadge } from "~/components/ui/badge";
 import { buttonClass } from "~/components/ui/button";
@@ -12,12 +19,10 @@ import {
   explorerSearchParams,
   isFilterActive,
   nextSort,
-  type AuditSortField,
   type ExplorerState,
   type FacilityFilters,
   type FilterChangeHandler,
-  type SortField,
-  type UnitSortField,
+  type SortDirection,
 } from "~/lib/facility-filters";
 import { replaceUrlQuery } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -47,9 +52,7 @@ const setsFilters = (filters: FacilityFilters) =>
 
 /** §9 data-explorer page: search form, filters, and the Facilities / Unit-years / Audit-flags tables. */
 export function Explorer({ initialState }: { initialState: ExplorerState }) {
-  const [activeTab, setActiveTab] = useState(
-    initialState.tab === "map" ? "explorer" : initialState.tab,
-  );
+  const [activeTab, setActiveTab] = useState(initialState.tab);
   const [filters, setFilters] = useState(initialState.filters);
   const deferredFilters = useDeferredValue(filters);
   const [table, setTable] = useState(initialState.table);
@@ -80,12 +83,6 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
   // §8.4: mirror tab, filters, sort, and page into the URL so views are shareable and reload-safe.
   useEffect(() => replaceUrlQuery(explorerQuery), [explorerQuery]);
 
-  const setPage = (page: number) =>
-    activeTab === "units"
-      ? setUnitTable((t) => ({ ...t, page }))
-      : activeTab === "audit"
-        ? setAuditTable((t) => ({ ...t, page }))
-        : setTable((t) => ({ ...t, page }));
   const resetPages = () => {
     setTable((t) => ({ ...t, page: 1 }));
     setUnitTable((t) => ({ ...t, page: 1 }));
@@ -154,13 +151,6 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
     result: describeResult,
   };
 
-  const handleSortChange = (field: SortField) =>
-    setTable((t) => nextSort(t, field, descByDefault));
-  const handleAuditSortChange = (field: AuditSortField) =>
-    setAuditTable((t) => nextSort(t, field, descByDefault));
-  const handleUnitSortChange = (field: UnitSortField) =>
-    setUnitTable((t) => nextSort(t, field, descByDefault));
-
   const showRank = filters.topN !== "ALL";
 
   const { data: stats } = api.facilities.getStats.useQuery();
@@ -186,24 +176,37 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
     ? new Date(lastImportedAt).toLocaleDateString()
     : undefined;
 
-  const resultProps =
+  /** A tab's table props: sort and page state with their handlers, and the query's status. */
+  const tableProps = <
+    T extends { page: number; pageSize: number; sortDir: SortDirection } & {
+      sortBy: F;
+    },
+    F extends string,
+  >(
+    t: T,
+    setT: Dispatch<SetStateAction<T>>,
+    q: { isLoading: boolean; isPlaceholderData: boolean },
+  ) => ({
+    sortBy: t.sortBy,
+    sortDir: t.sortDir,
+    onSortChange: (field: F) => setT((s) => nextSort(s, field, descByDefault)),
+    paging: {
+      page: t.page,
+      pageSize: t.pageSize,
+      isLoading: q.isLoading,
+      isPlaceholderData: q.isPlaceholderData,
+      onPageChange: (page: number) => setT((s) => ({ ...s, page })),
+      onPageSizeChange: (pageSize: number) =>
+        setT((s) => ({ ...s, pageSize, page: 1 })),
+    },
+  });
+
+  const [itemLabel, activeQuery] =
     activeTab === "units"
-      ? {
-          itemLabel: "unit-years" as const,
-          totalMatching: unitsQuery.data?.totalCount,
-          isLoading: unitsQuery.isLoading,
-        }
+      ? (["unit-years", unitsQuery] as const)
       : activeTab === "audit"
-        ? {
-            itemLabel: "flags" as const,
-            totalMatching: auditQuery.data?.totalCount,
-            isLoading: auditQuery.isLoading,
-          }
-        : {
-            itemLabel: "facilities" as const,
-            totalMatching: facilitiesQuery.data?.totalCount,
-            isLoading: facilitiesQuery.isLoading,
-          };
+        ? (["flags", auditQuery] as const)
+        : (["facilities", facilitiesQuery] as const);
 
   return (
     <div className="space-y-6">
@@ -240,7 +243,9 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
         onResetFilters={resetFilters}
         filterOptions={filterOptions}
         describe={activeTab === "audit" ? undefined : describe}
-        {...resultProps}
+        itemLabel={itemLabel}
+        totalMatching={activeQuery.data?.totalCount}
+        isLoading={activeQuery.isLoading}
         actions={
           <>
             <SourceBadge
@@ -273,46 +278,25 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
       {activeTab === "audit" ? (
         <AuditLogsTable
           data={auditQuery.data}
-          {...auditTable}
-          onSortChange={handleAuditSortChange}
-          isLoading={auditQuery.isLoading}
-          isPlaceholderData={auditQuery.isPlaceholderData}
-          onPageChange={setPage}
-          onPageSizeChange={(pageSize) =>
-            setAuditTable((t) => ({ ...t, pageSize, page: 1 }))
-          }
+          {...tableProps(auditTable, setAuditTable, auditQuery)}
         />
       ) : activeTab === "units" ? (
         <UnitsTable
           data={unitsQuery.data}
-          {...unitTable}
+          {...tableProps(unitTable, setUnitTable, unitsQuery)}
           showRank={showRank}
-          isLoading={unitsQuery.isLoading}
-          isPlaceholderData={unitsQuery.isPlaceholderData}
-          onSortChange={handleUnitSortChange}
           compareUnitIds={compareUnitIds}
           onToggleCompare={toggleUnitCompare}
-          onPageChange={setPage}
-          onPageSizeChange={(pageSize) =>
-            setUnitTable((t) => ({ ...t, pageSize, page: 1 }))
-          }
           onResetFilters={resetFilters}
         />
       ) : (
         <FacilitiesTable
           data={facilitiesQuery.data}
-          {...table}
+          {...tableProps(table, setTable, facilitiesQuery)}
           showRank={showRank}
           year={filters.year}
-          isLoading={facilitiesQuery.isLoading}
-          isPlaceholderData={facilitiesQuery.isPlaceholderData}
-          onSortChange={handleSortChange}
           compareIds={compareIds}
           onToggleCompare={toggleCompare}
-          onPageChange={setPage}
-          onPageSizeChange={(pageSize) =>
-            setTable((t) => ({ ...t, pageSize, page: 1 }))
-          }
           onResetFilters={resetFilters}
         />
       )}

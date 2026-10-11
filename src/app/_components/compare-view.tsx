@@ -117,8 +117,8 @@ function matrixSections(
             ),
             barRow(plants, "Gross load", "totalGenerationMWh", "MWh", "Most"),
             {
-              label: "Operating time",
-              render: (p) => mono(formatQuantity(p.totalOperatingHours, "hr")),
+              label: "Operating time, busiest unit",
+              render: (p) => mono(formatQuantity(p.peakUnitHours, "hr")),
             },
             {
               label: "Capacity factor",
@@ -154,21 +154,10 @@ function matrixSections(
             {
               label: "Heat rate",
               render: (p) =>
-                p.heatRateMMBtuMWh ? (
-                  <div className="space-y-0.5">
-                    <div className="text-fg text-sm tabular-nums">
-                      {p.heatRateMMBtuMWh.toFixed(2)} MMBtu/MWh
-                    </div>
-                    <span className="text-fg-muted text-xs">
-                      {p.heatRateMMBtuMWh < 8
-                        ? "High CCGT efficiency"
-                        : p.heatRateMMBtuMWh < 12
-                          ? "Standard steam rankine"
-                          : "Subcritical thermal"}
-                    </span>
-                  </div>
-                ) : (
-                  mono("—")
+                mono(
+                  formatQuantity(p.heatRateMMBtuMWh, "MMBtu/MWh", {
+                    digits: 2,
+                  }),
                 ),
             },
           ],

@@ -196,7 +196,7 @@ export const dataAuditLogs = sqliteTable(
     annualRecordId: text("annual_record_id")
       .notNull()
       .references(() => annualRecords.id, { onDelete: "cascade" }),
-    flagType: text("flag_type").notNull(), // "ZERO_EMISSIONS_HIGH_HEAT" | "PHANTOM_GENERATION" | "EXTREME_HEAT_RATE"
+    flagType: text("flag_type").notNull(), // one of AUDIT_RULES (~/lib/emissions-metrics)
     severity: text("severity").notNull(), // "WARN" | "ERROR"
     details: text("details").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })

@@ -17,6 +17,8 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { DataPanel } from "~/components/ui/data-panel";
+import { EmptyState } from "~/components/ui/empty-state";
 import { Input } from "~/components/ui/input";
 import { Select, toOptions } from "~/components/ui/select";
 import { nextSort, type SortDirection } from "~/lib/facility-filters";
@@ -81,7 +83,6 @@ export function TableSkeleton({ rows }: { rows: number }) {
   );
 }
 
-/** Header cell that sorts on click; `sort` omitted = plain header. Right-aligns when className has text-right. */
 type LocalSort<F extends string> = { sortBy: F; sortDir: SortDirection };
 
 /**
@@ -97,6 +98,7 @@ export const localSortProps = <F extends string>(
   onSortChange: (field: F) => setSort((s) => nextSort(s, field, descFirst)),
 });
 
+/** Header cell that sorts on click; `sort` omitted = plain header. Right-aligns when className has text-right. */
 export function SortableTableHead<F extends string>({
   label,
   sort,
@@ -301,5 +303,63 @@ export function TablePagination({
         )}
       </div>
     </div>
+  );
+}
+
+/** Paging state and handlers of a server-paged table, as the explorer passes them down. */
+export interface Paging {
+  page: number;
+  pageSize: number;
+  isLoading: boolean;
+  isPlaceholderData: boolean;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+}
+
+/**
+ * A server-paged result table: skeleton rows while the first page loads, a "no matches" state
+ * with a Clear filters button, otherwise `children`; pagination below.
+ */
+export function ResultsPanel({
+  paging,
+  data,
+  itemLabel,
+  onResetFilters,
+  children,
+}: {
+  paging: Paging;
+  data?: { items: unknown[]; totalCount: number; totalPages: number };
+  itemLabel: string;
+  onResetFilters?: () => void;
+  children: ReactNode;
+}) {
+  const { isLoading, pageSize, ...pageProps } = paging;
+  return (
+    <DataPanel>
+      {isLoading ? (
+        <TableSkeleton rows={pageSize} />
+      ) : !data?.items.length ? (
+        <EmptyState
+          title={`No ${itemLabel} match these filters.`}
+          description="Remove a filter above, or clear them all."
+          action={
+            onResetFilters && (
+              <Button variant="outline" size="sm" onClick={onResetFilters}>
+                Clear filters
+              </Button>
+            )
+          }
+        />
+      ) : (
+        children
+      )}
+      <TablePagination
+        {...pageProps}
+        pageSize={pageSize}
+        totalCount={data?.totalCount ?? 0}
+        totalPages={Math.max(data?.totalPages ?? 1, 1)}
+        itemLabel={itemLabel}
+      />
+    </DataPanel>
   );
 }

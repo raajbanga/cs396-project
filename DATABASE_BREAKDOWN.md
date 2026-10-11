@@ -385,7 +385,7 @@ flowchart LR
   - **Aggregated from `annual_records`**: total CO₂, total operating hours, carbon intensity — summed across all years, or **only the chosen reporting year** when the Year filter is set.
   - **Unit / unit-year filters** (fuel, unit type, controls, unit ID, year, min/max ranges) keep facilities with at least one matching unit(-year) (`IN` subqueries).
   - **Ranking (§8.3)**: `ROW_NUMBER() OVER ([PARTITION BY state_code] ORDER BY <sort column>)`; "First N" keeps ranks ≤ N, overall or per state (e.g. top CO₂ facility in each state).
-  - **Carbon intensity badge tiers** (`CarbonIntensityBadge`): clean if `< 950`, intermediate if `950–1600`, high if `> 1600` lbs/MWh.
+  - **Carbon intensity badge tiers** (`CarbonIntensityBadge`): low CO₂ rate if `< 950`, medium if `950–1600`, high if `> 1600` lbs/MWh (zero shows "Zero CO₂").
 - **Why It’s Built This Way**: The backend rolls up each facility into one row. Pagination (10/25/50 per page) keeps responses small.
 
 ---
@@ -396,7 +396,7 @@ flowchart LR
 - **Queries Used**: `api.facilities.getUnitYears` (filters, sort on every metric, ranking, paging) and `api.facilities.getUnit` (detail dialog).
 - **What Part of the Table It Uses**: `annual_records ⨝ units ⨝ facilities`. Basic filters (§8.1): facility ID, name search, unit ID, state, county, year, primary/secondary fuel, unit type, SO₂/NOₓ/PM control (fuels, type, and controls match by "contains" because units store combined values such as `Wet Lime FGD|Wet Limestone`; the dropdowns list the split values). Range filters (§8.2): min/max operating hours, gross load, heat input, CO₂, SO₂, NOₓ, inclusive. Everything ANDs together.
 - **Ranking (§8.3)**: Top-N / Bottom-N = sort column + direction with "First N"; per-state groups via `ROW_NUMBER() OVER (PARTITION BY state_code …)`. Units can be added to the compare dock (mixed with facilities, 2–4 total; `compareFacilities({ ids, unitIds })`). The unit dialog shows identification, fuel + controls, every reporting year with its source dataset, and audit flags.
-- **URL state (§8.4)**: tab, filters, sort, and page are mirrored into the query string (`explorerSearchParams` / `parseExplorerParams`) and read by `page.tsx`, so a search is shareable and reload-safe. Example: `/?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500001` (25 units).
+- **URL state (§8.4)**: tab, filters, sort, and page are mirrored into the query string (`explorerSearchParams` / `parseExplorerParams`) and read by `page.tsx`, so a search is shareable and reload-safe. Example: `/explore?tab=units&stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000` (25 unit-years).
 
 ---
 

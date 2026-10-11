@@ -180,30 +180,41 @@ export async function storedRecords(years: number[], facilityId?: number[]) {
   );
 }
 
+/** Runs `select` over the distinct `ids` in 500-id chunks (SQLite's bound-parameter limit) and concatenates the rows. */
+async function selectInChunks<T>(
+  ids: string[],
+  select: (chunk: string[]) => Promise<T[]>,
+) {
+  const unique = [...new Set(ids)];
+  const rows: T[] = [];
+  for (let i = 0; i < unique.length; i += 500)
+    rows.push(...(await select(unique.slice(i, i + 500))));
+  return rows;
+}
+
 /** Stored metrics by `${unitInternalId}_${year}` for the records about to be written. */
 async function storedByUnitYear(records: AnnualRecordInput[], tx: Executor) {
-  const stored = new Map<string, ComparableRecord>();
-  const ids = [...new Set(records.map((r) => r.unitInternalId))];
-  for (let i = 0; i < ids.length; i += 500) {
-    const rows = await tx
-      .select({
-        unitInternalId: annualRecords.unitInternalId,
-        year: annualRecords.year,
-        ...comparedColumns,
-      })
-      .from(annualRecords)
-      .where(inArray(annualRecords.unitInternalId, ids.slice(i, i + 500)));
-    for (const r of rows) stored.set(`${r.unitInternalId}_${r.year}`, r);
-  }
-  return stored;
+  const rows = await selectInChunks(
+    records.map((r) => r.unitInternalId),
+    (chunk) =>
+      tx
+        .select({
+          unitInternalId: annualRecords.unitInternalId,
+          year: annualRecords.year,
+          ...comparedColumns,
+        })
+        .from(annualRecords)
+        .where(inArray(annualRecords.unitInternalId, chunk)),
+  );
+  return new Map<string, ComparableRecord>(
+    rows.map((r) => [`${r.unitInternalId}_${r.year}`, r]),
+  );
 }
 
 /** Current control/program values of `unitIds`, by unit id. */
 async function unitAttributes(unitIds: string[], tx: Executor) {
-  const byUnit = new Map<string, RecordAttributes>();
-  const ids = [...new Set(unitIds)];
-  for (let i = 0; i < ids.length; i += 500) {
-    const rows = await tx
+  const rows = await selectInChunks(unitIds, (chunk) =>
+    tx
       .select({
         id: units.id,
         ...Object.fromEntries(RECORD_ATTRIBUTE_KEYS.map((k) => [k, units[k]])),
@@ -211,10 +222,11 @@ async function unitAttributes(unitIds: string[], tx: Executor) {
         [K in keyof RecordAttributes]: (typeof units)[K];
       })
       .from(units)
-      .where(inArray(units.id, ids.slice(i, i + 500)));
-    for (const { id, ...attributes } of rows) byUnit.set(id, attributes);
-  }
-  return byUnit;
+      .where(inArray(units.id, chunk)),
+  );
+  return new Map<string, RecordAttributes>(
+    rows.map(({ id, ...attributes }) => [id, attributes]),
+  );
 }
 
 /**

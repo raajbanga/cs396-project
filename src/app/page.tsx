@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import { DataCoverage, DataSources } from "~/app/_components/data-coverage";
 import { EpaPrimer } from "~/app/_components/epa-primer";
@@ -38,22 +37,7 @@ const FUNCTIONS = [
   },
 ];
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // Explorer links from before the pages split (/?tab=units&…) still work.
-  const params = await searchParams;
-  if (Object.keys(params).length > 0) {
-    const query = new URLSearchParams(
-      Object.entries(params).flatMap(([k, v]) =>
-        (Array.isArray(v) ? v : [v ?? ""]).map((x) => [k, x]),
-      ),
-    );
-    redirect(`/explore?${query}`);
-  }
-
+export default async function Home() {
   const stats = await api.facilities.getStats();
   const unitYears = stats.coverage.reduce((n, c) => n + c.records, 0);
   const years = stats.coverage.map((c) => c.year);

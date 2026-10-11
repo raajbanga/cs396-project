@@ -2,19 +2,16 @@
 
 import { use } from "react";
 import { FuelBadge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { DataPanel } from "~/components/ui/data-panel";
-import { EmptyState } from "~/components/ui/empty-state";
 import {
+  ResultsPanel,
   SortableTableHead,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TablePagination,
   TableRow,
-  TableSkeleton,
+  type Paging,
 } from "~/components/ui/table";
 import type { SortDirection, SortField } from "~/lib/facility-filters";
 import {
@@ -147,7 +144,7 @@ function FacilityTableRow({
       </TableCell>
       <TableCell className="min-w-0">
         <div className="text-fg-2 truncate" title={role.description}>
-          {role.badgeLabel}
+          {role.label}
         </div>
         <div className="text-fg-muted text-xs">{fac.nercRegion ?? "—"}</div>
       </TableCell>
@@ -202,7 +199,7 @@ function FacilityCard({
         </div>
         <div className="text-fg-muted truncate text-xs">
           {fac.id} · {formatCountyShort(fac.county)}, {fac.stateCode} ·{" "}
-          {roleOf(fac).badgeLabel}
+          {roleOf(fac).label}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-3 text-sm tabular-nums">
           <FuelBadge fuel={fac.primaryFuels[0] ?? "Not listed"} />
@@ -228,41 +225,29 @@ const COLUMNS: { label: string; sort?: SortField; className: string }[] = [
 
 export function FacilitiesTable({
   data,
-  page,
-  pageSize,
+  paging,
   sortBy,
   sortDir,
   showRank,
   year,
-  isLoading,
-  isPlaceholderData,
   onSortChange,
   compareIds,
   onToggleCompare,
-  onPageChange,
-  onPageSizeChange,
   onResetFilters,
 }: {
   data?: FacilitiesPage;
-  page: number;
-  pageSize: number;
+  paging: Paging;
   sortBy: SortField;
   sortDir: SortDirection;
   showRank: boolean;
   /** The year filter; CO₂ totals cover it, or every year when "ALL". */
   year: string;
-  isLoading: boolean;
-  isPlaceholderData: boolean;
   onSortChange: (field: SortField) => void;
   compareIds: number[];
   onToggleCompare: (id: number) => void;
-  onPageChange: (page: number) => void;
-  onPageSizeChange: (pageSize: number) => void;
   onResetFilters: () => void;
 }) {
   const facilities = data?.items ?? [];
-  const totalCount = data?.totalCount ?? 0;
-  const totalPages = Math.max(data?.totalPages ?? 1, 1);
   const rowProps = (fac: FacilityRow) => ({
     fac,
     showRank,
@@ -271,69 +256,47 @@ export function FacilitiesTable({
   });
 
   return (
-    <DataPanel>
-      {isLoading ? (
-        <TableSkeleton rows={pageSize} />
-      ) : facilities.length === 0 ? (
-        <EmptyState
-          title="No facilities match these filters."
-          description="Remove a filter above, or clear them all."
-          action={
-            <Button variant="outline" size="sm" onClick={onResetFilters}>
-              Clear filters
-            </Button>
-          }
-        />
-      ) : (
-        <>
-          <div className="hidden md:block">
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
-                    <span className="sr-only">Compare</span>
-                  </TableHead>
-                  {COLUMNS.map((col) => (
-                    <SortableTableHead
-                      key={col.label}
-                      {...col}
-                      label={
-                        col.sort === "co2"
-                          ? `CO₂, ${year === "ALL" ? "all years" : year}`
-                          : col.label
-                      }
-                      sortBy={sortBy}
-                      sortDir={sortDir}
-                      onSortChange={onSortChange}
-                    />
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {facilities.map((fac) => (
-                  <FacilityTableRow key={fac.id} {...rowProps(fac)} />
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="divide-edge/70 divide-y md:hidden">
+    <ResultsPanel
+      paging={paging}
+      data={data}
+      itemLabel="facilities"
+      onResetFilters={onResetFilters}
+    >
+      <div className="hidden md:block">
+        <Table className="table-fixed">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">
+                <span className="sr-only">Compare</span>
+              </TableHead>
+              {COLUMNS.map((col) => (
+                <SortableTableHead
+                  key={col.label}
+                  {...col}
+                  label={
+                    col.sort === "co2"
+                      ? `CO₂, ${year === "ALL" ? "all years" : year}`
+                      : col.label
+                  }
+                  sortBy={sortBy}
+                  sortDir={sortDir}
+                  onSortChange={onSortChange}
+                />
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {facilities.map((fac) => (
-              <FacilityCard key={fac.id} {...rowProps(fac)} />
+              <FacilityTableRow key={fac.id} {...rowProps(fac)} />
             ))}
-          </div>
-        </>
-      )}
-
-      <TablePagination
-        page={page}
-        pageSize={pageSize}
-        totalCount={totalCount}
-        totalPages={totalPages}
-        itemLabel="facilities"
-        isPlaceholderData={isPlaceholderData}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
-      />
-    </DataPanel>
+          </TableBody>
+        </Table>
+      </div>
+      <div className="divide-edge/70 divide-y md:hidden">
+        {facilities.map((fac) => (
+          <FacilityCard key={fac.id} {...rowProps(fac)} />
+        ))}
+      </div>
+    </ResultsPanel>
   );
 }

@@ -4,47 +4,37 @@ import { isZeroCarbonFuel } from "~/lib/map-utils";
 /** Plain-English plant summaries: grid role, carbon-intensity tier, and EPA equivalencies. */
 
 interface PlantRoleInfo {
-  role: string;
-  badgeLabel: string;
+  label: string;
   description: string;
 }
 
 const PLANT_ROLES = {
   cogen: {
-    role: "Industrial Cogenerator",
-    badgeLabel: "Industrial Cogen",
+    label: "Cogeneration",
     description:
-      "Generates electricity while capturing waste heat to power on-site manufacturing, refining, or heating.",
+      "Industrial or commercial plant that also supplies heat or steam on site.",
   },
   zeroCarbon: {
-    role: "Zero-Carbon Generator",
-    badgeLabel: "Zero-Carbon",
-    description:
-      "Generates clean, carbon-free electricity without direct fossil combustion.",
+    label: "Zero-carbon",
+    description: "Generates without fossil combustion.",
   },
   baseload: {
-    role: "Baseload Workhorse",
-    badgeLabel: "Baseload Plant",
+    label: "Baseload",
     description:
-      "Runs steadily around the clock 24/7 to provide the continuous foundation of electricity needed by cities and industries.",
+      "Runs most of the year (busiest unit over 4,800 h, or over 1,200 MW).",
   },
   peaker: {
-    role: "On-Demand Peaker",
-    badgeLabel: "On-Demand Peaker",
+    label: "Peaking",
     description:
-      "Sits on standby most of the year and fires up quickly only during extreme heatwaves, freezes, or supply shortages.",
+      "Runs only at times of high demand (busiest unit under 1,800 h).",
   },
   standby: {
-    role: "Standby / Reserve",
-    badgeLabel: "Standby Reserve",
-    description:
-      "Held in operational reserve or pending seasonal activation with minimal reported generation.",
+    label: "Standby",
+    description: "Reported no operating hours.",
   },
   loadFollowing: {
-    role: "Load-Following Plant",
-    badgeLabel: "Load-Following",
-    description:
-      "Ramps power output up and down throughout the day to match fluctuating consumer demand and balance solar/wind.",
+    label: "Load-following",
+    description: "Runs part of the year (busiest unit 1,800 to 4,800 h).",
   },
 } satisfies Record<string, PlantRoleInfo>;
 
@@ -89,36 +79,34 @@ function formatLargeNumber(num: number, suffix: string) {
   return `${num.toLocaleString()}${suffix}`;
 }
 
+/** CO₂ rate tier (lbs/MWh); `typicalOf` names the plants such a rate usually comes from. */
 export function getCarbonIntensityTier(intensity: number) {
   const tier: { label: string; variant: BadgeVariant; typicalOf: string } =
     intensity === 0
-      ? { label: "Zero-Carbon", variant: "success", typicalOf: "" }
+      ? { label: "Zero CO₂", variant: "success", typicalOf: "" }
       : intensity < 950
         ? {
-            label: "Low Carbon CCGT",
+            label: "Low CO₂ rate",
             variant: "success",
-            typicalOf:
-              "typical of modern, high-efficiency combined-cycle natural gas generation",
+            typicalOf: "typical of combined-cycle gas units",
           }
         : intensity <= 1600
           ? {
-              label: "Intermediate Peaker",
+              label: "Medium CO₂ rate",
               variant: "warning",
-              typicalOf:
-                "indicative of load-following or simple-cycle gas peakers",
+              typicalOf: "typical of simple-cycle gas or oil units",
             }
           : {
-              label: "High Carbon Coal",
+              label: "High CO₂ rate",
               variant: "destructive",
-              typicalOf:
-                "characteristic of carbon-dense coal or older thermal generation",
+              typicalOf: "typical of coal or older steam units",
             };
   return {
     ...tier,
     description:
       intensity === 0
-        ? "Zero direct stack CO₂ emissions per MWh generated"
-        : `${intensity} lbs CO₂ emitted per MWh generated (${tier.label})`,
+        ? "No direct CO₂ per MWh generated"
+        : `${intensity} lbs CO₂ per MWh generated (${tier.label})`,
   };
 }
 
@@ -189,13 +177,13 @@ export function generatePlantStory(params: {
     ? `${/\bcounty\b/i.test(county) ? county : `${county} County`}, ${params.stateCode}`
     : params.stateCode;
   const grid = params.nercRegion ?? "regional";
-  const article = /^[aeiou]/i.test(roleInfo.role) ? "an" : "a";
+  const article = /^[aeiou]/i.test(roleInfo.label) ? "an" : "a";
 
   const headline = `${params.name} is a ${
     params.totalCapacityMW > 0
       ? `${params.totalCapacityMW.toLocaleString()} MW `
       : ""
-  }${fuels} facility in ${location}, operating as ${article} ${roleInfo.role}.`;
+  }${fuels} facility in ${location}, operating as ${article} ${roleInfo.label.toLowerCase()} plant.`;
 
   let gridStory =
     params.totalCapacityMW > 0

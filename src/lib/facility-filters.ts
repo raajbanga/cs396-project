@@ -198,7 +198,7 @@ export const campdRetrievalSchema = campdFilterSchema
   });
 export type CampdRetrieval = z.infer<typeof campdRetrievalSchema>;
 
-const EXPLORER_TABS = ["explorer", "units", "map", "audit"] as const;
+const EXPLORER_TABS = ["explorer", "units", "audit"] as const;
 type ExplorerTab = (typeof EXPLORER_TABS)[number];
 
 export interface ExplorerState {
@@ -255,22 +255,20 @@ export function parseExplorerParams(params: Params): ExplorerState {
     unitTable: { ...DEFAULT_UNIT_TABLE_STATE },
     auditTable: { ...DEFAULT_AUDIT_TABLE_STATE },
   };
-  // Paging and sort params belong to the active tab's table (the map has none).
-  if (tab !== "map") {
-    const { key, defaults, sorts } = TAB_TABLES[tab];
-    Object.assign(state[key], {
-      page: positive(get("page")) ?? 1,
-      pageSize:
-        [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
-        defaults.pageSize,
-      sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
-      sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
-    });
-  }
+  // Paging and sort params belong to the active tab's table.
+  const { key, defaults, sorts } = TAB_TABLES[tab];
+  Object.assign(state[key], {
+    page: positive(get("page")) ?? 1,
+    pageSize:
+      [10, 25, 50, 100].find((n) => n === positive(get("size"))) ??
+      defaults.pageSize,
+    sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
+    sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
+  });
   return state;
 }
 
-/** The active (non-default) filters as URL params; the map's whole query. */
+/** The active (non-default) filters as URL params (the Map page's whole query). */
 export function filterSearchParams(
   filters: FacilityFilters,
   params = new URLSearchParams(),
@@ -288,16 +286,13 @@ export function explorerSearchParams(state: ExplorerState) {
   if (tab !== "explorer") params.set("tab", tab);
   if (q.trim()) params.set("q", q.trim());
   filterSearchParams(filters, params);
-  if (tab !== "map") {
-    const { key, defaults } = TAB_TABLES[tab];
-    const current = state[key];
-    if (current.sortBy !== defaults.sortBy) params.set("sort", current.sortBy);
-    if (current.sortDir !== defaults.sortDir)
-      params.set("dir", current.sortDir);
-    if (current.page !== 1) params.set("page", String(current.page));
-    if (current.pageSize !== defaults.pageSize) {
-      params.set("size", String(current.pageSize));
-    }
+  const { key, defaults } = TAB_TABLES[tab];
+  const current = state[key];
+  if (current.sortBy !== defaults.sortBy) params.set("sort", current.sortBy);
+  if (current.sortDir !== defaults.sortDir) params.set("dir", current.sortDir);
+  if (current.page !== 1) params.set("page", String(current.page));
+  if (current.pageSize !== defaults.pageSize) {
+    params.set("size", String(current.pageSize));
   }
   return params.toString();
 }
