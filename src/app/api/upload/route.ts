@@ -1,8 +1,15 @@
+import { env } from "~/env";
 import { canImport, checkUploadFile } from "~/lib/data-import";
 import { importUpload, parseUpload, previewUpload } from "~/server/data-import";
 
 /** Multipart `file` → validation report; with `commit=true`, stores the approved records instead. */
 export async function POST(req: Request) {
+  if (env.READ_ONLY) {
+    return Response.json(
+      { error: "Uploads are disabled on the hosted read-only build." },
+      { status: 403 },
+    );
+  }
   try {
     const form = await req.formData();
     const file = form.get("file");

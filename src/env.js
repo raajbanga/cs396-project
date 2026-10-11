@@ -9,6 +9,11 @@ export const env = createEnv({
     CAMPD_API: z.string().min(1).optional(),
     OPENROUTER_API_KEY: z.string().optional(),
     OPENROUTER_MODEL: z.string().optional(),
+    // "true" on the hosted (Vercel) build: its filesystem is read-only and has no Python.
+    READ_ONLY: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -23,6 +28,7 @@ export const env = createEnv({
     CAMPD_API: process.env.CAMPD_API,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_MODEL: process.env.OPENROUTER_MODEL,
+    READ_ONLY: process.env.READ_ONLY,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_CARTO_API: process.env.NEXT_PUBLIC_CARTO_API,
   },
