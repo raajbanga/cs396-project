@@ -68,7 +68,12 @@ export function DataCoverage({
 }
 
 /** §9 home page "data sources": each source's active datasets and when it last wrote. */
-export function DataSources({ sources = [] }: Partial<Pick<Stats, "sources">>) {
+export function DataSources({
+  sources = [],
+  traci,
+}: Partial<Pick<Stats, "sources">> & {
+  traci?: { version?: string; factors: number };
+}) {
   return (
     <ul className="divide-edge/70 border-edge divide-y border-y text-sm">
       {sources.map(({ source, datasets, superseded, lastImportedAt }) => (
@@ -92,7 +97,11 @@ export function DataSources({ sources = [] }: Partial<Pick<Stats, "sources">>) {
       )}
       <li className="flex flex-wrap items-baseline justify-between gap-x-4 py-2">
         <span className="text-fg">EPA TRACI impact factors</span>
-        <span className="text-fg-muted">Phase 2</span>
+        <span className="text-fg-muted">
+          {traci?.factors
+            ? `TRACI ${traci.version}: ${plural(traci.factors, "factor")} for CO₂, SO₂, NOₓ to air`
+            : "not imported (npm run traci:import)"}
+        </span>
       </li>
     </ul>
   );
