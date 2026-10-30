@@ -7,8 +7,35 @@ statistics, derived indicators, interactive charts, comparisons, TRACI impact in
 prediction model, and sensitivity/scenario analysis, all exportable with reproducibility
 metadata.
 
-Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` dropped (say why). Put an
-owner's initials after a task when someone picks it up, e.g. `— RB` / `— AB`.
+Status legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` dropped (say why) · 🧪 needs
+a check on a local machine. Put an owner's initials after a task when someone picks it up, e.g.
+`— RB` / `— AB`.
+
+## Status at a glance (10/30)
+
+| Area                          | State                                                                                    |
+| :---------------------------- | :--------------------------------------------------------------------------------------- |
+| F0–F10 (code)                 | Built, tested, pushed to `dev`. `npm run validate` and `npm run test:py` green.          |
+| F11 report, F12 slides + demo | Not started. README and `DATABASE_BREAKDOWN.md` already updated.                         |
+| Open code items               | Saved analyses (stretch), Download-page section, a few optional extras; see `[ ]` below. |
+
+## 🧪 Needs local testing
+
+- [ ] **Python 3.9 venv** (the README's tested setup): `pip install -r requirements.txt`, then
+      `npm run test:py`. Requirements are now version floors that support 3.9; the committed
+      models were trained with Python 3.13 / scikit-learn 1.9.1.
+- [ ] **Retrain locally** with `npm run ml:train`, then `npm test`: retraining rewrites the
+      models, the `models` rows, and `ml/fixtures/parity.json` together, so the parity test must
+      still pass. Metrics may differ slightly with an older scikit-learn; update the README table
+      if they do.
+- [ ] **Vercel read-only build**: Analyze and Predict load, charts render, ZIP downloads work.
+- [ ] **State map needs internet**: Plotly fetches the U.S. state outlines from `cdn.plot.ly` at
+      runtime. Check it on the demo network, or skip that chart in the demo.
+- [ ] **ZIP downloads** in Safari and Chrome (chart PNG, CSV, metadata.json all inside).
+- [ ] **Shell `DATABASE_URL`**: a `DATABASE_URL` set in your shell overrides `.env` (the cloud
+      session had a Postgres URL set and every script failed until it was pinned to
+      `file:./db.sqlite`). Run `echo $DATABASE_URL` if migrations or scripts fail.
+- [ ] Eyeball every tab in dark mode (headless screenshots only covered light mode).
 
 ---
 
@@ -18,7 +45,7 @@ owner's initials after a task when someone picks it up, e.g. `— RB` / `— AB`
 | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------- |
 | Compute stack     | **Hybrid.** Stats, indicators, TRACI, and chart data in SQL + TypeScript (tRPC). Models trained **offline** in Python (pandas, NumPy, scikit-learn), saved as `joblib` + a JSON export (coefficients / tree arrays) that TypeScript evaluates for live predictions and sensitivity. | Keeps the spec's pandas/sklearn, keeps the Vercel read-only deploy working (no Python at request time), fast interactions. |
 | Prediction target | **Annual NOₓ mass (short tons) per unit-year**, regression.                                                                                                                                                                                                                         | Leak-free enough to be honest, and every spec scenario (+10 % load, −5 % heat input, control change) changes it.           |
-| Charts            | **Plotly.js** (`react-plotly.js` + `plotly.js-dist-min`), lazy-loaded per page.                                                                                                                                                                                                     | Spec recommendation; zoom, tooltips, box plots, heat maps, and PNG export built in.                                        |
+| Charts            | **Plotly.js** (`plotly.js-dist-min` behind our own `<Chart>`; `react-plotly.js` not needed), lazy-loaded.                                                                                                                                                                           | Spec recommendation; zoom, tooltips, box plots, heat maps, and PNG export built in.                                        |
 | Web stack         | Stay on Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                                                                                                                                                                                                     | Spec allows it ("React is optional"); the report's technology table already justifies the mapping.                         |
 | Modeling years    | 2015–2025 only. Train 2016–2021, validate 2022–2023, test 2024–2025. 1996–98, 2006–08 and partial 2026 excluded.                                                                                                                                                                    | Spec §5.4 chronological split; 2016 is the first year with a prior-year feature; the older uploads have big year gaps.     |
 
@@ -59,12 +86,12 @@ owner's initials after a task when someone picks it up, e.g. `— RB` / `— AB`
 
 Shared plumbing every feature below depends on. Do this first.
 
-- [ ] Add Python deps to `requirements.txt`: `pandas`, `numpy`, `scikit-learn`, `joblib`, `scipy`, `pytest` (pin versions).
-- [ ] Add `plotly.js-dist-min` + `react-plotly.js` (+ types); build a `<Chart>` wrapper in `src/components/ui/` that lazy-loads Plotly (`next/dynamic`, `ssr: false`), applies light/dark theme tokens, and always sets title, axis titles with units, and the PNG export button.
-- [ ] New routes and nav entries (after Map, before Retrieve): **Analyze** (`/analyze`) with tabs _Dataset · Statistics · Charts · Compare · Impacts_, and **Predict** (`/predict`) with tabs _Models · Sensitivity · Scenarios_.
-- [ ] New tRPC router `src/server/api/routers/analysis.ts` (keep `facilities.ts` from growing past 1.1k lines).
-- [ ] Extract the filter → SQL `WHERE` builder so Explore and Analyze share one implementation (one source of truth for "the selected records").
-- [ ] Shared `src/lib/units.ts` for unit constants and labels (`SHORT_TON_KG = 907.18474`, lb/ton, display units).
+- [x] Python deps in `requirements.txt` (version floors, not pins, so Python 3.9 still works 🧪).
+- [x] `src/components/ui/chart.tsx`: lazy-loads Plotly, theme tokens light/dark, title + units + PNG export + data download on every chart.
+- [x] Routes and nav: **Analyze** (`/analyze`: Dataset · Statistics · Charts · Compare · Impacts) and **Predict** (`/predict`: Models · Sensitivity · Scenarios).
+- [x] Routers `analysis.ts` and `prediction.ts`; computations in `src/server/analysis.ts` and `src/server/prediction.ts`.
+- [x] Shared WHERE builder: `unitYearConditions` in `facilities.ts`, used by Explore's unit-years, exports, and Analyze.
+- [-] `src/lib/units.ts`: not needed; `SHORT_TON_KG` lives in `src/lib/traci.ts`, rates in `src/lib/analysis.ts`.
 
 **Done when:** `/analyze` and `/predict` render behind the nav, a sample Plotly chart themes correctly and downloads a PNG, `npm run validate` passes.
 
@@ -72,11 +99,12 @@ Shared plumbing every feature below depends on. Do this first.
 
 ## F1 — Analytical dataset builder (§4.1)
 
-- [ ] Analyze → Dataset tab reuses the Explore filter form: year range, state, facility, unit, primary fuel, unit type, control technology, program code, min operating time, min gross load.
-- [ ] Summary panel: selected **records, facilities, units, years**.
-- [ ] Missing-value summary: per variable, count and % `NULL` in the selection (table + small bar).
-- [ ] "Variables available" list: numeric metrics + derived indicators (F2) with unit and definition; categorical fields with distinct counts.
-- [ ] Filters round-trip through URL params (same keys as Explore) — the URL _is_ the analysis config.
+- [x] Analyze reuses the Explore filter bar (`FacilityFilterBar`); opens on 2015–2025 by default. Ranking (Top N) is ignored by analyses.
+- [x] Summary tiles: unit-years, facilities, units, reporting years.
+- [x] Missing-value table: every variable with kind, unit, how groups combine it, missing count and %, definition.
+- [x] Grouping fields with distinct counts.
+- [x] URL round-trip: filters + every tab choice (`src/lib/analysis-state.ts`).
+- [ ] Record one count against hand-written SQL for the report's test table (e.g. KY 2023–2024 = 177 unit-years).
 - [ ] Stretch: `saved_analyses` table (name, filter JSON, created_at) + "Save / Load analysis" menu.
 
 **Done when:** pasting an `/analyze?...` URL into a new tab reproduces identical counts and missing-value table; counts match a hand-written SQL query (record it in the report's test table).
@@ -85,12 +113,12 @@ Shared plumbing every feature below depends on. Do this first.
 
 ## F2 — Derived performance indicators (§4.3)
 
-- [ ] Add SO₂ intensity and NOₓ intensity (lb/MWh) next to the existing CO₂ intensity in `deriveRates` (`src/lib/emissions-metrics.ts`); store on `annual_records` via a migration + backfill, or compute in SQL — pick one and document it.
-- [ ] Year-over-year absolute and % change per unit and per facility (SQL `LAG()` window over year), `NULL` when either year is missing or the prior value is 0.
-- [ ] Capacity factor = gross load ÷ (nameplate MW × hours in year), `NULL` when nameplate is missing/0; flag > 100 % rather than clamping.
-- [ ] Aggregated intensities are **ratio of sums** (Σ emissions ÷ Σ load over records where both are reported), never mean of ratios. Document this.
-- [ ] Indicator definitions (formula + unit + `NULL` rule) in one exported constant, reused by the UI tooltips, exports' metadata (F9), and the report.
-- [ ] Unit tests: division by zero, missing numerator, missing denominator, leap year in capacity factor, YoY with gaps.
+- [x] CO₂/SO₂/NOₓ intensity, NOₓ rate (lb/MMBtu), heat rate: **computed on read** in `src/lib/analysis.ts`, not stored (always consistent with the records; no backfill).
+- [x] Year-over-year change (tons and %) per unit via a self-join on the previous year; per facility/state through grouping.
+- [x] Capacity factor with leap years; > 100 % kept.
+- [x] Groups pool rates as Σ numerator ÷ Σ denominator over rows where the rate is defined.
+- [x] One variable catalogue (`buildVariables`) feeds the UI, exports' metadata, and the report.
+- [x] Tests in `src/lib/analysis.test.ts`.
 
 **Done when:** every indicator has a test for its `NULL` path, and no undefined value is ever rendered as 0.
 
@@ -98,10 +126,10 @@ Shared plumbing every feature below depends on. Do this first.
 
 ## F3 — Descriptive statistics (§4.2)
 
-- [ ] `src/lib/stats.ts`: count, missing count, min, max, mean, median, sample SD, Q1, Q3, IQR, chosen percentiles (default 5/10/90/95). Use one documented quantile method (linear interpolation, same as NumPy's default).
-- [ ] Grouped statistics: group by state, fuel, unit type, year, control technology, facility; aggregate = mean / median / total / count. Covers the spec's examples (avg CO₂ by state, median NOₓ intensity by fuel, total SO₂ by year, avg heat rate by unit type).
-- [ ] Analyze → Statistics tab: variable picker, group-by picker, sortable results table, CSV download.
-- [ ] Cross-check script `scripts/check_stats.py`: pandas computes the same stats on a fixture; a test compares them with `stats.ts` to 1e-9.
+- [x] `src/lib/stats.ts` with NumPy's linear quantiles.
+- [x] Grouped statistics by every grouping field; the four spec questions are "Try" links.
+- [x] Statistics tab with sortable table and ZIP download.
+- [x] Cross-check: `src/lib/stats.test.ts` holds NumPy/SciPy reference values (no separate script needed).
 
 **Done when:** the four spec example questions each have a one-click "Try" link and match the pandas cross-check.
 
@@ -109,15 +137,16 @@ Shared plumbing every feature below depends on. Do this first.
 
 ## F4 — TRACI environmental and health impact indicators (§3, §4.6)
 
-- [ ] Download EPA TRACI 2.2 characterization factors; commit a **small** extracted CSV (`data/traci/traci_2_2_air.csv`, only CO₂/SO₂/NOₓ to air) with a README citing the source file and access date. Do not commit the full workbook.
-- [ ] Migration: `traci_factors` table — `traci_version`, `substance`, `cas`, `medium` (= air), `impact_category`, `cf_value`, `cf_unit`, `source_note`.
-- [ ] Explicit pollutant map (code constant, not name matching): CAMPD `co2MassTons` → TRACI carbon dioxide; `so2MassTons` → sulfur dioxide; `noxMassTons` → nitrogen oxides. Fail loudly if a mapped substance has no verified factor.
-- [ ] Import script `npm run traci:import` (idempotent upsert, records version).
-- [ ] Look up and verify which categories apply (expected: global warming — CO₂; acidification — SO₂, NOₓ; eutrophication — NOₓ; smog formation — NOₓ (+SO₂ if present); particulate-matter human health — SO₂, NOₓ). Record each factor + unit in the report.
-- [ ] Calculation in `src/lib/traci.ts`: `mass_kg = short_tons × 907.18474`; `impact_c = Σ_i mass_kg,i × CF_i,c` **within a category only**; optional `impact_c ÷ gross_load_MWh`. Missing pollutant → that pollutant's contribution is missing, and the result says "partial" with which pollutant was absent (do not silently treat as 0).
-- [ ] Analyze → Impacts tab: aggregate by facility / unit / state / fuel / year; one column (or chart panel) per category, each in its own equivalent unit; toggle "per MWh"; every result shows TRACI version + factors used.
-- [ ] Plain-language disclaimer on the tab and in exports: potential impact for comparison, not measured illness, exposure, or damage.
-- [ ] Unit tests: conversion constant, single-pollutant hand calc, multi-pollutant sum, categories never mixed, partial-missing case, per-MWh with zero load.
+- [x] Extract `data/traci/traci_2_2_air.csv` from EPA's `traci_2_2.xlsx` with source, date, and SHA-256 in `data/traci/README.md`.
+- [x] `traci_factors` table (migration 0009) and `npm run traci:import`.
+- [x] Exact substance match: `CARBON DIOXIDE`, `SULFUR DIOXIDE`, `NITROGEN OXIDES` (not `NITROGEN DIOXIDE`, which differs for smog).
+- [x] Verified categories: global warming (CO₂ 1), acidification (SO₂ 1, NOₓ 0.7), human health particulate (SO₂ 0.0611, NOₓ 0.00722), smog (NOₓ 24.79). **The TRACI 2.2 workbook has no eutrophication column**, so there is none.
+- [x] Calculation as variables in `impactVariables`: Σ kg × factor within a category; per-MWh variants.
+- [x] Missing pollutant → that category is **missing** for the unit-year (changed from the "partial" plan: a partial sum would understate). Missing counts show on the Dataset tab.
+- [x] Impacts tab: by any grouping field, one chart per category in its own unit, total or per MWh, factor table, formulas.
+- [x] Disclaimer on the tab and in export metadata.
+- [x] Tests in `src/lib/analysis.test.ts`.
+- [ ] Worked example for one facility-year in the report.
 
 **Done when:** one facility-year's impacts are reproduced by hand in the report (worked example) and match the app to the displayed precision.
 
@@ -127,15 +156,12 @@ Shared plumbing every feature below depends on. Do this first.
 
 All charts: descriptive title, axis units, legend, tooltips, driven by the F1 filters, PNG export (Plotly) + "Download data" CSV.
 
-- [ ] Line: emissions, gross load, and intensity over time (by group, up to ~8 series).
-- [ ] Bar: compare states / fuels / facilities / units / control technologies on any metric or indicator.
-- [ ] Histogram + box plot: distribution of a chosen variable, optional group split (log-scale toggle — emissions are heavily skewed).
-- [ ] Scatter: any two variables, colored by fuel/unit type, hover shows unit and year.
-- [ ] Correlation heat map: Pearson (and Spearman toggle) across numeric variables, pairwise-complete, n shown in tooltip.
-- [ ] Rankings: top/bottom N facilities or units as horizontal bars (reuse Phase 1 ranking SQL).
-- [ ] Map: state choropleth of a chosen metric/indicator (reuse `public/geo/us-states-10m.json`); keep existing facility map linked.
-- [ ] Impact charts (F4) reuse the same bar/line components.
-- [ ] Sampling guard: scatter/histogram over > 20k points → sample or bin server-side, and say so on the chart.
+- [x] Trend, bars, histogram/box (log toggle), scatter (log–log), correlation heat map (Pearson/Spearman, n on hover), rankings (top/bottom 20 facilities or units), state choropleth.
+- [x] Fuel classes use the Map page's colors.
+- [x] Impact charts use the same `<Chart>`.
+- [x] Sampling: distributions ≤ 20k values, scatter ≤ 4k points, said on the chart.
+- [x] 🧪 State map needs `cdn.plot.ly` (see top).
+- [ ] Write two interpretations for the talk. Candidates found while testing: coal vs gas CO₂ lines cross in 2023 and 2025; the NOₓ-rate box plot by fuel class; Pearson gives CO₂ intensity × heat rate = 1.00 because of a few tiny-load outliers, which Spearman does not.
 
 **Done when:** at least two charts have written interpretations ready for the presentation (§12.5 requires interpreting two).
 
@@ -143,11 +169,10 @@ All charts: descriptive title, axis units, legend, tooltips, driven by the F1 fi
 
 ## F6 — Comparative analysis (§4.5)
 
-- [ ] Extend Compare beyond 2–4 facilities/units to groups: **states, fuels, unit types**, **with vs without a selected control** (e.g. SCR), **period A vs period B**.
-- [ ] Output per comparison: summary stats per side, absolute and % difference, rank, normalized indicators (intensities), a chart.
-- [ ] Statistics (use `scipy` offline for verification, implement in TS for the app): 95 % CI for the mean (t), Welch two-sample t-test, Mann–Whitney U, one-way ANOVA (+ Kruskal–Wallis) for 3+ groups, correlation. Show p-value and effect size.
-- [ ] Plain-language result sentence generated per test, including assumptions and the "association, not causation" caveat (e.g. SCR units differ in age and size too).
-- [ ] Tests: each statistic against SciPy output on a fixed fixture.
+- [x] Compare tab: 2–8 groups along any grouping field (states, fuels, unit types, NOₓ/SO₂ control class, years). Phase 1's facility/unit compare dialog stays.
+- [x] Pooled value, difference and % difference from the first group, count, mean with 95 % CI, median, SD, and a CI chart.
+- [x] Welch t, Mann–Whitney U, ANOVA, Kruskal–Wallis (tie-corrected) in TS, checked against SciPy. Effect sizes not shown beyond the differences.
+- [x] Plain-language reading with the association-not-causation and non-independence caveats.
 
 **Done when:** "units with vs without SCR, NOₓ intensity, 2024" produces numbers, a chart, and a sentence a non-statistician can read.
 
@@ -157,18 +182,18 @@ All charts: descriptive title, axis units, legend, tooltips, driven by the F1 fi
 
 Target: **annual NOₓ mass (short tons) per unit-year.** Pipeline lives in `ml/` (Python), app integration in TS.
 
-- [ ] `ml/extract.py`: pull unit-years 2015–2025 from `db.sqlite` into a pandas frame; drop rows with missing target; document row counts at each filter step.
-- [ ] Features: gross load, heat input, operating hours, capacity factor, nameplate MW, primary fuel, unit type, NOₓ control set (multi-hot: SCR, SNCR, LNB, DLN, water injection, …), state (or EPA region if too sparse), unit age, **prior-year NOₓ rate (lb/MMBtu)**, prior-year operating hours.
-- [ ] **Leakage rules (write them in the report):** never use same-year NOₓ, NOₓ intensity, or anything computed from them. Run an ablation without same-year heat input/load to show how much of the score is "the unit ran more" vs genuine prediction.
-- [ ] Split: train 2016–2021, validate 2022–2023 (tuning), test 2024–2025 (reported once). No random split.
-- [ ] Models: **baseline** = median NOₓ by fuel × unit type (train years); **Ridge** (log-target, scaled numerics, one-hot categoricals); **Decision tree regressor** (depth tuned on validation). Stretch: `HistGradientBoostingRegressor` for the report only.
-- [ ] Metrics on validation and test: MAE, RMSE, R², MAPE (only on rows with target ≥ 1 ton; say why). Also residual plot and predicted-vs-actual scatter.
-- [ ] Save each model: `ml/models/<name>.joblib` + `ml/models/<name>.json` (preprocessing params, coefficients or tree node arrays, feature list, training-range min/max per feature, metrics, split years, sklearn version, git SHA).
-- [ ] Migration: `models` table (id, name, target, features JSON, params JSON, train/val/test years, metrics JSON, artifact path, pipeline version, created_at). `npm run ml:register` loads the JSON files into it. Optional `model_predictions` table for test-set predictions.
-- [ ] `src/lib/model-inference.ts`: evaluate Ridge and tree JSON in TS. **Parity test**: TS predictions on 200 fixture rows equal sklearn's to 1e-6.
-- [ ] Predict → Models tab: comparison table (baseline vs Ridge vs tree, val and test), predicted-vs-actual chart, residuals, feature importance / coefficients, per-unit prediction lookup.
-- [ ] `ml/test_pipeline.py` (pytest): split has no year overlap, no leaked columns, baseline metric reproducible, JSON export round-trips.
-- [ ] `npm run ml:train` documented in README (needs the venv; the app itself does not).
+- [x] `ml/train.py` (one script: extract, train, evaluate, save, register). Rows: train 25,116, validation 7,970, test 7,755.
+- [x] Inputs: heat input, gross load, operating time, nameplate MW, unit age, prior-year NOₓ rate, prior-year operating time, primary fuel, unit type, 5 control flags (SCR, SNCR, low-NOₓ burner, injection, overfire air). Capacity factor and state left out (redundant / sparse).
+- [x] Leakage rules + ablation without same-year activity (validation R²: Ridge 0.70, tree 0.84).
+- [x] Chronological split; settings tuned on validation, refit on 2016–2023, tested once on 2024–2025.
+- [x] Baseline, Ridge (log target), decision tree. Test MAE 109.4 / 58.5 / 26.3 t; R² 0.49 / 0.83 / 0.95.
+- [ ] Stretch: `HistGradientBoostingRegressor` for the report only.
+- [x] Metrics MAE, RMSE, R², MAPE (target ≥ 1 t); predicted-vs-actual chart. [ ] Residual plot (optional).
+- [x] Saved models (`ml/models/*.joblib` + `.json`, `metrics.json`) and the `models` table, written by `npm run ml:train` (no separate register step).
+- [x] `src/lib/model.ts` + parity test (`src/lib/model.test.ts`, 200 rows, 1e-6, float32 tree thresholds like scikit-learn).
+- [x] Models tab: comparison table, predicted vs actual, importance/coefficients, model record. Per-unit lookup is the baseline picker on Sensitivity/Scenarios.
+- [x] `ml/test_pipeline.py`, `npm run test:py`.
+- [x] README documents `ml:train`, `test:py`, `traci:import`.
 
 **Done when:** both models beat the baseline on the test years (or the report honestly explains why not), and the Models tab shows numbers read from the `models` table.
 
@@ -178,14 +203,13 @@ Target: **annual NOₓ mass (short tons) per unit-year.** Pipeline lives in `ml/
 
 All computed in TS from the F7 JSON models — instant, works on Vercel.
 
-- [ ] One-variable-at-a-time: pick model, baseline unit-year, one numeric input, min/max, step (absolute or %). Hold all else constant. Table: input value, prediction, Δ abs, Δ %.
-- [ ] Sensitivity curve (Plotly): varied input on x, prediction on y; marked baseline point; dashed reference lines at baseline input and prediction; tooltips with value/prediction/Δ/Δ%; **shaded region outside the training range** with a warning.
-- [ ] Named scenarios vs baseline: gross load +10 %, heat input −5 %, fuel or NOₓ-control category changed (e.g. add SCR), combined high-efficiency (load same, heat input −5 %, add SCR). Users can edit percentages and add a custom scenario.
-- [ ] Scenario bar chart: baseline + each scenario, labeled with % change = (scenario − baseline) ÷ baseline × 100.
-- [ ] Out-of-range warning per scenario when any changed input leaves the training min/max (or category unseen in training).
-- [ ] Optional: also show the TRACI acidification/eutrophication/smog result of the predicted NOₓ (F4 × F7) so scenarios speak in impact units too.
-- [ ] Persistent caption: "model response, not a causal effect."
-- [ ] Tests: OVAT holds other inputs fixed; % change formula; out-of-range detection at the boundaries; tree model produces step curves (sanity).
+- [x] One input at a time over a % range of its baseline value (from, to, step); table with value, prediction, Δ, Δ %. Default baseline: Ghent unit 2, 2024 (coal, no SCR). [ ] Absolute min/max (only % today).
+- [x] Curve with baseline diamond, dashed reference lines, tooltips, shaded out-of-range regions, warning text.
+- [x] Scenarios: load ±%, heat input ±%, add/remove SCR, fuel switch, high efficiency, for Ridge and tree side by side. [ ] Fully custom scenario (only the two % values are editable).
+- [x] Grouped bar chart labeled with % change; faded bars and table warnings when outside the training range.
+- [ ] Optional: TRACI impacts of the predicted NOₓ.
+- [x] "Model response, not a causal effect" captions.
+- [~] Tests: out-of-range and direction tests exist; [ ] OVAT/% change unit tests (logic lives in the tab components; move it to `src/lib/model.ts` if we test it).
 
 **Done when:** the demo can take one real coal unit, add SCR and cut heat input 5 %, and show the curve, the bar chart, and a range warning.
 
@@ -193,11 +217,10 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 
 ## F9 — Saving and exporting results (§7)
 
-- [ ] Exports: filtered analytical dataset, summary/grouped stats, comparison results, TRACI results, model evaluation + test predictions, sensitivity table, scenario table, chart data (CSV) and chart image (PNG via Plotly).
-- [ ] Format: **ZIP** = `data.csv` + `metadata.json` (+ `chart.png` when relevant). Use `fflate`.
-- [ ] `metadata.json`: analysis timestamp, dataset identifier (dataset IDs + DB last-import time), filters and variables, indicator definitions (from F2), TRACI version + factors (F4), model name/features/params, train/val/test years (F7), app version + git SHA.
-- [ ] Extend `/api/export` with the new types (same route, new `type` values) rather than a parallel route.
-- [ ] Download page gets an "Analysis exports" section listing them.
+- [x] Every chart's **Data** button and every stats/impacts table: ZIP with CSV, `metadata.json`, and chart PNG (`ExportButton`, `src/lib/export-bundle.ts`).
+- [x] `metadata.json`: time, URL, software version + commit, database snapshot (unit-years, datasets, last import), filters, tab choices, variable definitions, TRACI factors, model record, baseline.
+- [x] `/api/export?type=analysis`: every selected unit-year with all variables (ZIP); **Download dataset** on Analyze.
+- [x] Download page: its intro points to the analysis exports on Analyze and Predict.
 
 **Done when:** an exported ZIP alone is enough to re-create the result (re-open the URL in metadata → same numbers).
 
@@ -205,14 +228,14 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 
 ## F10 — Testing, quality, and repo hygiene (§12.3)
 
-- [ ] `npm test` covers: stats, indicators, TRACI, comparisons, model inference parity, sensitivity/scenarios, export metadata.
-- [ ] `pytest ml/` covers the training pipeline; add `npm run test:py`.
-- [ ] Small fixtures only (`ml/fixtures/`, `src/lib/__fixtures__/`); no large raw data, no keys.
-- [ ] Migrations for every new table; `npm run db:migrate` works from a fresh clone; committed `db.sqlite` updated with TRACI + models rows.
-- [ ] `.env.example` updated if anything new is configurable.
-- [ ] `npm run validate` green; Vercel read-only build works with the new pages.
-- [ ] Performance check: Analyze tab on all 2015–2025 records responds < 1 s locally (add indexes if not).
-- [ ] Commit history: small, descriptive commits per feature.
+- [x] `npm test`: 57 passing (stats vs SciPy, indicators, TRACI, model parity, ranges). [ ] Export metadata test.
+- [x] `npm run test:py`: 6 passing.
+- [x] Small fixtures only (`ml/fixtures/parity.json`, 100 KB).
+- [x] Migration 0009; committed `db.sqlite` has the TRACI and model rows.
+- [x] `.env.example`: nothing new to configure.
+- [x] `npm run validate` green. 🧪 Vercel deploy.
+- [x] Performance: a new selection loads in ~1.3 s (2015–2025, 47k unit-years), then is cached for 60 s; each view computes in ~0.1 s.
+- [x] Commits per feature on `dev`.
 
 ---
 
@@ -227,7 +250,7 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 - [ ] Testing: new test cases, parity test, stats cross-checks.
 - [ ] Limitations: potential vs actual impacts, model ≠ causation, fuel/unit type not versioned per year, extrapolation outside training range, sparse pre-2015 data.
 - [ ] Planned-vs-delivered table for Phase 2; individual contributions; references (TRACI 2.2, CAMPD, scikit-learn, Plotly); generative AI disclosure.
-- [ ] Update README (remove "Phase 2 is not part of this repository"), `DATABASE_BREAKDOWN.md`.
+- [x] Update README (Phase 2 section, results table, scripts) and `DATABASE_BREAKDOWN.md` (tables 7–8).
 - [ ] `npm run report` builds cleanly.
 
 ---
@@ -249,8 +272,9 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 
 ## Risks and open questions
 
-- **Fuel/unit type are per unit, not per year.** Fuel-switched units (e.g. Big Sandy BSU1 coal → gas) get the wrong historical fuel as a model feature. Options: move fuel/unit type onto `annual_records` (the API rows have it; listed in Phase 1 future work) or exclude units whose fuel changed. Decide in week 1.
-- **TRACI factor verification.** Need the actual TRACI 2.2 file and to confirm a nitrogen-oxides air factor exists for each category before using it (spec forbids approximate name matching).
+- **Fuel/unit type are per unit, not per year.** _Not changed in code; must go in the report's limitations._ Fuel-switched units (e.g. Big Sandy BSU1 coal → gas) get the wrong historical fuel as a model feature. Options: move fuel/unit type onto `annual_records` (the API rows have it; listed in Phase 1 future work) or exclude units whose fuel changed. Decide in week 1.
+- ~~**TRACI factor verification.**~~ Done: factors read from EPA's workbook; see F4.
 - **Schedule.** 4 weeks for a 6-milestone spec, with Thanksgiving in week 4. F1–F5 and F7–F8 are the must-haves; F6 statistical tests and saved analyses are the first things to cut.
-- **Plotly bundle size** on Vercel — lazy-load only on chart pages.
+- **Plotly bundle size**: loaded only when a chart mounts.
+- **Model disagreement on SCR**: the tree barely responds to adding SCR (it leans on last year's NOₓ rate), while Ridge cuts Ghent 2 by ~59 %. Good material for the report and demo; don't hide it.
 - **Owners:** assign each F-section to RB or AB at the top of the section.

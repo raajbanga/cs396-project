@@ -5,9 +5,12 @@ annual operating and emissions data for U.S. power-plant units. Data comes from 
 Air Markets Program Data (CAMPD) API and from CSV/Excel files that users upload. Everything is
 stored in a local SQLite database.
 
-Built for **CS396 Phase 1 (Data Management Website)** by Raaj Banga and Arnav Bawankule.
-Environmental evaluation (TRACI factors, indicators, scoring) is Phase 2 and not part of this
-repository.
+Built for **CS396** by Raaj Banga and Arnav Bawankule. **Phase 1** is the data-management
+website (retrieve, upload, validate, store, search, download). **Phase 2** adds analysis and
+decision support on top of it: descriptive statistics, derived indicators, interactive charts,
+group comparisons with statistical tests, EPA TRACI 2.2 impact indicators, a NOₓ prediction
+model compared with a baseline, sensitivity and scenario analysis, and exports with
+reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 
 | Document                                                   | Contents                                                                     |
 | :--------------------------------------------------------- | :--------------------------------------------------------------------------- |
@@ -32,6 +35,8 @@ repository.
 | `datasets`        |    151 | 12 CAMPD API syncs, 13 facility-file uploads, and 126 daily-emissions uploads (14 superseded by the API sync)                                                                       |
 | `data_audit_logs` |  7,603 | Physical-sanity flags on 7,056 records: 6,516 CO₂ not reported, 963 extreme heat rates (WARN), 124 zero emissions with high heat input (ERROR)                                      |
 | `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                                                                                                           |
+| `traci_factors`   |      6 | Phase 2: TRACI 2.2 factors for CO₂, SO₂, and NOₓ to air (`npm run traci:import`)                                                                                                    |
+| `models`          |      3 | Phase 2: the NOₓ baseline, Ridge, and decision-tree models with metrics and parameters (`npm run ml:train`)                                                                         |
 
 ---
 
@@ -97,6 +102,52 @@ and shared by URL like any other search.
 
 ---
 
+## Phase 2: analysis and prediction
+
+Two pages, **Analyze** and **Predict**, sit between Map and Retrieve in the navigation. Both
+keep every choice in the URL, so a view can be reloaded or shared.
+
+| Phase 2 specification §         | Where it is in epaData                                                                                                                                                                                                                                                                                                 |
+| :------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §4.1 Analytical dataset builder | **Analyze** (`/analyze`): the Explore filters (year range, state, facility, unit, fuel, unit type, controls, program, operating-time and load ranges) choose the unit-years. **Dataset** tab: unit-years, facilities, units, and years selected; every variable with its definition and missing count; grouping fields |
+| §4.2 Descriptive statistics     | **Statistics** tab: count, missing, min, max, mean, median, SD, Q1, Q3, IQR, P5/P10/P90/P95, overall and per group (state, fuel class, fuel, unit type, NOₓ or SO₂ control class, year, facility, unit)                                                                                                                |
+| §4.3 Derived indicators         | CO₂, SO₂, NOₓ intensity (lb/MWh), NOₓ rate (lb/MMBtu), heat rate, capacity factor, year-over-year change in tons and %. Missing when an input is missing or a denominator is 0; groups pool rates as Σ numerator ÷ Σ denominator                                                                                       |
+| §4.4 Interactive visualization  | **Charts** tab (Plotly): trend lines, bars, histograms and box plots, scatter, correlation heat map (Pearson or Spearman), rankings, state map. Zoom, tooltips, PNG export, and data download on every chart                                                                                                           |
+| §4.5 Comparative analysis       | **Compare** tab: two to eight groups along any grouping field (states, fuels, with vs without SCR, 2015 vs 2024, …): pooled values, differences, 95 % CIs, Welch t, Mann–Whitney U, ANOVA, Kruskal–Wallis, and a plain-language reading                                                                                |
+| §4.6 TRACI impact indicators    | **Impacts** tab: global warming, acidification, particulate human health, and smog formation, each in its own unit, total or per MWh, by any grouping field; the factors and formulas are shown                                                                                                                        |
+| §5 Prediction                   | **Predict** → **Models**: annual NOₓ per unit-year; median baseline, Ridge regression, decision tree; train 2016–21, validate 2022–23, test 2024–25; MAE, RMSE, R², MAPE; predicted vs actual; importances                                                                                                             |
+| §6 Sensitivity and scenarios    | **Sensitivity**: one input varied over a % range for a chosen unit-year, with the baseline marked and the region outside the training data shaded. **Scenarios**: load +10 %, heat input −5 %, add SCR, fuel switch, high efficiency, for both models, with range warnings                                             |
+| §7 Saving and exporting         | Every chart and result table downloads a ZIP: CSV, `metadata.json` (date, software commit, database snapshot, filters, definitions, TRACI factors, model and split), and the chart PNG. **Download dataset** exports every selected unit-year with all variables                                                       |
+
+### Prediction results (test years 2024–2025, refit on 2016–2023)
+
+| Model                                  | MAE (t) | RMSE (t) |    R² | MAPE    |
+| :------------------------------------- | ------: | -------: | ----: | :------ |
+| Baseline: median by fuel and unit type |   109.4 |    366.9 | 0.489 | 143.6 % |
+| Ridge regression (log target)          |    58.5 |    213.5 | 0.827 | 49.3 %  |
+| Decision tree                          |    26.3 |    113.9 | 0.951 | 20.9 %  |
+
+Without same-year heat input, gross load, and operating time, validation R² falls to 0.70
+(Ridge) and 0.84 (tree): the rest comes from unit attributes, controls, and the previous
+year's NOₓ rate. Full metrics are in `ml/models/metrics.json`.
+
+### How prediction works without Python on the server
+
+`ml/train.py` (pandas, scikit-learn) trains the models offline and stores each one in the
+`models` table with its preprocessing (medians, log flags, scaling, categories) and
+parameters (Ridge coefficients or the tree's node arrays) as JSON. `src/lib/model.ts`
+replays them in TypeScript, so predictions, sensitivity curves, and scenarios are instant and
+also work on the read-only Vercel build. `src/lib/model.test.ts` checks that it reproduces
+scikit-learn's predictions on 200 test rows (`ml/fixtures/parity.json`) to 10⁻⁶.
+
+```bash
+npm run ml:train      # retrain and re-register the models (needs the Python venv)
+npm run test:py       # pytest for the training pipeline
+npm run traci:import  # reload the TRACI factors from data/traci
+```
+
+---
+
 ## Where the data comes from
 
 Explore, Map, the detail dialog, comparisons, audit flags, and downloads read **only the local
@@ -149,7 +200,8 @@ environment at `epaDataVENV/bin/python3`).
 ### Prerequisites
 
 - Node.js 20.9 or newer, with npm
-- Python 3.9 or newer (reads uploaded files)
+- Python 3.9 or newer (reads uploaded files; Phase 2 model training uses pandas and scikit-learn,
+  tested with Python 3.13)
 - Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
   for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
   without it.
@@ -190,15 +242,15 @@ compiler, the unit tests, and a production build. All five should pass.
 Defined and validated in `src/env.js`; `.env.example` lists them all. Only `DATABASE_URL` is
 required. Keys are read on the server only and never sent to the browser.
 
-| Variable                | Required | Purpose                                                                                                   |
-| :---------------------- | :------- | :-------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`          | yes      | `file:./db.sqlite` (relative paths resolve from the project folder)                                       |
-| `DATABASE_AUTH_TOKEN`   | no       | Only for a remote libSQL/Turso database; leave empty                                                      |
-| `CAMPD_API`             | no       | EPA API key, sent as the `x-api-key` header. Enables Retrieve, `sync:campd`, and the granular time series |
-| `OPENROUTER_API_KEY`    | no       | Enables the language-model fallback in description search                                                 |
-| `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `nvidia/nemotron-3-super-120b-a12b:free`                                     |
-| `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the flat map: light or dark tiles to match the theme. Without it, public dark tiles |
-| `READ_ONLY`             | no       | `true` on a hosted build (Vercel): Upload and Retrieve show a "run it locally" notice and refuse writes   |
+| Variable                | Required | Purpose                                                                                                                 |
+| :---------------------- | :------- | :---------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | yes      | `file:./db.sqlite` (relative paths resolve from the project folder). A value already set in your shell wins over `.env` |
+| `DATABASE_AUTH_TOKEN`   | no       | Only for a remote libSQL/Turso database; leave empty                                                                    |
+| `CAMPD_API`             | no       | EPA API key, sent as the `x-api-key` header. Enables Retrieve, `sync:campd`, and the granular time series               |
+| `OPENROUTER_API_KEY`    | no       | Enables the language-model fallback in description search                                                               |
+| `OPENROUTER_MODEL`      | no       | OpenRouter model ID; default `nvidia/nemotron-3-super-120b-a12b:free`                                                   |
+| `NEXT_PUBLIC_CARTO_API` | no       | CARTO basemap key for the flat map: light or dark tiles to match the theme. Without it, public dark tiles               |
+| `READ_ONLY`             | no       | `true` on a hosted build (Vercel): Upload and Retrieve show a "run it locally" notice and refuse writes                 |
 
 ---
 
@@ -393,6 +445,11 @@ for the web layer and keeps SQLite and Python:
 | SQLite                 | SQLite through the libSQL client                                                 | Unchanged                                                            |
 | Python data processing | `scripts/parse_import.py` (csv, openpyxl)                                        | Reads and validates every upload (§6 step 3)                         |
 | Bootstrap/CSS          | Tailwind CSS v4                                                                  | Styling, light and dark themes                                       |
+
+Phase 2 adds Plotly.js (charts, lazy-loaded), pandas, NumPy, scikit-learn, and joblib (offline
+model training in `ml/`), SciPy (reference values for the statistics tests), pytest, and fflate
+(export ZIPs). Statistics and TRACI calculations run in TypeScript on the server
+(`src/lib/stats.ts`, `src/lib/analysis.ts`), checked against SciPy and hand calculations.
 
 Other libraries: TanStack Query (client caching), Zod (input validation on every endpoint),
 Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide-react

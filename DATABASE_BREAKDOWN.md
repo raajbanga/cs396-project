@@ -296,6 +296,43 @@ The data-quality report for each upload **and CAMPD retrieval**: every row that 
 | `reason`    | `TEXT`             | Every failing field and why, or the duplicate's row.           | **Data-quality report**.                                 |
 | `rawRow`    | `TEXT` (JSON)      | The original row, header → cell text.                          | **Export**: Original columns in the invalid-records CSV. |
 
+### Table 7: `traci_factors` (Phase 2)
+
+EPA TRACI 2.2 characterization factors for the three pollutants CAMPD reports, emitted to air. Loaded from `data/traci/traci_2_2_air.csv` by `npm run traci:import` (source and checksum in `data/traci/README.md`). The Analyze page turns each impact category into two variables: the impact and the impact per MWh.
+
+| Column           | Type                  | What It Means                                                                 | Where and How It Is Used                                                |
+| :--------------- | :-------------------- | :---------------------------------------------------------------------------- | :---------------------------------------------------------------------- |
+| `id`             | `INTEGER PRIMARY KEY` | Row number.                                                                   | **Key**.                                                                |
+| `traciVersion`   | `TEXT`                | `2.2`.                                                                        | **Reproducibility**: Shown with every result and in exports.            |
+| `pollutant`      | `TEXT`                | CAMPD pollutant: `co2`, `so2`, or `nox`.                                      | **Matching**: Which `annual_records` mass column the factor multiplies. |
+| `substance`      | `TEXT`                | TRACI substance, matched exactly (`NITROGEN OXIDES`, not `NITROGEN DIOXIDE`). | **Provenance**: Factor table on the Impacts tab.                        |
+| `cas`            | `TEXT`                | TRACI's CAS number (`x` when TRACI lists none).                               | **Provenance**.                                                         |
+| `medium`         | `TEXT`                | Always `air`.                                                                 | **Matching**.                                                           |
+| `impactCategory` | `TEXT`                | Global warming, Acidification, Human health (particulate), Smog formation.    | **Grouping**: Impacts are summed only within a category.                |
+| `factor`         | `REAL`                | Equivalent units per kg of substance.                                         | **Calculation**: mass (short tons × 907.18474) × factor.                |
+| `factorUnit`     | `TEXT`                | e.g. `kg SO2 eq`.                                                             | **Units**: Each category keeps its own unit.                            |
+| `source`         | `TEXT`                | Workbook sheet and column the value was copied from.                          | **Provenance**.                                                         |
+
+Unique index on (`traciVersion`, `pollutant`, `medium`, `impactCategory`).
+
+### Table 8: `models` (Phase 2)
+
+Prediction models trained by `ml/train.py` (`npm run ml:train`), which writes one row per model. `artifact` holds the preprocessing and parameters as JSON, so the web app predicts without Python (`src/lib/model.ts`); the scikit-learn object is saved beside it as `artifactPath`.
+
+| Column                                         | Type               | What It Means                                                                                  | Where and How It Is Used                                |
+| :--------------------------------------------- | :----------------- | :--------------------------------------------------------------------------------------------- | :------------------------------------------------------ |
+| `id`                                           | `TEXT PRIMARY KEY` | `nox-baseline`, `nox-ridge`, `nox-tree`.                                                       | **Key**.                                                |
+| `name` / `kind`                                | `TEXT`             | Display name; `baseline`, `ridge`, or `tree`.                                                  | **Predict page**: Model pickers and comparison table.   |
+| `target`                                       | `TEXT`             | NOₓ mass, short tons per unit-year.                                                            | **Labels**.                                             |
+| `features`                                     | `TEXT` (JSON)      | Input names.                                                                                   | **Model record**; export metadata.                      |
+| `params`                                       | `TEXT` (JSON)      | Settings chosen on the validation years (alpha, depth, leaf size).                             | **Comparison table**.                                   |
+| `trainYears` / `validationYears` / `testYears` | `TEXT`             | `2016-2021` / `2022-2023` / `2024-2025`.                                                       | **Chronological split**, shown and exported.            |
+| `metrics`                                      | `TEXT` (JSON)      | MAE, RMSE, R², MAPE, n for train, validation, test, and validation without same-year activity. | **Comparison table**.                                   |
+| `artifact`                                     | `TEXT` (JSON)      | Preprocessing spec, coefficients or tree arrays, training ranges, importances.                 | **Prediction, sensitivity, scenarios, range warnings**. |
+| `artifactPath`                                 | `TEXT`             | `ml/models/<id>.joblib`.                                                                       | **Reproducibility**.                                    |
+| `pipelineVersion`                              | `TEXT`             | Git commit and scikit-learn, NumPy, pandas versions.                                           | **Reproducibility**.                                    |
+| `trainedAt`                                    | `INTEGER`          | Unix time.                                                                                     | **Model record**.                                       |
+
 ---
 
 ## 4. How the Data Is Split Across the Views
@@ -573,7 +610,8 @@ The commit fetches again rather than reusing the preview, as the upload re-posts
 5. **Last writer wins**: `annual_records.dataset_id` is the dataset that last wrote the record, and values are overwritten rather than versioned. Re-importing a year leaves the older dataset in the history as superseded.
 6. **Origin per unit-year only**: Facilities and units have no dataset link, so "Origin" (API or upload) is known for annual records only.
 7. **Granular data path**: Hourly–monthly slices hit the EPA API at request time; yearly slices aggregate local `annual_records`.
-8. **Cross-doc index**: Setup, scripts, and repo layout are summarized in **[README.md](./README.md)**; this file is the schema and view-mapping reference.
+8. **Phase 2 analyses read `annual_records` live**: Derived indicators, year-over-year change, and TRACI impacts are computed from the stored masses when the Analyze page asks (`src/lib/analysis.ts`), never stored, so they always match the current records. A value whose inputs are missing, or whose denominator is 0, is missing, not 0.
+9. **Cross-doc index**: Setup, scripts, and repo layout are summarized in **[README.md](./README.md)**; this file is the schema and view-mapping reference.
 
 ---
 
