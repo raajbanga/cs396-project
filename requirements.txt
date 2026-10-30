@@ -1,8 +1,9 @@
 openpyxl>=3.1
-# Phase 2 analysis and prediction (ml/train.py, ml/test_pipeline.py)
-pandas==3.1.0
-numpy==2.5.4
-scikit-learn==1.9.1
-scipy==1.18.1
-joblib>=1.4
-pytest>=8
+# Phase 2 analysis and prediction (ml/train.py, ml/test_pipeline.py). Floors support Python 3.9;
+# the committed models were trained with pandas 3.1, NumPy 2.5, scikit-learn 1.9.1, SciPy 1.18.
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3
+scipy>=1.10
+joblib>=1.3
+pytest>=7

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { use, useDeferredValue, useEffect, useState } from "react";
 import { Button, buttonClass } from "~/components/ui/button";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
@@ -156,7 +157,24 @@ export function DownloadView({
   return (
     <PageView
       header={
-        <PageTitle lead="Export data from the local database as CSV: whole datasets, search results, your comparison selection, data-quality reports, or provenance.">
+        <PageTitle
+          lead={
+            <>
+              Export data from the local database as CSV: whole datasets, search
+              results, your comparison selection, data-quality reports, or
+              provenance. Analysis results (statistics, charts, TRACI impacts,
+              predictions, scenarios) download from their own views on{" "}
+              <Link href="/analyze" className="text-primary hover:underline">
+                Analyze
+              </Link>{" "}
+              and{" "}
+              <Link href="/predict" className="text-primary hover:underline">
+                Predict
+              </Link>
+              , as ZIPs with a metadata file that records how they were made.
+            </>
+          }
+        >
           Download data
         </PageTitle>
       }
