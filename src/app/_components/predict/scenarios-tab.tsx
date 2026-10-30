@@ -3,10 +3,15 @@
 import { Chart } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
 import { Field, ReportTable } from "~/components/ui/report";
-import { formatStat } from "~/lib/analysis";
-import { outOfRange, predict, type ModelInputs } from "~/lib/model";
+import { formatPct, formatStat } from "~/lib/analysis";
+import {
+  featureLabel,
+  outOfRange,
+  predict,
+  type ModelInputs,
+} from "~/lib/model";
 import { Controls } from "../analyze/shared";
-import { inputLabel, rangeWarning, type PredictTabProps } from "./predict-view";
+import { rangeWarning, type PredictTabProps } from "./predict-view";
 
 const scale = (v: number | null, pct: number) =>
   v === null ? null : v * (1 + pct / 100);
@@ -53,9 +58,6 @@ function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
     },
   ];
 }
-
-const pct = (v: number | null) =>
-  v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)} %`;
 
 /** §6.3–§6.4: named scenarios against the baseline, for each trained model. */
 export function ScenariosTab({
@@ -119,13 +121,13 @@ export function ScenariosTab({
             x: rows.map((r) => r.scenario.name),
             y: rows.map((r) => r.prediction),
             text: rows.map((r) =>
-              r.scenario.name === "Baseline" ? "" : pct(r.diffPct),
+              r.scenario.name === "Baseline" ? "" : formatPct(r.diffPct),
             ),
             textposition: "outside",
             marker: { opacity: rows.map((r) => (r.warnings.length ? 0.4 : 1)) },
             customdata: rows.map((r) => [
               formatStat(r.diff),
-              pct(r.diffPct),
+              formatPct(r.diffPct),
               rangeWarning(r.warnings),
             ]) as never,
             hovertemplate: `%{x}<br>NOₓ %{y:,.4~g} t<br>change %{customdata[0]} t (%{customdata[1]})<br>%{customdata[2]}<extra>${m.name}</extra>`,
@@ -156,7 +158,7 @@ export function ScenariosTab({
             r.prediction,
             r.diff,
             r.diffPct,
-            r.warnings.map(inputLabel).join("; "),
+            r.warnings.map(featureLabel).join("; "),
           ]),
         }}
       />
@@ -165,27 +167,30 @@ export function ScenariosTab({
         head={[
           "Scenario",
           "What changes",
-          "Model",
-          "Predicted NOₓ (t)",
-          "Change (t)",
-          "Change (%)",
-          "Warning",
+          ...trained.flatMap((m) => [`${m.name} (t)`, "Change"]),
+          "Outside the training data",
         ]}
-        rows={results.map((r) => [
-          r.scenario.name,
-          r.scenario.change,
-          r.model.name,
-          formatStat(r.prediction),
-          r.scenario.name === "Baseline" ? "—" : formatStat(r.diff),
-          r.scenario.name === "Baseline" ? "—" : pct(r.diffPct),
-          r.warnings.length ? (
-            <span key="w" className="text-warn">
-              {rangeWarning(r.warnings)}
-            </span>
-          ) : (
-            ""
-          ),
-        ])}
+        rows={list.map((scenario) => {
+          const rows = results.filter((r) => r.scenario === scenario);
+          const warnings = [...new Set(rows.flatMap((r) => r.warnings))];
+          return [
+            <span key="n" className="text-fg font-medium">
+              {scenario.name}
+            </span>,
+            scenario.change,
+            ...rows.flatMap((r) => [
+              formatStat(r.prediction),
+              r.scenario === list[0] ? "—" : formatPct(r.diffPct),
+            ]),
+            warnings.length ? (
+              <span key="w" className="text-warn">
+                {warnings.map(featureLabel).join(", ")}
+              </span>
+            ) : (
+              "—"
+            ),
+          ];
+        })}
       />
       <p className="text-fg-muted max-w-4xl text-xs">
         Each scenario changes only what it names; the prior-year NOₓ rate still

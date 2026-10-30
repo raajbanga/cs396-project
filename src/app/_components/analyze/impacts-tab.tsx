@@ -2,19 +2,24 @@
 
 import { ExportButton } from "~/components/ui/export-button";
 import { Chart } from "~/components/ui/chart";
-import { Field, ReportTable, Section } from "~/components/ui/report";
-import { SegmentedControl } from "~/components/ui/segmented-control";
+import { ReportTable, Section } from "~/components/ui/report";
 import { formatStat } from "~/lib/analysis";
 import { IMPACT_DISCLAIMER, SHORT_TON_KG } from "~/lib/traci";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import {
   asDimension,
+  bind,
   Controls,
   DimensionField,
   dimensionLabel,
+  Toggle,
+  valueColumn,
   type TabProps,
 } from "./shared";
+
+/** One mid-tone color per impact category, readable on both themes. */
+const CATEGORY_COLORS = ["#b45309", "#2563eb", "#0d9488", "#a21caf"];
 
 const POLLUTANT_LABELS: Record<string, string> = {
   co2: "CO₂",
@@ -23,7 +28,8 @@ const POLLUTANT_LABELS: Record<string, string> = {
 };
 
 /** §4.6: CAMPD emissions × TRACI factors, one result per impact category in its own unit. */
-export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
+export function ImpactsTab(props: TabProps) {
+  const { filters, view, catalog } = props;
   const perMWh = view.perMWh === "1";
   const by = asDimension(view.impactBy) ?? "state";
   const impacts = catalog.variables.filter(
@@ -56,30 +62,22 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
 
   return (
     <div className="space-y-6">
-      <p className="border-warn/40 text-fg-2 max-w-4xl rounded-md border px-3 py-2 text-sm">
+      <p className="border-warn text-fg-2 max-w-4xl border-l-2 pl-4 text-sm">
         {IMPACT_DISCLAIMER}
       </p>
 
       <Controls>
-        <DimensionField
-          value={view.impactBy}
-          onChange={(impactBy) => setView({ impactBy })}
-          catalog={catalog}
+        <DimensionField {...bind(props, "impactBy")} />
+        <Toggle
+          {...bind(props, "perMWh")}
+          label="Result"
+          off="Total"
+          on="Per MWh of gross load"
         />
-        <Field label="Result">
-          <SegmentedControl
-            value={perMWh ? "1" : "0"}
-            onChange={(v) => setView({ perMWh: v === "1" ? "1" : "" })}
-            options={[
-              { value: "0", label: "Total" },
-              { value: "1", label: "Per MWh of gross load" },
-            ]}
-          />
-        </Field>
       </Controls>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {impacts.map((v) => {
+        {impacts.map((v, i) => {
           const top = [...rows]
             .filter((r) => r.values[v.key] != null)
             .sort((a, b) => b.values[v.key]! - a.values[v.key]!)
@@ -99,6 +97,9 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
                   orientation: "h",
                   y: top.map((r) => r.group),
                   x: top.map((r) => r.values[v.key] ?? null),
+                  marker: {
+                    color: CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+                  },
                   hovertemplate: `%{y}: %{x:,.4~g} ${v.unit}<extra></extra>`,
                 },
               ]}
@@ -108,7 +109,7 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
                 margin: { l: 16, r: 16, t: 8, b: 48 },
               }}
               table={{
-                head: [by, `${v.key} (${v.unit})`],
+                head: [by, valueColumn(v)],
                 rows: top.map((r) => [r.group, r.values[v.key]]),
               }}
             />
@@ -119,15 +120,15 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
       <Section
         title="Results by group"
         note={`Each category is summed only over its own pollutants and keeps its own unit; categories are never added together. A unit-year is left out of a category when one of its pollutants was not reported. ${formatNumber(rows.length)} of ${formatNumber(data?.total)} groups, largest ${impacts[0]?.label.toLowerCase()} first.`}
-      >
-        <div className="flex justify-end">
+        actions={
           <ExportButton
             name={`traci-${version}-impacts-by-${by}${perMWh ? "-per-mwh" : ""}`}
             title={`TRACI ${version} impacts by ${dimensionLabel(catalog, by).toLowerCase()}`}
             table={{ head, rows: table }}
             meta={traciMeta}
           />
-        </div>
+        }
+      >
         <ReportTable
           sortable
           head={head}
@@ -158,7 +159,7 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
             f.substance,
             f.cas,
             f.impactCategory,
-            String(f.factor),
+            String(Number(f.factor.toPrecision(6))),
             f.factorUnit,
           ])}
         />

@@ -18,11 +18,11 @@ export function quantile(sorted: readonly number[], p: number) {
   return sorted[lo]! + (h - lo) * (sorted[hi]! - sorted[lo]!);
 }
 
-export const mean = (xs: readonly number[]) =>
+const mean = (xs: readonly number[]) =>
   xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 
 /** Sample variance (n − 1); null below two values. */
-export function variance(xs: readonly number[]) {
+function variance(xs: readonly number[]) {
   const m = mean(xs);
   if (m === null || xs.length < 2) return null;
   return xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1);
@@ -66,7 +66,7 @@ export function describe(values: readonly (number | null)[]): Summary {
 }
 
 /** Pairs where both values are reported (pairwise-complete). */
-export function completePairs(
+function completePairs(
   xs: readonly (number | null)[],
   ys: readonly (number | null)[],
 ) {
@@ -103,7 +103,7 @@ export function pearson(
 }
 
 /** 1-based ranks, ties sharing their average rank. */
-export function ranks(xs: readonly number[]) {
+function ranks(xs: readonly number[]) {
   const order = xs.map((x, i) => [x, i] as const).sort((p, q) => p[0] - q[0]);
   const out = new Array<number>(xs.length);
   for (let i = 0; i < order.length;) {
@@ -175,7 +175,7 @@ function betaContinuedFraction(a: number, b: number, x: number) {
 }
 
 /** Regularized incomplete beta I_x(a, b). */
-export function incompleteBeta(x: number, a: number, b: number) {
+function incompleteBeta(x: number, a: number, b: number) {
   if (x <= 0) return 0;
   if (x >= 1) return 1;
   const front = Math.exp(
@@ -191,11 +191,11 @@ export function incompleteBeta(x: number, a: number, b: number) {
 }
 
 /** Two-sided p-value of Student's t with `df` degrees of freedom. */
-export const tTwoSided = (t: number, df: number) =>
+const tTwoSided = (t: number, df: number) =>
   incompleteBeta(df / (df + t * t), df / 2, 0.5);
 
 /** Upper-tail p-value of F(d1, d2). */
-export const fUpper = (f: number, d1: number, d2: number) =>
+const fUpper = (f: number, d1: number, d2: number) =>
   f <= 0 ? 1 : incompleteBeta(d2 / (d2 + d1 * f), d2 / 2, d1 / 2);
 
 /** Upper-tail p-value of χ²(df): the regularized upper incomplete gamma Q(df/2, x/2). */
@@ -234,7 +234,7 @@ export function chiSquareUpper(x: number, df: number) {
 }
 
 /** Standard normal CDF (Abramowitz–Stegun 7.1.26 erf, |error| < 1.5e-7). */
-export function normalCdf(z: number) {
+function normalCdf(z: number) {
   const t = 1 / (1 + (0.3275911 * Math.abs(z)) / Math.SQRT2);
   const y =
     1 -
@@ -248,7 +248,7 @@ export function normalCdf(z: number) {
 }
 
 /** Student-t quantile by bisection on `tTwoSided` (for confidence intervals). */
-export function tQuantile(p: number, df: number) {
+function tQuantile(p: number, df: number) {
   let lo = 0;
   let hi = 1e3;
   for (let i = 0; i < 200; i++) {

@@ -148,7 +148,9 @@ The Statistics tab (Figure~\ref{fig:statistics}) describes one variable over the
 count, missing count, minimum, maximum, mean, median, standard deviation, first and third
 quartiles, interquartile range, and the 5th, 10th, 90th, and 95th percentiles, together with the
 variable's total, mean, or pooled rate over the whole selection. With a grouping field it
-repeats these statistics for each group in a sortable table. The four example questions of the
+repeats these statistics for each group in a sortable table. It also lists \emph{unusual
+observations}: the unit-years beyond Tukey's far-out fences, $Q_1 - 3\,\text{IQR}$ and
+$Q_3 + 3\,\text{IQR}$, with their count on each side and the ten most extreme. The four example questions of the
 specification (average \COtwo{} by state, median \NOx{} intensity by fuel, total \SOtwo{} by
 year, and average heat rate by unit type) are offered as one-click examples.
 
@@ -177,7 +179,8 @@ and statistics always use every value.
 The Compare tab compares two to eight groups along any grouping field: states, fuels, unit
 types, \NOx{} or \SOtwo{} control classes (for example units with and without SCR), or
 reporting years (for example 2015 against 2024). For each group it shows the pooled value of the
-variable, its difference and percentage difference from the first group, the count, the mean
+variable, its rank among the compared groups, its difference and percentage difference from the
+first group, the count, the mean
 with its 95\,\% confidence interval, the median, and the standard deviation; it runs Welch's
 $t$-test and the Mann--Whitney $U$ test for two groups and one-way ANOVA and the
 Kruskal--Wallis test for any number; and it states the result in plain language with its caveats
@@ -204,8 +207,9 @@ training time (Figure~\ref{fig:models}).
 \subsection{Sensitivity and scenario analysis}
 
 The Sensitivity and Scenarios tabs start from a baseline unit-year, chosen by facility name or
-ID, year, and unit, and a model. Sensitivity varies one input over a range of percentages of its
-baseline value with all other inputs held constant, and draws the prediction as a curve with the
+ID, year, and unit, and a model. Sensitivity varies one input from a minimum to a maximum value, entered
+either in the input's own unit or as percentages of its baseline value, with all other inputs
+held constant, and draws the prediction as a curve with the
 baseline marked and the region outside the training data shaded (Figure~\ref{fig:sensitivity}).
 Scenarios compares the baseline with five named changes, gross load $+10\,\%$, heat input
 $-5\,\%$ (both editable), adding or removing SCR, switching the primary fuel, and a combined
@@ -281,7 +285,6 @@ Eutrophication from \NOx{} & Not provided & The TRACI~2.2 workbook has no eutrop
 Partial impact when a pollutant is missing & Category missing for that unit-year & A partial sum would understate the impact silently.\\
 State and capacity factor as model inputs & Left out & State is sparse for many fuel and type combinations; capacity factor duplicates gross load and nameplate capacity.\\
 Saved analysis configurations & URL parameters only & The URL already reproduces a view; saving it is a bookmark.\\
-Sensitivity over absolute values & Percentages of the baseline & One control serves every input, whatever its unit.\\
 Gradient-boosting model for comparison & Not built & Time; the tree already reaches $R^2 = 0.95$.\\
 \bottomrule
 \end{longtable}}
@@ -583,7 +586,13 @@ filters, is the fairer reading.
   \label{fig:compare}
 \end{figure}
 
-\paragraph{An unusual observation.} The Pearson correlation between \COtwo{} intensity and heat
+\paragraph{Unusual observations.} Over 2015--2025, 3{,}582 unit-years lie above the far-out fence
+for \NOx{} intensity (6.1~lb/MWh, against a median of 0.58). Of these, 3{,}491 are combustion
+turbines, with a median operating time of 44~hours a year: peaking units whose start-ups produce
+\NOx{} with almost no generation. They are real reports rather than errors, but they are why the
+pooled rate (0.70~lb/MWh) is the honest summary and the mean (2.46) is not.
+
+\paragraph{A misleading correlation.} The Pearson correlation between \COtwo{} intensity and heat
 rate over the 37{,}718 unit-years reporting both is 0.9998, while Spearman's rank correlation is
 0.765 (Figure~\ref{fig:correlation}). A few unit-years with tiny gross loads have intensities and
 heat rates thousands of times the norm; they dominate Pearson's $r$ and nearly nothing else. The
@@ -698,7 +707,7 @@ passes.
 
 \subsection{Unit tests}
 
-\code{npm test} runs 57 TypeScript tests (one Phase~1 test is skipped), of which these are new:
+\code{npm test} runs 60 TypeScript tests (one Phase~1 test is skipped), of which these are new:
 \begin{itemize}
   \item \code{stats.test.ts}: quantiles and standard deviation against NumPy; Pearson and Spearman
         correlation, Welch's $t$, Mann--Whitney $U$, the confidence interval, ANOVA,
@@ -713,7 +722,9 @@ passes.
   \item \code{model.test.ts}: the parity test (all three models on 200 test unit-years, within
         $10^{-6}$); input derivation (unit age, control flags, a previous rate that is missing
         when the previous heat input is zero); out-of-range detection; the direction of the
-        response to heat input.
+        response to heat input; readable feature names.
+  \item The URL state: the default year range applies whenever no filter is in the URL; signed
+        percentage formatting.
 \end{itemize}
 \code{npm run test:py} runs six pytest tests of the training pipeline: the three periods do not
 overlap; no input is the target or derived from it; the input rules; the preprocessing
@@ -731,8 +742,19 @@ the dataset export failed; the context moved to the client component that uses i
 year-range chip, shared with the Explore page, displayed ``2,015--2,025'' (a Phase~1 defect);
 years are now shown without separators. A chart's loading placeholder rendered its spinner and
 text side by side; the Predict page overflowed a phone screen by ten pixels; both were fixed.
-Finally, the Python requirements had been pinned to versions that need Python~3.11 or later,
-while the documented setup uses Python~3.9; they are now minimum versions that support both.
+The Python requirements had been pinned to versions that need Python~3.11 or later, while the
+documented setup uses Python~3.9; they are now minimum versions that support both.
+
+A final audit against the specification found five more. The emissions-program filter that
+\S4.1 lists had never been built, although the filter bar offered controls; it now matches a
+whole program code, since CAMPD stores lists such as ``ARP, CSNOX, CSOSG2'' and a substring match
+would let ``CSNOX'' catch ``CSNOXOS''. The default 2015--2025 range applied only to a URL with no
+parameters at all, so a link to a tab (\code{/analyze?tab=charts}) silently analysed every year
+including the partial 2026; it now applies whenever the URL sets no filter. The row cache did not
+notice an import for up to a minute; its key now includes the time of the latest import. A
+caption wrapped around a segmented control as an HTML \code{label} forwarded a click on the
+caption to the first button, flipping the choice; such captions are now plain groups. Finally,
+sorting groups whose value was missing used an inconsistent comparison.
 
 \subsection{Assessment against the objectives}
 

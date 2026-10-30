@@ -71,7 +71,7 @@ export function TableCell({ className, ...props }: ComponentProps<"td">) {
 }
 
 /** Pulsing placeholder rows while a table's first page loads. */
-export function TableSkeleton({ rows }: { rows: number }) {
+function TableSkeleton({ rows }: { rows: number }) {
   return (
     <div className="divide-edge/70 divide-y">
       {Array.from({ length: Math.min(rows, 10) }, (_, i) => (
@@ -158,7 +158,7 @@ function pageWindow(page: number, totalPages: number): (number | "…")[] {
 }
 
 /** Table footer: "Showing a–b of n", page size, jump-to-page, and page buttons. */
-export function TablePagination({
+function TablePagination({
   page,
   pageSize,
   totalCount,

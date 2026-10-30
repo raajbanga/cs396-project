@@ -1,8 +1,13 @@
 "use client";
 
 import { Field } from "~/components/ui/report";
+import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Select } from "~/components/ui/select";
-import type { DimensionKey, VariableInfo } from "~/lib/analysis";
+import {
+  AGGREGATION_LABELS,
+  type DimensionKey,
+  type VariableInfo,
+} from "~/lib/analysis";
 import type { AnalysisView } from "~/lib/analysis-state";
 import type { FacilityFilters } from "~/lib/facility-filters";
 import type { RouterOutputs } from "~/trpc/react";
@@ -25,6 +30,24 @@ export const asDimension = (key: string) =>
 /** "CO₂ intensity (lb/MWh)". */
 export const variableLabel = (v?: VariableInfo) =>
   v ? `${v.label} (${v.unit})` : "";
+
+/** The CSV column of a variable: "co2MassTons (short tons)". */
+export const valueColumn = (v?: VariableInfo) =>
+  v ? `${v.key} (${v.unit})` : "";
+
+/** "Total", "Mean", or "Pooled rate" for the variable. */
+export const combinedLabel = (v?: VariableInfo) =>
+  v ? AGGREGATION_LABELS[v.aggregation] : "Value";
+
+/** A picker's value and change handler bound to one tab choice, plus the catalog. */
+export const bind = (
+  { view, setView, catalog }: TabProps,
+  key: keyof AnalysisView,
+) => ({
+  value: view[key],
+  onChange: (value: string) => setView({ [key]: value }),
+  catalog,
+});
 
 export const findInfo = (catalog: Catalog, key: string) =>
   catalog.variables.find((v) => v.key === key);
@@ -58,7 +81,8 @@ export function VariableField({
           .filter((v) => !groups || groups.includes(v.group))
           .map((v) => ({
             value: v.key,
-            label: `${v.group === "Measured" ? "" : `${v.group} · `}${variableLabel(v)}`,
+            label: variableLabel(v),
+            group: v.group,
           }))}
       />
     </Field>
@@ -103,4 +127,32 @@ export function DimensionField({
 /** A row of tab controls. */
 export function Controls({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-wrap items-end gap-3">{children}</div>;
+}
+
+/** An on/off choice ("1" or "") as a two-way segmented control. */
+export function Toggle({
+  label,
+  value,
+  onChange,
+  off,
+  on,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  off: string;
+  on: string;
+}) {
+  return (
+    <Field group label={label}>
+      <SegmentedControl
+        value={value === "1" ? "1" : "0"}
+        onChange={(v) => onChange(v === "1" ? "1" : "")}
+        options={[
+          { value: "0", label: off },
+          { value: "1", label: on },
+        ]}
+      />
+    </Field>
+  );
 }

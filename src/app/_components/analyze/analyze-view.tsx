@@ -94,6 +94,7 @@ export function AnalyzeView({
           onResetFilters={() => setFilters(DEFAULT_FILTERS)}
           filterOptions={filterOptions}
           itemLabel="unit-years"
+          analysis
           totalMatching={summary.data?.records}
           isLoading={summary.isLoading}
           actions={

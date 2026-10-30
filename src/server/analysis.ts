@@ -27,7 +27,7 @@ import {
 import type { TraciFactor } from "~/lib/traci";
 import { unitYearConditions } from "~/server/api/routers/facilities";
 import { db } from "~/server/db";
-import { version } from "../../package.json";
+import pkg from "../../package.json";
 import {
   annualRecords,
   datasets,
@@ -87,11 +87,19 @@ async function selectRows(filters: FilterInput): Promise<AnalysisRow[]> {
 const selection = ({ topN: _n, rankGroup: _g, ...filters }: FilterInput) =>
   filters;
 
-const CACHE_MS = 60_000;
+const CACHE_MS = 5 * 60_000;
 const cache = new Map<string, { at: number; rows: Promise<AnalysisRow[]> }>();
 
-export function analysisRows(filters: FilterInput) {
-  const key = JSON.stringify(selection(filters));
+/** When the data last changed: every retrieval, upload, and sync records a dataset. */
+const dataVersion = async () =>
+  (await db.select({ at: max(datasets.importedAt) }).from(datasets))[0]?.at;
+
+/**
+ * The selection's unit-years, cached per selection and data version, so a page's several views
+ * share one query and an import is visible at once.
+ */
+export async function analysisRows(filters: FilterInput) {
+  const key = JSON.stringify([selection(filters), await dataVersion()]);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.rows;
   if (cache.size > 20) cache.clear();
@@ -124,7 +132,7 @@ const appVersion = (() => {
   } catch {
     commit = "unknown";
   }
-  return { name: "epaData", version, commit };
+  return { name: "epaData", version: pkg.version, commit };
 })();
 
 /** §7 reproducibility: which software and which state of the database produced an export. */
@@ -187,18 +195,46 @@ function rankedGroups(
     rows: list,
     value: aggregate(v, list),
   }));
+  // Groups without a value go last in either order.
+  const key = (g: { value: number | null }) =>
+    g.value === null ? -Infinity : order === "desc" ? g.value : -g.value;
   groups.sort((a, b) =>
     order === "label"
       ? a.group.localeCompare(b.group, undefined, { numeric: true })
-      : a.value === null
-        ? 1
-        : b.value === null
-          ? -1
-          : order === "desc"
-            ? b.value - a.value
-            : a.value - b.value,
+      : key(b) - key(a),
   );
   return { groups: groups.slice(0, limit), total: groups.length };
+}
+
+/**
+ * Unusual observations: unit-years beyond Tukey's far-out fences (Q1 − 3·IQR, Q3 + 3·IQR), the
+ * count on each side and the most extreme ten.
+ */
+function unusualRows(
+  rows: AnalysisRow[],
+  v: Variable,
+  { q1, q3, iqr, median }: ReturnType<typeof describe>,
+) {
+  if (q1 === null || q3 === null || iqr === null || median === null)
+    return null;
+  const low = q1 - 3 * iqr;
+  const high = q3 + 3 * iqr;
+  const label = dimension("unit").value;
+  const outside = rows.flatMap((r) => {
+    const x = v.value(r);
+    return x !== null && (x < low || x > high)
+      ? [{ label: `${label(r)}, ${r.year}`, value: x }]
+      : [];
+  });
+  return {
+    low,
+    high,
+    below: outside.filter((o) => o.value < low).length,
+    above: outside.filter((o) => o.value > high).length,
+    extreme: outside
+      .sort((a, b) => Math.abs(b.value - median) - Math.abs(a.value - median))
+      .slice(0, 10),
+  };
 }
 
 /** §4.2: a variable's summary statistics overall and, with `by`, per group. */
@@ -209,7 +245,8 @@ export function describeVariable(
   limit = 100,
 ) {
   const overall = { ...describe(rows.map(v.value)), value: aggregate(v, rows) };
-  if (!by) return { overall, groups: [], totalGroups: 0 };
+  const unusual = unusualRows(rows, v, overall);
+  if (!by) return { overall, unusual, groups: [], totalGroups: 0 };
   const { groups, total } = rankedGroups(
     rows,
     by,
@@ -219,6 +256,7 @@ export function describeVariable(
   );
   return {
     overall,
+    unusual,
     groups: groups.map((g) => ({
       group: g.group,
       value: g.value,

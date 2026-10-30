@@ -144,13 +144,19 @@ export function Chart({
   }, []);
 
   return (
-    <DataPanel className="p-3">
-      <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-fg text-sm font-semibold">{title}</h3>
-          {subtitle && <p className="text-fg-muted text-xs">{subtitle}</p>}
+    <DataPanel className="p-4">
+      <div className="mb-2 flex items-start gap-3">
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <h3 className="text-fg text-sm font-semibold text-balance">
+            {title}
+          </h3>
+          {subtitle && (
+            <p className="text-fg-muted max-w-[90ch] text-xs text-pretty">
+              {subtitle}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {actions}
           {table && (
             <ExportButton

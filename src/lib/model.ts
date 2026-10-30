@@ -22,7 +22,7 @@ export interface ModelRaw {
 }
 
 /** NOₓ controls the models see, as on/off inputs (matched case-insensitively). */
-export const CONTROLS = {
+const CONTROLS = {
   scr: { label: "SCR", pattern: /selective catalytic/ },
   sncr: { label: "SNCR", pattern: /non-catalytic/ },
   low_nox_burner: { label: "Low-NOₓ burners", pattern: /low nox/ },
@@ -114,7 +114,7 @@ export interface ModelArtifact {
 }
 
 /** Impute, log, standardize, one-hot, and controls, in the training column order. */
-export function designRow(inputs: ModelInputs, spec: Spec) {
+function designRow(inputs: ModelInputs, spec: Spec) {
   const row: number[] = [];
   for (const f of spec.numeric) {
     let x = inputs[f.name] ?? f.median;
@@ -173,4 +173,21 @@ export function outOfRange(model: ModelArtifact, inputs: ModelInputs) {
     if (!seen.includes(inputs[name])) warnings.push(name);
   }
   return warnings;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  primary_fuel: "Primary fuel",
+  unit_type: "Unit type",
+};
+
+/** A model input or feature in words: "heat_input_mmbtu" → "Heat input", "primary_fuel=Coal" → "Primary fuel: Coal". */
+export function featureLabel(name: string) {
+  const [field = name, category] = name.split("=");
+  const label =
+    field in NUMERIC_INPUTS
+      ? NUMERIC_INPUTS[field as NumericInput].label
+      : field in CONTROLS
+        ? CONTROLS[field as Control].label
+        : (CATEGORY_LABELS[field] ?? field);
+  return category ? `${label}: ${category}` : label;
 }

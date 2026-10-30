@@ -172,7 +172,6 @@ const POLLUTANTS = [
   { key: "so2", label: "SO₂", mass: "so2MassTons", prev: "prevSo2MassTons" },
   { key: "nox", label: "NOₓ", mass: "noxMassTons", prev: "prevNoxMassTons" },
 ] as const;
-export type Pollutant = (typeof POLLUTANTS)[number]["key"];
 
 const MEASURED: Variable[] = [
   measured(
@@ -341,7 +340,7 @@ const YEAR_OVER_YEAR: Variable[] = [
  * pollutants with a factor in that category. Missing when any of those pollutants is missing
  * (a partial sum would understate the impact). Each category also gets a per-MWh intensity.
  */
-export function impactVariables(factors: readonly TraciFactor[]): Variable[] {
+function impactVariables(factors: readonly TraciFactor[]): Variable[] {
   const categories = [...new Set(factors.map((f) => f.impactCategory))];
   return categories.flatMap((category) => {
     const terms = factors.filter((f) => f.impactCategory === category);
@@ -455,3 +454,9 @@ export function formatStat(v: number | null | undefined) {
     maximumFractionDigits: 6,
   });
 }
+
+/** A signed percentage: "+12.3 %", "-4.0 %"; "—" when undefined. */
+export const formatPct = (v: number | null | undefined) =>
+  v === null || v === undefined || !Number.isFinite(v)
+    ? "—"
+    : `${v > 0 ? "+" : ""}${v.toFixed(1)} %`;

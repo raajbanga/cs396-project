@@ -1,12 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { ChevronRight } from "lucide-react";
 import { DataCoverage, DataSources } from "~/app/_components/data-coverage";
 import { EpaPrimer } from "~/app/_components/epa-primer";
 import { Section } from "~/components/ui/report";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/server";
-
-export const dynamic = "force-dynamic";
 
 /** The §9 functions, in the order data moves through the app. */
 const FUNCTIONS = [
@@ -48,6 +47,7 @@ const FUNCTIONS = [
 ];
 
 export default async function Home() {
+  await connection(); // the figures come from the database at request time, never from the build
   const [stats, { factors }] = await Promise.all([
     api.facilities.getStats(),
     api.analysis.catalog(),

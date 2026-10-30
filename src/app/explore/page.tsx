@@ -3,7 +3,6 @@ import { Explorer } from "~/app/_components/explorer";
 import { parseExplorerParams } from "~/lib/facility-filters";
 import { api, HydrateClient } from "~/trpc/server";
 
-export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Explore" };
 
 export default async function ExplorePage({
