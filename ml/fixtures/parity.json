@@ -1,0 +1,4202 @@
+[
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": null,
+      "commercial_op_date": "1973-01-01",
+      "operating_hours": 1597.92,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 239238.751,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 27.589,
+      "prev_heat_input_mmbtu": 403113.659,
+      "prev_operating_hours": 3105.56
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 22.00340146360831,
+      "tree": 16.1067
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 28.8,
+      "commercial_op_date": "1977-07-01",
+      "operating_hours": 196.0,
+      "gross_generation_mwh": 3728.0,
+      "heat_input_mmbtu": 58769.7,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 3.837,
+      "prev_heat_input_mmbtu": 25929.9,
+      "prev_operating_hours": 84.0
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 6.982822475049522,
+      "tree": 10.304125
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 29.3,
+      "commercial_op_date": "1978-04-26",
+      "operating_hours": 14.46,
+      "gross_generation_mwh": 157.94,
+      "heat_input_mmbtu": 2807.9,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 2.051,
+      "prev_heat_input_mmbtu": 3419.1,
+      "prev_operating_hours": 15.3
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 3.9666661602008437,
+      "tree": 1.8104242424242427
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 100.0,
+      "commercial_op_date": "1965-09-30",
+      "operating_hours": 124.45,
+      "gross_generation_mwh": 3139.95,
+      "heat_input_mmbtu": 86019.0,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 12.737,
+      "prev_heat_input_mmbtu": 36392.4,
+      "prev_operating_hours": 18.38
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 26.776966237673456,
+      "tree": 29.17797142857143
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 81.0,
+      "commercial_op_date": "1988-07-01",
+      "operating_hours": 82.56,
+      "gross_generation_mwh": 3164.59,
+      "heat_input_mmbtu": 34129.2,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 70.861,
+      "prev_heat_input_mmbtu": 126068.1,
+      "prev_operating_hours": 194.23
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 27.478017425509286,
+      "tree": 12.466315789473688
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Other boiler",
+      "nameplate_capacity_mw": null,
+      "commercial_op_date": "1980-09-15",
+      "operating_hours": 66.34,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 39671.4,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 1.201,
+      "prev_heat_input_mmbtu": 23327.9,
+      "prev_operating_hours": 39.01
+    },
+    "predictions": {
+      "baseline": 1.5045,
+      "ridge": 2.3413943629645493,
+      "tree": 2.0921818181818184
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 510.7,
+      "commercial_op_date": "1990-03-01",
+      "operating_hours": 7983.62,
+      "gross_generation_mwh": 742289.68,
+      "heat_input_mmbtu": 7800802.482,
+      "nox_controls": "Steam Injection",
+      "prev_nox_mass_tons": 282.442,
+      "prev_heat_input_mmbtu": 7351280.022,
+      "prev_operating_hours": 7706.26
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 257.62841491594645,
+      "tree": 332.89646875
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 22.5,
+      "commercial_op_date": "2009-12-18",
+      "operating_hours": 3313.59,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 474606.284,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 1.59,
+      "prev_heat_input_mmbtu": 468617.944,
+      "prev_operating_hours": 3308.49
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 3.3989586515938286,
+      "tree": 4.35205
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Stoker",
+      "nameplate_capacity_mw": 70.0,
+      "commercial_op_date": "1990-01-01",
+      "operating_hours": 5185.75,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 1650371.922,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 463.515,
+      "prev_heat_input_mmbtu": 2270106.365,
+      "prev_operating_hours": 6518.75
+    },
+    "predictions": {
+      "baseline": 153.848,
+      "ridge": 303.43375250482546,
+      "tree": 298.6246
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 51.5,
+      "commercial_op_date": "1999-06-22",
+      "operating_hours": 1.56,
+      "gross_generation_mwh": 26.49,
+      "heat_input_mmbtu": 400.986,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 0.141,
+      "prev_heat_input_mmbtu": 960.453,
+      "prev_operating_hours": 3.55
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.0,
+      "tree": 0.14495918367346938
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": null,
+      "commercial_op_date": "1930-01-01",
+      "operating_hours": 2979.07,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 357470.147,
+      "nox_controls": "Combustion Modification/Fuel Reburning",
+      "prev_nox_mass_tons": 22.096,
+      "prev_heat_input_mmbtu": 354681.91,
+      "prev_operating_hours": 2708.17
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 51.933939232728186,
+      "tree": 24.670719999999992
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": null,
+      "commercial_op_date": null,
+      "operating_hours": 3194.0,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 331012.2,
+      "nox_controls": "Low NOx Burner Technology w/ Closed-coupled OFA",
+      "prev_nox_mass_tons": 11.985,
+      "prev_heat_input_mmbtu": 456784.1,
+      "prev_operating_hours": 3585.0
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 15.025906296690309,
+      "tree": 12.370533333333334
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 18.6,
+      "commercial_op_date": "1984-07-01",
+      "operating_hours": 10.0,
+      "gross_generation_mwh": 114.0,
+      "heat_input_mmbtu": 1862.9,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 3.601,
+      "prev_heat_input_mmbtu": 9047.2,
+      "prev_operating_hours": 56.0
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 0.5481758310539101,
+      "tree": 0.5975499999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 114.0,
+      "commercial_op_date": "2002-06-06",
+      "operating_hours": 10.36,
+      "gross_generation_mwh": 518.02,
+      "heat_input_mmbtu": 6107.459,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 0.036,
+      "prev_heat_input_mmbtu": 2078.697,
+      "prev_operating_hours": 2.93
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.0,
+      "tree": 0.12435000000000003
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.0,
+      "commercial_op_date": "2006-08-10",
+      "operating_hours": 41.06,
+      "gross_generation_mwh": 734.73,
+      "heat_input_mmbtu": 9263.545,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 9.311,
+      "prev_heat_input_mmbtu": 260035.22,
+      "prev_operating_hours": 1005.75
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.017253950906112137,
+      "tree": 0.6057974683544303
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 56.7,
+      "commercial_op_date": "1974-07-01",
+      "operating_hours": 46.0,
+      "gross_generation_mwh": 598.0,
+      "heat_input_mmbtu": 8937.5,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 3.613,
+      "prev_heat_input_mmbtu": 16212.3,
+      "prev_operating_hours": 80.0
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 2.248749795525788,
+      "tree": 2.398741935483871
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 50.0,
+      "commercial_op_date": "2011-05-08",
+      "operating_hours": 33.67,
+      "gross_generation_mwh": 1266.25,
+      "heat_input_mmbtu": 12507.961,
+      "nox_controls": "Selective Catalytic Reduction|Water Injection",
+      "prev_nox_mass_tons": 0.044,
+      "prev_heat_input_mmbtu": 19056.538,
+      "prev_operating_hours": 49.52
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 0.0,
+      "tree": 0.06675862068965517
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 50.0,
+      "commercial_op_date": "2011-07-29",
+      "operating_hours": 49.01,
+      "gross_generation_mwh": 2066.73,
+      "heat_input_mmbtu": 21403.218,
+      "nox_controls": "Water Injection|Ammonia Injection",
+      "prev_nox_mass_tons": 0.316,
+      "prev_heat_input_mmbtu": 71940.726,
+      "prev_operating_hours": 189.31
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.8286016270207676,
+      "tree": 0.2527619047619048
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 62.0,
+      "commercial_op_date": "2009-08-06",
+      "operating_hours": 99.92,
+      "gross_generation_mwh": 2517.58,
+      "heat_input_mmbtu": 27380.574,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 0.487,
+      "prev_heat_input_mmbtu": 11281.524,
+      "prev_operating_hours": 41.48
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 1.635736181294201,
+      "tree": 1.10565
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 51.0,
+      "commercial_op_date": "1972-01-11",
+      "operating_hours": 46.33,
+      "gross_generation_mwh": 1593.3,
+      "heat_input_mmbtu": 25511.541,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 9.943,
+      "prev_heat_input_mmbtu": 29794.53,
+      "prev_operating_hours": 53.75
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 7.612944477781628,
+      "tree": 8.098666666666666
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 91.9,
+      "commercial_op_date": "1995-05-17",
+      "operating_hours": 66.0,
+      "gross_generation_mwh": 3191.0,
+      "heat_input_mmbtu": 36176.8,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 1.871,
+      "prev_heat_input_mmbtu": 5952.9,
+      "prev_operating_hours": 17.0
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 9.942565930102601,
+      "tree": 6.710761904761905
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 62.0,
+      "commercial_op_date": "2009-06-25",
+      "operating_hours": 192.2,
+      "gross_generation_mwh": 4684.03,
+      "heat_input_mmbtu": 50781.019,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 1.063,
+      "prev_heat_input_mmbtu": 25339.547,
+      "prev_operating_hours": 99.23
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 2.8968576377882256,
+      "tree": 2.3146666666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 42.4,
+      "commercial_op_date": "1999-06-07",
+      "operating_hours": 120.34,
+      "gross_generation_mwh": 3688.38,
+      "heat_input_mmbtu": 60962.735,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 5.638,
+      "prev_heat_input_mmbtu": 41418.118,
+      "prev_operating_hours": 83.42
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 5.473119337769774,
+      "tree": 7.251782608695652
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 57.0,
+      "commercial_op_date": "2002-05-10",
+      "operating_hours": 289.59,
+      "gross_generation_mwh": 6134.58,
+      "heat_input_mmbtu": 69221.557,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 7.945,
+      "prev_heat_input_mmbtu": 190978.524,
+      "prev_operating_hours": 817.67
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.095529982359855,
+      "tree": 3.2740506329113934
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 47.0,
+      "commercial_op_date": "2003-01-08",
+      "operating_hours": 214.88,
+      "gross_generation_mwh": 7722.9,
+      "heat_input_mmbtu": 82445.672,
+      "nox_controls": "Water Injection|Ammonia Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.948,
+      "prev_heat_input_mmbtu": 89227.127,
+      "prev_operating_hours": 236.95
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.9718545919235361,
+      "tree": 0.9685135135135133
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.9,
+      "commercial_op_date": "2009-04-19",
+      "operating_hours": 186.72,
+      "gross_generation_mwh": 8322.01,
+      "heat_input_mmbtu": 94317.728,
+      "nox_controls": "Water Injection|Ammonia Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.685,
+      "prev_heat_input_mmbtu": 105008.258,
+      "prev_operating_hours": 206.88
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 1.0614597620139428,
+      "tree": 0.5046999999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 84.5,
+      "commercial_op_date": "2001-04-13",
+      "operating_hours": 122.35,
+      "gross_generation_mwh": 8926.87,
+      "heat_input_mmbtu": 105661.529,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 1.226,
+      "prev_heat_input_mmbtu": 67336.039,
+      "prev_operating_hours": 80.76
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 3.952160039408751,
+      "tree": 1.9737142857142858
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 86.0,
+      "commercial_op_date": "2002-05-25",
+      "operating_hours": 141.98,
+      "gross_generation_mwh": 9605.0,
+      "heat_input_mmbtu": 116819.129,
+      "nox_controls": "Water Injection|Dry Low NOx Burners",
+      "prev_nox_mass_tons": 2.671,
+      "prev_heat_input_mmbtu": 219163.73,
+      "prev_operating_hours": 261.25
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.12509035085083,
+      "tree": 1.335225806451613
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 135.0,
+      "commercial_op_date": "2002-09-25",
+      "operating_hours": 117.45,
+      "gross_generation_mwh": 10804.37,
+      "heat_input_mmbtu": 132653.128,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 14.008,
+      "prev_heat_input_mmbtu": 526112.434,
+      "prev_operating_hours": 443.18
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.720745308471542,
+      "tree": 3.4252499999999997
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 61.9,
+      "commercial_op_date": "2007-10-08",
+      "operating_hours": 527.45,
+      "gross_generation_mwh": 14775.96,
+      "heat_input_mmbtu": 146487.055,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 2.942,
+      "prev_heat_input_mmbtu": 64765.03,
+      "prev_operating_hours": 236.98
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.084091839335925,
+      "tree": 6.891705882352941
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 103.9,
+      "commercial_op_date": "1994-04-22",
+      "operating_hours": 269.51,
+      "gross_generation_mwh": 18863.69,
+      "heat_input_mmbtu": 165649.77,
+      "nox_controls": "Selective Catalytic Reduction|Steam Injection",
+      "prev_nox_mass_tons": 3.426,
+      "prev_heat_input_mmbtu": 220036.203,
+      "prev_operating_hours": 365.09
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 2.1260091350169343,
+      "tree": 2.899366666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 71.0,
+      "commercial_op_date": "2001-05-04",
+      "operating_hours": 446.46,
+      "gross_generation_mwh": 19523.69,
+      "heat_input_mmbtu": 184732.215,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 7.454,
+      "prev_heat_input_mmbtu": 196514.575,
+      "prev_operating_hours": 479.49
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 8.91410311626568,
+      "tree": 7.491511627906976
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 39.1,
+      "commercial_op_date": "1992-06-01",
+      "operating_hours": 616.02,
+      "gross_generation_mwh": 17625.23,
+      "heat_input_mmbtu": 204896.683,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 4.534,
+      "prev_heat_input_mmbtu": 68106.168,
+      "prev_operating_hours": 208.23
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 10.885227739033589,
+      "tree": 13.668571428571433
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 135.0,
+      "commercial_op_date": "2002-10-21",
+      "operating_hours": 192.65,
+      "gross_generation_mwh": 18138.08,
+      "heat_input_mmbtu": 221498.705,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 15.638,
+      "prev_heat_input_mmbtu": 498959.804,
+      "prev_operating_hours": 425.76
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.08400157658179,
+      "tree": 6.506954545454545
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 47.0,
+      "commercial_op_date": "2001-08-27",
+      "operating_hours": 587.98,
+      "gross_generation_mwh": 23713.49,
+      "heat_input_mmbtu": 242535.219,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 1.002,
+      "prev_heat_input_mmbtu": 126117.847,
+      "prev_operating_hours": 323.36
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 2.657599411694963,
+      "tree": 1.7660434782608696
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 91.9,
+      "commercial_op_date": "2000-05-30",
+      "operating_hours": 274.14,
+      "gross_generation_mwh": 20205.52,
+      "heat_input_mmbtu": 252884.003,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 6.134,
+      "prev_heat_input_mmbtu": 448452.313,
+      "prev_operating_hours": 498.88
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.767059313695648,
+      "tree": 3.414833333333333
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 57.0,
+      "commercial_op_date": "2001-06-12",
+      "operating_hours": 1141.39,
+      "gross_generation_mwh": 29139.54,
+      "heat_input_mmbtu": 297214.055,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 4.684,
+      "prev_heat_input_mmbtu": 70258.15,
+      "prev_operating_hours": 300.02
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 14.182992169396549,
+      "tree": 19.729173913043475
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 45.0,
+      "commercial_op_date": "2002-01-11",
+      "operating_hours": 729.07,
+      "gross_generation_mwh": 32899.52,
+      "heat_input_mmbtu": 336020.955,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.517,
+      "prev_heat_input_mmbtu": 76055.167,
+      "prev_operating_hours": 176.1
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 3.921980986608868,
+      "tree": 1.6135499999999996
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 76.6,
+      "commercial_op_date": "2002-04-01",
+      "operating_hours": 539.91,
+      "gross_generation_mwh": 31076.19,
+      "heat_input_mmbtu": 369953.919,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 8.975,
+      "prev_heat_input_mmbtu": 586288.315,
+      "prev_operating_hours": 837.89
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 8.779882115105462,
+      "tree": 5.886766666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 50.0,
+      "commercial_op_date": "1957-06-01",
+      "operating_hours": 2184.22,
+      "gross_generation_mwh": 28918.07,
+      "heat_input_mmbtu": 406155.248,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 20.094,
+      "prev_heat_input_mmbtu": 194580.053,
+      "prev_operating_hours": 1352.39
+    },
+    "predictions": {
+      "baseline": 30.003,
+      "ridge": 42.463601643698595,
+      "tree": 39.968027777777785
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Other boiler",
+      "nameplate_capacity_mw": 133.4,
+      "commercial_op_date": "2013-12-06",
+      "operating_hours": 7309.0,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 449552.0,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 0.818,
+      "prev_heat_input_mmbtu": 148452.9,
+      "prev_operating_hours": 2022.0
+    },
+    "predictions": {
+      "baseline": 6.591,
+      "ridge": 18.374795869348503,
+      "tree": 2.837904761904762
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 213.0,
+      "commercial_op_date": "2001-05-01",
+      "operating_hours": 378.52,
+      "gross_generation_mwh": 52114.16,
+      "heat_input_mmbtu": 478594.696,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 15.901,
+      "prev_heat_input_mmbtu": 716983.496,
+      "prev_operating_hours": 543.84
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 13.155076322548924,
+      "tree": 9.955333333333334
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2022-03-10",
+      "operating_hours": 1297.59,
+      "gross_generation_mwh": 52829.12,
+      "heat_input_mmbtu": 531309.099,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 2.532,
+      "prev_heat_input_mmbtu": 399743.309,
+      "prev_operating_hours": 1049.62
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.797211103225118,
+      "tree": 3.4253478260869565
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 105.3,
+      "commercial_op_date": "2018-08-24",
+      "operating_hours": 864.58,
+      "gross_generation_mwh": 59255.38,
+      "heat_input_mmbtu": 576240.103,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 2.659,
+      "prev_heat_input_mmbtu": 675062.291,
+      "prev_operating_hours": 998.55
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 5.733571699783758,
+      "tree": 2.41992
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 108.0,
+      "commercial_op_date": "2013-01-09",
+      "operating_hours": 782.31,
+      "gross_generation_mwh": 67655.2,
+      "heat_input_mmbtu": 610785.139,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 4.07,
+      "prev_heat_input_mmbtu": 690019.515,
+      "prev_operating_hours": 931.38
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 6.428232255313971,
+      "tree": 3.8420000000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 115.0,
+      "commercial_op_date": "1993-08-19",
+      "operating_hours": 790.09,
+      "gross_generation_mwh": 45369.94,
+      "heat_input_mmbtu": 638251.453,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 17.57,
+      "prev_heat_input_mmbtu": 439448.164,
+      "prev_operating_hours": 589.55
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 25.732117202963526,
+      "tree": 22.527250000000006
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2023-05-05",
+      "operating_hours": 1585.69,
+      "gross_generation_mwh": 69999.73,
+      "heat_input_mmbtu": 696745.679,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 2.582,
+      "prev_heat_input_mmbtu": 413919.55,
+      "prev_operating_hours": 941.74
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 5.960105881894089,
+      "tree": 3.8788095238095233
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 138.6,
+      "commercial_op_date": "1997-09-01",
+      "operating_hours": 806.69,
+      "gross_generation_mwh": 66259.35,
+      "heat_input_mmbtu": 760883.357,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 38.017,
+      "prev_heat_input_mmbtu": 511740.207,
+      "prev_operating_hours": 491.66
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 32.63531811795484,
+      "tree": 54.01242307692306
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2021-07-08",
+      "operating_hours": 1941.14,
+      "gross_generation_mwh": 83692.54,
+      "heat_input_mmbtu": 845938.329,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 5.221,
+      "prev_heat_input_mmbtu": 772148.217,
+      "prev_operating_hours": 1749.01
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.331428256091071,
+      "tree": 5.1949000000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 123.0,
+      "commercial_op_date": "2000-01-01",
+      "operating_hours": 1541.98,
+      "gross_generation_mwh": 123200.06,
+      "heat_input_mmbtu": 886121.157,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 9.044,
+      "prev_heat_input_mmbtu": 211090.067,
+      "prev_operating_hours": 410.06
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 24.30724800385134,
+      "tree": 36.65800000000001
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Petroleum Coke",
+      "unit_type": "Circulating fluidized bed boiler",
+      "nameplate_capacity_mw": 64.0,
+      "commercial_op_date": "1990-07-14",
+      "operating_hours": 4159.22,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 586650.025,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 57.068,
+      "prev_heat_input_mmbtu": 948342.619,
+      "prev_operating_hours": 5671.41
+    },
+    "predictions": {
+      "baseline": 323.3845,
+      "ridge": 36.438672189145976,
+      "tree": 39.59256521739132
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 107.1,
+      "commercial_op_date": "2002-06-01",
+      "operating_hours": 1003.32,
+      "gross_generation_mwh": 83990.77,
+      "heat_input_mmbtu": 1044341.862,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 9.279,
+      "prev_heat_input_mmbtu": 750051.631,
+      "prev_operating_hours": 768.25
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 21.74687827927875,
+      "tree": 12.8928
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 40.0,
+      "commercial_op_date": "2008-05-09",
+      "operating_hours": 3361.06,
+      "gross_generation_mwh": 94268.0,
+      "heat_input_mmbtu": 1151744.7,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 60.498,
+      "prev_heat_input_mmbtu": 1325810.4,
+      "prev_operating_hours": 4240.53
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 33.89973310778594,
+      "tree": 54.99870370370371
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 43.0,
+      "commercial_op_date": "2001-07-31",
+      "operating_hours": 3244.16,
+      "gross_generation_mwh": 116901.95,
+      "heat_input_mmbtu": 1212943.828,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 41.684,
+      "prev_heat_input_mmbtu": 985789.772,
+      "prev_operating_hours": 2678.76
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 37.46264305123364,
+      "tree": 52.87739999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 225.0,
+      "commercial_op_date": "2021-10-23",
+      "operating_hours": 824.52,
+      "gross_generation_mwh": 122572.05,
+      "heat_input_mmbtu": 1296018.113,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 12.632,
+      "prev_heat_input_mmbtu": 907913.39,
+      "prev_operating_hours": 565.63
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 22.780486652618226,
+      "tree": 22.56173076923077
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 97.0,
+      "commercial_op_date": "2005-11-15",
+      "operating_hours": 1824.12,
+      "gross_generation_mwh": 114416.15,
+      "heat_input_mmbtu": 1436362.32,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 15.005,
+      "prev_heat_input_mmbtu": 1125382.997,
+      "prev_operating_hours": 1436.85
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 27.47815415706508,
+      "tree": 20.392363636363633
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 90.0,
+      "commercial_op_date": "2004-01-28",
+      "operating_hours": 2186.84,
+      "gross_generation_mwh": 145539.43,
+      "heat_input_mmbtu": 1615143.806,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 9.053,
+      "prev_heat_input_mmbtu": 736621.511,
+      "prev_operating_hours": 936.62
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 27.286201445598948,
+      "tree": 18.3387
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 84.7,
+      "commercial_op_date": "2000-06-15",
+      "operating_hours": 2405.47,
+      "gross_generation_mwh": 148425.6,
+      "heat_input_mmbtu": 1840816.24,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 19.536,
+      "prev_heat_input_mmbtu": 1166539.683,
+      "prev_operating_hours": 1578.05
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 31.99720068625559,
+      "tree": 44.52569565217391
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 260.0,
+      "commercial_op_date": "2002-04-27",
+      "operating_hours": 4616.81,
+      "gross_generation_mwh": 254555.44,
+      "heat_input_mmbtu": 2079746.455,
+      "nox_controls": "Steam Injection",
+      "prev_nox_mass_tons": 79.463,
+      "prev_heat_input_mmbtu": 2021408.226,
+      "prev_operating_hours": 4544.62
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 63.6996923195375,
+      "tree": 79.70195238095236
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 387.2,
+      "commercial_op_date": "1962-05-01",
+      "operating_hours": 3384.5,
+      "gross_generation_mwh": 426398.93,
+      "heat_input_mmbtu": 2314409.71,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 56.303,
+      "prev_heat_input_mmbtu": 2177062.147,
+      "prev_operating_hours": 3045.84
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 122.83084476029181,
+      "tree": 51.52229032258065
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 191.2,
+      "commercial_op_date": "2000-05-24",
+      "operating_hours": 1392.7,
+      "gross_generation_mwh": 232105.31,
+      "heat_input_mmbtu": 2523994.792,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 51.625,
+      "prev_heat_input_mmbtu": 1323661.062,
+      "prev_operating_hours": 745.48
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 45.330135296243405,
+      "tree": 106.85139473684208
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 108.0,
+      "commercial_op_date": "2009-04-09",
+      "operating_hours": 3331.71,
+      "gross_generation_mwh": 321144.39,
+      "heat_input_mmbtu": 2828823.721,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 7.264,
+      "prev_heat_input_mmbtu": 1577790.043,
+      "prev_operating_hours": 1916.08
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 24.299279436071654,
+      "tree": 13.209838709677419
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 210.0,
+      "commercial_op_date": "2023-06-30",
+      "operating_hours": 1850.83,
+      "gross_generation_mwh": 298373.46,
+      "heat_input_mmbtu": 3119104.992,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 1.807,
+      "prev_heat_input_mmbtu": 132644.649,
+      "prev_operating_hours": 68.28
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 38.09594675846137,
+      "tree": 41.595868421052636
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 104.0,
+      "commercial_op_date": "2005-03-15",
+      "operating_hours": 7214.7,
+      "gross_generation_mwh": 457557.1,
+      "heat_input_mmbtu": 3539662.218,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 11.49,
+      "prev_heat_input_mmbtu": 3398227.816,
+      "prev_operating_hours": 6716.57
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 24.558055340323016,
+      "tree": 10.957906250000002
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 164.0,
+      "commercial_op_date": "1994-04-01",
+      "operating_hours": 4002.75,
+      "gross_generation_mwh": 317388.13,
+      "heat_input_mmbtu": 3932477.884,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 67.492,
+      "prev_heat_input_mmbtu": 3474834.834,
+      "prev_operating_hours": 3654.9
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 57.51067605314413,
+      "tree": 65.49005128205125
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 171.0,
+      "commercial_op_date": "1995-06-30",
+      "operating_hours": 3507.5,
+      "gross_generation_mwh": 338710.25,
+      "heat_input_mmbtu": 4343641.925,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction|Steam Injection",
+      "prev_nox_mass_tons": 72.883,
+      "prev_heat_input_mmbtu": 5599262.95,
+      "prev_operating_hours": 4358.25
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 25.559881535521935,
+      "tree": 61.22245
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 187.5,
+      "commercial_op_date": "1959-06-01",
+      "operating_hours": 3612.11,
+      "gross_generation_mwh": 461729.46,
+      "heat_input_mmbtu": 4683794.689,
+      "nox_controls": "Low NOx Burner Technology w/ Closed-coupled/Separated OFA",
+      "prev_nox_mass_tons": 180.383,
+      "prev_heat_input_mmbtu": 6711374.629,
+      "prev_operating_hours": 5048.33
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 155.85830421017218,
+      "tree": 154.6313157894737
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 386.0,
+      "commercial_op_date": "2002-04-14",
+      "operating_hours": 3884.53,
+      "gross_generation_mwh": 763423.67,
+      "heat_input_mmbtu": 5296473.336,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 34.828,
+      "prev_heat_input_mmbtu": 7669179.856,
+      "prev_operating_hours": 5060.76
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 28.172235007041124,
+      "tree": 22.851600000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 523.0,
+      "commercial_op_date": "2009-11-18",
+      "operating_hours": 3843.71,
+      "gross_generation_mwh": 832313.83,
+      "heat_input_mmbtu": 5883187.203,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 36.725,
+      "prev_heat_input_mmbtu": 3870943.87,
+      "prev_operating_hours": 2731.7
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 39.13905548970807,
+      "tree": 60.14340000000001
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 205.0,
+      "commercial_op_date": "2007-04-26",
+      "operating_hours": 7103.21,
+      "gross_generation_mwh": 761142.19,
+      "heat_input_mmbtu": 6381140.323,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 38.539,
+      "prev_heat_input_mmbtu": 5035256.751,
+      "prev_operating_hours": 5865.57
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 35.96007505421059,
+      "tree": 50.992571428571424
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Circulating fluidized bed boiler",
+      "nameplate_capacity_mw": 229.0,
+      "commercial_op_date": "2000-02-10",
+      "operating_hours": 3026.9,
+      "gross_generation_mwh": 329283.09,
+      "heat_input_mmbtu": 4047525.243,
+      "nox_controls": "Ammonia Injection (Retired Jun 01, 2024)|Selective Non-catalytic Reduction (Retired Jun 01, 2024)",
+      "prev_nox_mass_tons": 256.872,
+      "prev_heat_input_mmbtu": 8357782.607,
+      "prev_operating_hours": 6429.91
+    },
+    "predictions": {
+      "baseline": 204.326,
+      "ridge": 203.33378268108362,
+      "tree": 137.3373043478261
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 440.0,
+      "commercial_op_date": "2000-04-28",
+      "operating_hours": 4656.61,
+      "gross_generation_mwh": 1077969.2,
+      "heat_input_mmbtu": 7501934.884,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 163.939,
+      "prev_heat_input_mmbtu": 9741668.278,
+      "prev_operating_hours": 6189.52
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 102.86496762868364,
+      "tree": 136.97121428571432
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 109.0,
+      "commercial_op_date": "1999-02-11",
+      "operating_hours": 8062.75,
+      "gross_generation_mwh": 1105657.0,
+      "heat_input_mmbtu": 7894416.55,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 105.838,
+      "prev_heat_input_mmbtu": 8144070.7,
+      "prev_operating_hours": 8320.0
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 111.15848630336629,
+      "tree": 116.30874999999997
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 357.0,
+      "commercial_op_date": "1999-07-28",
+      "operating_hours": 5682.35,
+      "gross_generation_mwh": 1219216.1,
+      "heat_input_mmbtu": 8406288.418,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 48.261,
+      "prev_heat_input_mmbtu": 4964611.622,
+      "prev_operating_hours": 3466.57
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 113.42581182068565,
+      "tree": 70.80533333333332
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 126.9,
+      "commercial_op_date": "1998-08-21",
+      "operating_hours": 8181.02,
+      "gross_generation_mwh": 887269.35,
+      "heat_input_mmbtu": 8955145.08,
+      "nox_controls": "Selective Catalytic Reduction|Dry Low NOx Burners",
+      "prev_nox_mass_tons": 197.139,
+      "prev_heat_input_mmbtu": 9001138.609,
+      "prev_operating_hours": 8215.01
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 68.27890772292952,
+      "tree": 208.2588684210526
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 154.0,
+      "commercial_op_date": "2001-03-01",
+      "operating_hours": 5583.22,
+      "gross_generation_mwh": 858280.81,
+      "heat_input_mmbtu": 9528612.18,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 104.509,
+      "prev_heat_input_mmbtu": 6508465.67,
+      "prev_operating_hours": 3844.14
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 133.86775145574703,
+      "tree": 157.5588571428572
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 635.0,
+      "commercial_op_date": "2008-11-05",
+      "operating_hours": 5729.72,
+      "gross_generation_mwh": 1374440.19,
+      "heat_input_mmbtu": 9986043.843,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 188.665,
+      "prev_heat_input_mmbtu": 12889569.106,
+      "prev_operating_hours": 7497.5
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 59.54144110168353,
+      "tree": 134.99384615384616
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 573.3,
+      "commercial_op_date": "2000-05-21",
+      "operating_hours": 6169.67,
+      "gross_generation_mwh": 1465472.33,
+      "heat_input_mmbtu": 10328168.834,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 209.657,
+      "prev_heat_input_mmbtu": 9793379.255,
+      "prev_operating_hours": 5882.7
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 153.23400383994343,
+      "tree": 291.50676190476196
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 387.0,
+      "commercial_op_date": "1968-01-01",
+      "operating_hours": 4878.88,
+      "gross_generation_mwh": 1065688.56,
+      "heat_input_mmbtu": 10610741.782,
+      "nox_controls": "Overfire Air|Low NOx Burner Technology w/ Separated OFA",
+      "prev_nox_mass_tons": 200.233,
+      "prev_heat_input_mmbtu": 6933822.293,
+      "prev_operating_hours": 3195.63
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 300.3037239397902,
+      "tree": 334.543347826087
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 445.0,
+      "commercial_op_date": "2003-01-20",
+      "operating_hours": 6472.64,
+      "gross_generation_mwh": 1519524.05,
+      "heat_input_mmbtu": 10919771.908,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 32.287,
+      "prev_heat_input_mmbtu": 7091899.235,
+      "prev_operating_hours": 4595.21
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 57.15522958973942,
+      "tree": 42.563765624999995
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 445.0,
+      "commercial_op_date": "2003-05-31",
+      "operating_hours": 6844.98,
+      "gross_generation_mwh": 1602974.16,
+      "heat_input_mmbtu": 11329977.918,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 38.387,
+      "prev_heat_input_mmbtu": 9856972.247,
+      "prev_operating_hours": 6178.28
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 60.65293449377556,
+      "tree": 45.6732380952381
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 505.9,
+      "commercial_op_date": "2003-07-23",
+      "operating_hours": 6698.72,
+      "gross_generation_mwh": 1729761.83,
+      "heat_input_mmbtu": 11689372.763,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 70.254,
+      "prev_heat_input_mmbtu": 12051997.736,
+      "prev_operating_hours": 6915.29
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 70.24222157148012,
+      "tree": 69.99982608695655
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 357.4,
+      "commercial_op_date": "2011-02-27",
+      "operating_hours": 7596.48,
+      "gross_generation_mwh": 1755590.51,
+      "heat_input_mmbtu": 11971428.856,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 26.004,
+      "prev_heat_input_mmbtu": 13111067.578,
+      "prev_operating_hours": 8300.11
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 58.77265539005109,
+      "tree": 30.129384615384616
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 165.0,
+      "commercial_op_date": "2005-06-14",
+      "operating_hours": 7674.76,
+      "gross_generation_mwh": 1851616.72,
+      "heat_input_mmbtu": 12276235.974,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 68.611,
+      "prev_heat_input_mmbtu": 13830016.282,
+      "prev_operating_hours": 8426.3
+    },
+    "predictions": {
+      "baseline": 52.293,
+      "ridge": 63.35073373811366,
+      "tree": 63.23850000000001
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 358.0,
+      "commercial_op_date": "2005-12-31",
+      "operating_hours": 7577.44,
+      "gross_generation_mwh": 1880843.88,
+      "heat_input_mmbtu": 12577886.149,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 37.878,
+      "prev_heat_input_mmbtu": 11823254.354,
+      "prev_operating_hours": 7235.5
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 72.21911134256811,
+      "tree": 37.543958333333336
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 175.0,
+      "commercial_op_date": "1955-06-24",
+      "operating_hours": 7724.16,
+      "gross_generation_mwh": 661364.56,
+      "heat_input_mmbtu": 7368578.345,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)",
+      "prev_nox_mass_tons": 842.581,
+      "prev_heat_input_mmbtu": 7117691.0,
+      "prev_operating_hours": 8760.0
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 1313.4394602941459,
+      "tree": 860.2908235294118
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 366.1,
+      "commercial_op_date": "2004-03-18",
+      "operating_hours": 8202.38,
+      "gross_generation_mwh": 2588416.96,
+      "heat_input_mmbtu": 13796964.05,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 103.283,
+      "prev_heat_input_mmbtu": 12465085.623,
+      "prev_operating_hours": 7290.07
+    },
+    "predictions": {
+      "baseline": 52.293,
+      "ridge": 84.50185096449208,
+      "tree": 115.05945
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 396.3,
+      "commercial_op_date": "2002-06-01",
+      "operating_hours": 7155.99,
+      "gross_generation_mwh": 1972561.22,
+      "heat_input_mmbtu": 13948877.915,
+      "nox_controls": "Selective Catalytic Reduction|Dry Low NOx Burners",
+      "prev_nox_mass_tons": 41.057,
+      "prev_heat_input_mmbtu": 10908724.942,
+      "prev_operating_hours": 5964.34
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 70.36405421238796,
+      "tree": 51.70876470588235
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 580.5,
+      "commercial_op_date": "2006-06-09",
+      "operating_hours": 6618.49,
+      "gross_generation_mwh": 2023026.51,
+      "heat_input_mmbtu": 14407069.784,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 47.982,
+      "prev_heat_input_mmbtu": 8580591.616,
+      "prev_operating_hours": 4536.06
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 70.35034859277664,
+      "tree": 76.84344999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 300.0,
+      "commercial_op_date": "1957-05-01",
+      "operating_hours": 5033.47,
+      "gross_generation_mwh": 846571.44,
+      "heat_input_mmbtu": 8463469.462,
+      "nox_controls": "Low NOx Burner Technology w/ Separated OFA|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 306.13,
+      "prev_heat_input_mmbtu": 9611403.683,
+      "prev_operating_hours": 6401.62
+    },
+    "predictions": {
+      "baseline": 1113.545,
+      "ridge": 385.03353414040066,
+      "tree": 274.47815
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 745.2,
+      "commercial_op_date": "1980-09-15",
+      "operating_hours": 3543.22,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 8977806.2,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)|Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 263.133,
+      "prev_heat_input_mmbtu": 4396400.754,
+      "prev_operating_hours": 1728.1
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 370.3722258375974,
+      "tree": 584.6113333333334
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 350.0,
+      "commercial_op_date": "2011-04-06",
+      "operating_hours": 7972.35,
+      "gross_generation_mwh": 2163933.37,
+      "heat_input_mmbtu": 16093731.611,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 39.748,
+      "prev_heat_input_mmbtu": 14602167.117,
+      "prev_operating_hours": 7560.29
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 81.17458046009175,
+      "tree": 42.73230434782609
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 190.0,
+      "commercial_op_date": "1965-07-01",
+      "operating_hours": 7173.21,
+      "gross_generation_mwh": 934468.29,
+      "heat_input_mmbtu": 10002963.473,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 326.384,
+      "prev_heat_input_mmbtu": 12055202.089,
+      "prev_operating_hours": 8025.85
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 456.6906014775807,
+      "tree": 255.8973
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 392.0,
+      "commercial_op_date": "2003-08-20",
+      "operating_hours": 7694.98,
+      "gross_generation_mwh": 2686670.41,
+      "heat_input_mmbtu": 18923386.947,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 63.615,
+      "prev_heat_input_mmbtu": 18536769.068,
+      "prev_operating_hours": 7529.84
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 88.70570384554897,
+      "tree": 72.31954166666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 625.0,
+      "commercial_op_date": "2023-01-04",
+      "operating_hours": 6484.47,
+      "gross_generation_mwh": 3277528.83,
+      "heat_input_mmbtu": 20620933.752,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 33.986,
+      "prev_heat_input_mmbtu": 12121207.35,
+      "prev_operating_hours": 3430.8
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 94.38958325158137,
+      "tree": 60.71325
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 644.3,
+      "commercial_op_date": "2021-11-28",
+      "operating_hours": 6040.75,
+      "gross_generation_mwh": 3363201.93,
+      "heat_input_mmbtu": 22155070.05,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 69.791,
+      "prev_heat_input_mmbtu": 24272773.208,
+      "prev_operating_hours": 6668.18
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 75.24000863100656,
+      "tree": 66.30754999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 1033.7,
+      "commercial_op_date": "2018-07-20",
+      "operating_hours": 7356.01,
+      "gross_generation_mwh": 3828049.54,
+      "heat_input_mmbtu": 24914519.916,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 56.48,
+      "prev_heat_input_mmbtu": 22257040.217,
+      "prev_operating_hours": 6877.19
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 102.61520164797793,
+      "tree": 64.30974193548386
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom turbo-fired boiler",
+      "nameplate_capacity_mw": 410.9,
+      "commercial_op_date": "1979-12-01",
+      "operating_hours": 7019.1,
+      "gross_generation_mwh": 1541793.78,
+      "heat_input_mmbtu": 16460819.364,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air",
+      "prev_nox_mass_tons": 2141.75,
+      "prev_heat_input_mmbtu": 17060443.206,
+      "prev_operating_hours": 6064.38
+    },
+    "predictions": {
+      "baseline": 516.847,
+      "ridge": 2105.4341389337924,
+      "tree": 2398.1415185185183
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 446.0,
+      "commercial_op_date": "1979-11-01",
+      "operating_hours": 8400.47,
+      "gross_generation_mwh": 1801956.69,
+      "heat_input_mmbtu": 21071486.643,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 401.375,
+      "prev_heat_input_mmbtu": 13894277.443,
+      "prev_operating_hours": 5573.88
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 806.0662189202271,
+      "tree": 568.3455666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 816.3,
+      "commercial_op_date": "1972-06-06",
+      "operating_hours": 6648.24,
+      "gross_generation_mwh": 2789703.64,
+      "heat_input_mmbtu": 26361959.423,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 1035.519,
+      "prev_heat_input_mmbtu": 23898716.628,
+      "prev_operating_hours": 5838.26
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 891.6842549514348,
+      "tree": 1120.7325999999996
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 738.0,
+      "commercial_op_date": "1983-10-13",
+      "operating_hours": 5868.33,
+      "gross_generation_mwh": 2977715.53,
+      "heat_input_mmbtu": 29629019.1,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air",
+      "prev_nox_mass_tons": 3399.991,
+      "prev_heat_input_mmbtu": 38417375.655,
+      "prev_operating_hours": 6753.59
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 2571.3477846611936,
+      "tree": 2603.3548749999995
+    }
+  },
+  {
+    "raw": {
+      "year": 2024,
+      "primary_fuel": "Coal",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 793.2,
+      "commercial_op_date": "1977-05-16",
+      "operating_hours": 7220.35,
+      "gross_generation_mwh": 3562936.84,
+      "heat_input_mmbtu": 35957861.52,
+      "nox_controls": "Low NOx Burner Technology w/ Separated OFA",
+      "prev_nox_mass_tons": 3206.249,
+      "prev_heat_input_mmbtu": 46719108.146,
+      "prev_operating_hours": 7713.61
+    },
+    "predictions": {
+      "baseline": 1113.545,
+      "ridge": 3080.3655015917034,
+      "tree": 2867.2148333333334
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 10.8,
+      "commercial_op_date": "2004-07-01",
+      "operating_hours": 5286.3,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 657494.949,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 37.103,
+      "prev_heat_input_mmbtu": 787030.758,
+      "prev_operating_hours": 5918.72
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 16.03241860614072,
+      "tree": 27.331599999999995
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 101.8,
+      "commercial_op_date": "1979-06-01",
+      "operating_hours": 616.0,
+      "gross_generation_mwh": 12371.0,
+      "heat_input_mmbtu": 172038.5,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 13.402,
+      "prev_heat_input_mmbtu": 86429.8,
+      "prev_operating_hours": 284.0
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 15.174753342134087,
+      "tree": 18.111827586206893
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 41.9,
+      "commercial_op_date": "1970-06-23",
+      "operating_hours": 150.0,
+      "gross_generation_mwh": 2273.0,
+      "heat_input_mmbtu": 28344.3,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 70.021,
+      "prev_heat_input_mmbtu": 200043.9,
+      "prev_operating_hours": 1000.0
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 10.413385524787977,
+      "tree": 9.67257142857143
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 65.3,
+      "commercial_op_date": "1973-05-01",
+      "operating_hours": 62.0,
+      "gross_generation_mwh": 1526.0,
+      "heat_input_mmbtu": 65100.0,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 7.808,
+      "prev_heat_input_mmbtu": 27300.0,
+      "prev_operating_hours": 26.0
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 12.506662428440281,
+      "tree": 17.801045454545452
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 51.6,
+      "commercial_op_date": "1988-06-01",
+      "operating_hours": 749.22,
+      "gross_generation_mwh": 17659.48,
+      "heat_input_mmbtu": 262227.0,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 68.68,
+      "prev_heat_input_mmbtu": 196217.0,
+      "prev_operating_hours": 560.62
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 44.45473144078127,
+      "tree": 100.2591875
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 29.3,
+      "commercial_op_date": "1978-04-08",
+      "operating_hours": 34.52,
+      "gross_generation_mwh": 430.79,
+      "heat_input_mmbtu": 7047.9,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 2.655,
+      "prev_heat_input_mmbtu": 4425.0,
+      "prev_operating_hours": 22.59
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 7.968731441304763,
+      "tree": 3.8177777777777777
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Other boiler",
+      "nameplate_capacity_mw": 423.5,
+      "commercial_op_date": "2008-10-15",
+      "operating_hours": 18.29,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 2126.517,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)",
+      "prev_nox_mass_tons": 0.407,
+      "prev_heat_input_mmbtu": 31483.535,
+      "prev_operating_hours": 214.71
+    },
+    "predictions": {
+      "baseline": 6.591,
+      "ridge": 0.0,
+      "tree": 0.04679310344827586
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Other Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 11.1,
+      "commercial_op_date": "1972-06-01",
+      "operating_hours": 2593.9,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 1210550.334,
+      "nox_controls": "Other",
+      "prev_nox_mass_tons": 67.589,
+      "prev_heat_input_mmbtu": 1733808.739,
+      "prev_operating_hours": 3087.43
+    },
+    "predictions": {
+      "baseline": 96.9975,
+      "ridge": 38.4871695663079,
+      "tree": 205.71274999999997
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Process Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 78.8,
+      "commercial_op_date": "1947-01-01",
+      "operating_hours": 3670.82,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 1502879.197,
+      "nox_controls": "Other|Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 12.601,
+      "prev_heat_input_mmbtu": 1428033.476,
+      "prev_operating_hours": 3669.4
+    },
+    "predictions": {
+      "baseline": 25.929,
+      "ridge": 22.72850465874616,
+      "tree": 11.732969696969695
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 30.4,
+      "commercial_op_date": "2000-04-07",
+      "operating_hours": 3668.6,
+      "gross_generation_mwh": 94020.4,
+      "heat_input_mmbtu": 1016216.14,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 38.92,
+      "prev_heat_input_mmbtu": 874536.653,
+      "prev_operating_hours": 3248.41
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 30.26496503724151,
+      "tree": 44.9957619047619
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Other boiler",
+      "nameplate_capacity_mw": null,
+      "commercial_op_date": "1968-01-01",
+      "operating_hours": 1096.61,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 99947.087,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 18.321,
+      "prev_heat_input_mmbtu": 220099.181,
+      "prev_operating_hours": 2458.18
+    },
+    "predictions": {
+      "baseline": 6.591,
+      "ridge": 8.868959422161918,
+      "tree": 6.452299999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 397.0,
+      "commercial_op_date": "2000-04-19",
+      "operating_hours": 0.56,
+      "gross_generation_mwh": 0.0,
+      "heat_input_mmbtu": 211.389,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 9.845,
+      "prev_heat_input_mmbtu": 1585405.762,
+      "prev_operating_hours": 1025.72
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 0.0,
+      "tree": 0.017700000000000004
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 49.9,
+      "commercial_op_date": "2002-04-18",
+      "operating_hours": 24.14,
+      "gross_generation_mwh": 328.84,
+      "heat_input_mmbtu": 5551.165,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 5.486,
+      "prev_heat_input_mmbtu": 138744.177,
+      "prev_operating_hours": 617.2
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.0005503988952610437,
+      "tree": 0.30475862068965515
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 22.0,
+      "commercial_op_date": "1972-05-01",
+      "operating_hours": 42.8,
+      "gross_generation_mwh": 716.4,
+      "heat_input_mmbtu": 12962.6,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 11.415,
+      "prev_heat_input_mmbtu": 62098.5,
+      "prev_operating_hours": 219.9
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 2.2150148883360243,
+      "tree": 2.0665483870967742
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 43.0,
+      "commercial_op_date": "1996-07-01",
+      "operating_hours": 31.89,
+      "gross_generation_mwh": 943.7,
+      "heat_input_mmbtu": 12756.0,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 3.012,
+      "prev_heat_input_mmbtu": 8236.0,
+      "prev_operating_hours": 20.59
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 5.006159959813637,
+      "tree": 4.920566666666668
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 72.0,
+      "commercial_op_date": "2000-05-07",
+      "operating_hours": 29.02,
+      "gross_generation_mwh": 1602.95,
+      "heat_input_mmbtu": 20909.276,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 1.876,
+      "prev_heat_input_mmbtu": 32252.757,
+      "prev_operating_hours": 44.73
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.8505801559596451,
+      "tree": 1.0723000000000003
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 58.9,
+      "commercial_op_date": "2001-10-23",
+      "operating_hours": 60.99,
+      "gross_generation_mwh": 2251.81,
+      "heat_input_mmbtu": 24638.324,
+      "nox_controls": "Dry Low NOx Burners|Ammonia Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.431,
+      "prev_heat_input_mmbtu": 69481.133,
+      "prev_operating_hours": 164.39
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.0,
+      "tree": 0.38035483870967746
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 56.7,
+      "commercial_op_date": "1973-06-01",
+      "operating_hours": 103.74,
+      "gross_generation_mwh": 1560.82,
+      "heat_input_mmbtu": 21515.7,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 14.161,
+      "prev_heat_input_mmbtu": 23601.6,
+      "prev_operating_hours": 113.92
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 20.647281987134228,
+      "tree": 12.582999999999997
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 64.3,
+      "commercial_op_date": "2008-07-23",
+      "operating_hours": 148.52,
+      "gross_generation_mwh": 3184.44,
+      "heat_input_mmbtu": 34803.906,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.699,
+      "prev_heat_input_mmbtu": 56089.88,
+      "prev_operating_hours": 244.88
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.04679507848865106,
+      "tree": 0.655409090909091
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 50.0,
+      "commercial_op_date": "1974-04-19",
+      "operating_hours": 55.13,
+      "gross_generation_mwh": 2296.64,
+      "heat_input_mmbtu": 31215.8,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 1.139,
+      "prev_heat_input_mmbtu": 3927.0,
+      "prev_operating_hours": 6.72
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 7.178003594510507,
+      "tree": 10.029571428571426
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 45.1,
+      "commercial_op_date": "1991-06-01",
+      "operating_hours": 117.9,
+      "gross_generation_mwh": 3420.78,
+      "heat_input_mmbtu": 47466.693,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 1.129,
+      "prev_heat_input_mmbtu": 18066.342,
+      "prev_operating_hours": 40.88
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 3.6954393500455907,
+      "tree": 2.4885238095238096
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 100.0,
+      "commercial_op_date": "2013-02-09",
+      "operating_hours": 78.09,
+      "gross_generation_mwh": 6774.83,
+      "heat_input_mmbtu": 59259.675,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 3.168,
+      "prev_heat_input_mmbtu": 655333.608,
+      "prev_operating_hours": 839.25
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.6072946927837652,
+      "tree": 0.35651515151515145
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 65.0,
+      "commercial_op_date": "1973-06-01",
+      "operating_hours": 75.42,
+      "gross_generation_mwh": 3309.5,
+      "heat_input_mmbtu": 50970.8,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 4.513,
+      "prev_heat_input_mmbtu": 17148.9,
+      "prev_operating_hours": 26.77
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 9.670178326078933,
+      "tree": 12.392368421052629
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 183.2,
+      "commercial_op_date": "2002-04-01",
+      "operating_hours": 54.06,
+      "gross_generation_mwh": 7796.07,
+      "heat_input_mmbtu": 81783.575,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 2.962,
+      "prev_heat_input_mmbtu": 101562.465,
+      "prev_operating_hours": 71.86
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.027728927160036,
+      "tree": 3.059933333333334
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 84.5,
+      "commercial_op_date": "2000-05-31",
+      "operating_hours": 114.81,
+      "gross_generation_mwh": 7594.08,
+      "heat_input_mmbtu": 96110.19,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 1.855,
+      "prev_heat_input_mmbtu": 96504.472,
+      "prev_operating_hours": 104.29
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 3.7881112293726638,
+      "tree": 1.9737142857142858
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 57.0,
+      "commercial_op_date": "2001-05-25",
+      "operating_hours": 514.06,
+      "gross_generation_mwh": 10885.62,
+      "heat_input_mmbtu": 117447.209,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 4.892,
+      "prev_heat_input_mmbtu": 54147.272,
+      "prev_operating_hours": 206.06
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.879890885984691,
+      "tree": 12.915166666666666
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 46.0,
+      "commercial_op_date": "2023-01-24",
+      "operating_hours": 321.68,
+      "gross_generation_mwh": 9174.03,
+      "heat_input_mmbtu": 128852.983,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 5.502,
+      "prev_heat_input_mmbtu": 298386.874,
+      "prev_operating_hours": 746.67
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 0.9635879637900256,
+      "tree": 2.645666666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 101.8,
+      "commercial_op_date": "2001-04-16",
+      "operating_hours": 213.36,
+      "gross_generation_mwh": 9869.44,
+      "heat_input_mmbtu": 140981.905,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 3.369,
+      "prev_heat_input_mmbtu": 226033.694,
+      "prev_operating_hours": 331.07
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.568478229705438,
+      "tree": 2.1795454545454547
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 806.4,
+      "commercial_op_date": "1971-12-01",
+      "operating_hours": 97.02,
+      "gross_generation_mwh": 11049.95,
+      "heat_input_mmbtu": 155465.594,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 1.858,
+      "prev_heat_input_mmbtu": 289695.477,
+      "prev_operating_hours": 183.31
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 6.2186971207148565,
+      "tree": 1.1015862068965518
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 61.9,
+      "commercial_op_date": "2007-10-05",
+      "operating_hours": 602.32,
+      "gross_generation_mwh": 15924.44,
+      "heat_input_mmbtu": 164257.949,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 4.82,
+      "prev_heat_input_mmbtu": 108928.197,
+      "prev_operating_hours": 392.53
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.8066572196240545,
+      "tree": 8.435957446808512
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 121.0,
+      "commercial_op_date": "1999-06-18",
+      "operating_hours": 216.61,
+      "gross_generation_mwh": 14465.23,
+      "heat_input_mmbtu": 185834.308,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 2.525,
+      "prev_heat_input_mmbtu": 49592.334,
+      "prev_operating_hours": 51.52
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.002355124562952,
+      "tree": 8.495535714285712
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Diesel Oil",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 21.3,
+      "commercial_op_date": "1970-07-01",
+      "operating_hours": 659.0,
+      "gross_generation_mwh": 8937.0,
+      "heat_input_mmbtu": 149339.0,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 13.39,
+      "prev_heat_input_mmbtu": 147622.504,
+      "prev_operating_hours": 610.66
+    },
+    "predictions": {
+      "baseline": 2.508,
+      "ridge": 9.84826885527491,
+      "tree": 19.656238095238095
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 57.0,
+      "commercial_op_date": "2002-05-11",
+      "operating_hours": 1016.88,
+      "gross_generation_mwh": 18819.06,
+      "heat_input_mmbtu": 219701.202,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 12.316,
+      "prev_heat_input_mmbtu": 292003.089,
+      "prev_operating_hours": 1300.05
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 10.366074995647937,
+      "tree": 11.732580645161288
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 48.0,
+      "commercial_op_date": "2016-12-13",
+      "operating_hours": 635.37,
+      "gross_generation_mwh": 25497.43,
+      "heat_input_mmbtu": 240143.244,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 10.742,
+      "prev_heat_input_mmbtu": 254939.048,
+      "prev_operating_hours": 677.71
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 8.603879955383068,
+      "tree": 10.556967741935484
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 45.0,
+      "commercial_op_date": "2002-07-22",
+      "operating_hours": 666.65,
+      "gross_generation_mwh": 27190.3,
+      "heat_input_mmbtu": 258074.168,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 2.504,
+      "prev_heat_input_mmbtu": 115809.479,
+      "prev_operating_hours": 277.0
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 3.43988976672467,
+      "tree": 4.419263157894737
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 91.9,
+      "commercial_op_date": "2000-06-14",
+      "operating_hours": 305.78,
+      "gross_generation_mwh": 22166.42,
+      "heat_input_mmbtu": 271211.635,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 5.378,
+      "prev_heat_input_mmbtu": 211654.556,
+      "prev_operating_hours": 230.11
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 8.701948268202996,
+      "tree": 6.425470588235294
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 120.0,
+      "commercial_op_date": "1991-06-01",
+      "operating_hours": 262.23,
+      "gross_generation_mwh": 19831.56,
+      "heat_input_mmbtu": 251588.7,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 6.741,
+      "prev_heat_input_mmbtu": 130763.7,
+      "prev_operating_hours": 138.91
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 14.495717607961248,
+      "tree": 17.508649999999996
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 88.0,
+      "commercial_op_date": "2014-06-16",
+      "operating_hours": 519.83,
+      "gross_generation_mwh": 23264.85,
+      "heat_input_mmbtu": 331723.528,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 9.854,
+      "prev_heat_input_mmbtu": 348543.901,
+      "prev_operating_hours": 504.6
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 7.648135545383462,
+      "tree": 27.723500000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 81.3,
+      "commercial_op_date": "1975-01-01",
+      "operating_hours": 439.0,
+      "gross_generation_mwh": 27064.0,
+      "heat_input_mmbtu": 363835.0,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 29.93,
+      "prev_heat_input_mmbtu": 108914.0,
+      "prev_operating_hours": 164.0
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 45.33348019394537,
+      "tree": 65.9008695652174
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 122.0,
+      "commercial_op_date": "1991-01-01",
+      "operating_hours": 380.38,
+      "gross_generation_mwh": 25935.4,
+      "heat_input_mmbtu": 346181.41,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 14.201,
+      "prev_heat_input_mmbtu": 200918.332,
+      "prev_operating_hours": 215.95
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 19.617629735948565,
+      "tree": 19.729173913043475
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 47.0,
+      "commercial_op_date": "2002-12-15",
+      "operating_hours": 1302.51,
+      "gross_generation_mwh": 37166.73,
+      "heat_input_mmbtu": 428065.097,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 13.869,
+      "prev_heat_input_mmbtu": 542267.357,
+      "prev_operating_hours": 1560.6
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 5.6154401167143,
+      "tree": 10.73559090909091
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 64.0,
+      "commercial_op_date": "2012-01-26",
+      "operating_hours": 920.82,
+      "gross_generation_mwh": 49941.09,
+      "heat_input_mmbtu": 475918.081,
+      "nox_controls": "Water Injection|Ammonia Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 0.944,
+      "prev_heat_input_mmbtu": 288769.566,
+      "prev_operating_hours": 592.12
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.917118342197614,
+      "tree": 1.3438709677419356
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 84.0,
+      "commercial_op_date": "2003-12-02",
+      "operating_hours": 696.34,
+      "gross_generation_mwh": 39145.39,
+      "heat_input_mmbtu": 515828.1,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 16.272,
+      "prev_heat_input_mmbtu": 1085401.0,
+      "prev_operating_hours": 1486.28
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 15.285196913325978,
+      "tree": 7.893681159420289
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 122.0,
+      "commercial_op_date": "1974-12-14",
+      "operating_hours": 1508.0,
+      "gross_generation_mwh": 43341.0,
+      "heat_input_mmbtu": 564200.045,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 31.813,
+      "prev_heat_input_mmbtu": 493022.747,
+      "prev_operating_hours": 911.48
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 37.073985038392415,
+      "tree": 36.7773
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 105.0,
+      "commercial_op_date": "1994-09-23",
+      "operating_hours": 602.4,
+      "gross_generation_mwh": 45071.24,
+      "heat_input_mmbtu": 608890.318,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 20.66,
+      "prev_heat_input_mmbtu": 576512.482,
+      "prev_operating_hours": 597.86
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 23.73525208706127,
+      "tree": 22.527250000000006
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2024-05-22",
+      "operating_hours": 1444.29,
+      "gross_generation_mwh": 63558.3,
+      "heat_input_mmbtu": 642628.463,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 2.735,
+      "prev_heat_input_mmbtu": 511691.993,
+      "prev_operating_hours": 1141.04
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 4.873006876191706,
+      "tree": 3.21385
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2021-07-05",
+      "operating_hours": 1773.36,
+      "gross_generation_mwh": 69509.13,
+      "heat_input_mmbtu": 701368.883,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 5.725,
+      "prev_heat_input_mmbtu": 803399.757,
+      "prev_operating_hours": 1922.14
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 6.3990799144671255,
+      "tree": 6.030281250000001
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2021-07-12",
+      "operating_hours": 1729.49,
+      "gross_generation_mwh": 75938.33,
+      "heat_input_mmbtu": 762196.477,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 5.524,
+      "prev_heat_input_mmbtu": 841505.311,
+      "prev_operating_hours": 1895.72
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 6.748866588905574,
+      "tree": 4.246060606060605
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom turbo-fired boiler",
+      "nameplate_capacity_mw": 163.2,
+      "commercial_op_date": "1961-04-01",
+      "operating_hours": 895.74,
+      "gross_generation_mwh": 80015.11,
+      "heat_input_mmbtu": 824667.757,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 240.682,
+      "prev_heat_input_mmbtu": 940665.301,
+      "prev_operating_hours": 978.1
+    },
+    "predictions": {
+      "baseline": 267.669,
+      "ridge": 113.58128915284138,
+      "tree": 91.3277142857143
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 60.5,
+      "commercial_op_date": "2010-05-11",
+      "operating_hours": 2170.81,
+      "gross_generation_mwh": 93024.07,
+      "heat_input_mmbtu": 887678.47,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 6.335,
+      "prev_heat_input_mmbtu": 757750.318,
+      "prev_operating_hours": 1844.88
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 9.103580311225606,
+      "tree": 6.030281250000001
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 100.0,
+      "commercial_op_date": "2011-05-28",
+      "operating_hours": 2190.32,
+      "gross_generation_mwh": 122397.5,
+      "heat_input_mmbtu": 961254.953,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 13.478,
+      "prev_heat_input_mmbtu": 2586409.876,
+      "prev_operating_hours": 5573.58
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 8.019946635335371,
+      "tree": 6.076166666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 176.0,
+      "commercial_op_date": "2003-04-07",
+      "operating_hours": 661.23,
+      "gross_generation_mwh": 97166.5,
+      "heat_input_mmbtu": 1035557.728,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 5.426,
+      "prev_heat_input_mmbtu": 288852.821,
+      "prev_operating_hours": 188.44
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 21.15453669493813,
+      "tree": 20.311352941176466
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 357.1,
+      "commercial_op_date": "2008-12-13",
+      "operating_hours": 727.1,
+      "gross_generation_mwh": 159394.59,
+      "heat_input_mmbtu": 1111388.264,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 76.028,
+      "prev_heat_input_mmbtu": 8866781.451,
+      "prev_operating_hours": 5608.85
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 6.906155887549781,
+      "tree": 10.369
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 257.4,
+      "commercial_op_date": "1991-09-15",
+      "operating_hours": 1136.47,
+      "gross_generation_mwh": 102943.48,
+      "heat_input_mmbtu": 1184518.054,
+      "nox_controls": "Steam Injection",
+      "prev_nox_mass_tons": 58.566,
+      "prev_heat_input_mmbtu": 1507123.595,
+      "prev_operating_hours": 1405.38
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 36.97588097212496,
+      "tree": 44.71216666666667
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 91.0,
+      "commercial_op_date": "2002-03-01",
+      "operating_hours": 1788.76,
+      "gross_generation_mwh": 106057.2,
+      "heat_input_mmbtu": 1337658.591,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 35.69,
+      "prev_heat_input_mmbtu": 1363803.605,
+      "prev_operating_hours": 1841.66
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 25.60051494791054,
+      "tree": 36.25366666666666
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 98.0,
+      "commercial_op_date": "2009-11-14",
+      "operating_hours": 2185.66,
+      "gross_generation_mwh": 153961.57,
+      "heat_input_mmbtu": 1443581.797,
+      "nox_controls": "Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 6.954,
+      "prev_heat_input_mmbtu": 1096417.27,
+      "prev_operating_hours": 1685.5
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 14.01844035789477,
+      "tree": 7.89479411764706
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 257.4,
+      "commercial_op_date": "1991-09-15",
+      "operating_hours": 1499.95,
+      "gross_generation_mwh": 135187.83,
+      "heat_input_mmbtu": 1578359.667,
+      "nox_controls": "Steam Injection",
+      "prev_nox_mass_tons": 65.68,
+      "prev_heat_input_mmbtu": 1628090.061,
+      "prev_operating_hours": 1503.4
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 46.19259011143416,
+      "tree": 60.39119999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 130.0,
+      "commercial_op_date": "2000-03-10",
+      "operating_hours": 1579.29,
+      "gross_generation_mwh": 132130.21,
+      "heat_input_mmbtu": 1804757.829,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 48.313,
+      "prev_heat_input_mmbtu": 1032910.916,
+      "prev_operating_hours": 860.72
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 52.87309108823087,
+      "tree": 84.03191304347827
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 136.0,
+      "commercial_op_date": "1968-06-01",
+      "operating_hours": 5087.77,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 1989601.247,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)",
+      "prev_nox_mass_tons": 79.767,
+      "prev_heat_input_mmbtu": 2612836.492,
+      "prev_operating_hours": 6803.1
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 84.35699209036981,
+      "tree": 57.26988461538462
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 136.0,
+      "commercial_op_date": "1969-03-01",
+      "operating_hours": 5452.02,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 2153984.348,
+      "nox_controls": "Low NOx Burner Technology (Dry Bottom only)",
+      "prev_nox_mass_tons": 39.334,
+      "prev_heat_input_mmbtu": 1259194.252,
+      "prev_operating_hours": 3172.47
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 89.58640278988283,
+      "tree": 67.01606451612905
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 187.0,
+      "commercial_op_date": "2008-06-06",
+      "operating_hours": 1708.58,
+      "gross_generation_mwh": 208349.4,
+      "heat_input_mmbtu": 2359092.425,
+      "nox_controls": "Water Injection",
+      "prev_nox_mass_tons": 59.453,
+      "prev_heat_input_mmbtu": 4127843.371,
+      "prev_operating_hours": 2813.11
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 55.055591374326326,
+      "tree": 32.4968275862069
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 175.0,
+      "commercial_op_date": "1956-01-01",
+      "operating_hours": 2346.25,
+      "gross_generation_mwh": 233586.16,
+      "heat_input_mmbtu": 2636917.583,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 104.564,
+      "prev_heat_input_mmbtu": 2368519.207,
+      "prev_operating_hours": 2208.07
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 121.70884205472612,
+      "tree": 106.85139473684208
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Residual Oil",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 446.0,
+      "commercial_op_date": "1973-08-01",
+      "operating_hours": 2097.46,
+      "gross_generation_mwh": 241083.41,
+      "heat_input_mmbtu": 2909149.843,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air",
+      "prev_nox_mass_tons": 69.997,
+      "prev_heat_input_mmbtu": 2389896.135,
+      "prev_operating_hours": 1617.72
+    },
+    "predictions": {
+      "baseline": 12.722,
+      "ridge": 98.16914128146502,
+      "tree": 54.32790909090908
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 346.0,
+      "commercial_op_date": "2002-11-08",
+      "operating_hours": 1827.41,
+      "gross_generation_mwh": 450103.57,
+      "heat_input_mmbtu": 3301936.555,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 37.514,
+      "prev_heat_input_mmbtu": 7173268.042,
+      "prev_operating_hours": 4008.41
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 16.984664241537573,
+      "tree": 17.46464
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 445.5,
+      "commercial_op_date": "1975-01-01",
+      "operating_hours": 2211.56,
+      "gross_generation_mwh": 327304.93,
+      "heat_input_mmbtu": 3660165.692,
+      "nox_controls": "Low NOx Cell Burner|Combustion Modification/Fuel Reburning",
+      "prev_nox_mass_tons": 359.958,
+      "prev_heat_input_mmbtu": 3365685.009,
+      "prev_operating_hours": 1610.64
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 145.8226846253897,
+      "tree": 307.7034838709677
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 216.0,
+      "commercial_op_date": "2016-06-13",
+      "operating_hours": 2356.67,
+      "gross_generation_mwh": 394105.37,
+      "heat_input_mmbtu": 4078539.724,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 51.968,
+      "prev_heat_input_mmbtu": 3692547.22,
+      "prev_operating_hours": 2204.16
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 52.68310681634651,
+      "tree": 50.69072727272728
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 173.4,
+      "commercial_op_date": "2008-03-06",
+      "operating_hours": 2935.2,
+      "gross_generation_mwh": 387430.3,
+      "heat_input_mmbtu": 4509816.9,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 54.362,
+      "prev_heat_input_mmbtu": 3195200.7,
+      "prev_operating_hours": 2036.68
+    },
+    "predictions": {
+      "baseline": 7.364,
+      "ridge": 69.90322062058918,
+      "tree": 80.14773333333336
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 191.0,
+      "commercial_op_date": "2021-06-27",
+      "operating_hours": 7718.0,
+      "gross_generation_mwh": 437437.75,
+      "heat_input_mmbtu": 4890248.4,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 16.362,
+      "prev_heat_input_mmbtu": 4982190.525,
+      "prev_operating_hours": 8312.5
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 26.84512381736248,
+      "tree": 13.288633333333333
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 348.9,
+      "commercial_op_date": "2002-02-01",
+      "operating_hours": 4292.33,
+      "gross_generation_mwh": 477598.63,
+      "heat_input_mmbtu": 5605249.441,
+      "nox_controls": "Dry Low NOx Burners|Water Injection",
+      "prev_nox_mass_tons": 76.404,
+      "prev_heat_input_mmbtu": 6091160.092,
+      "prev_operating_hours": 4632.45
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 85.14595280626199,
+      "tree": 78.96907692307691
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 455.0,
+      "commercial_op_date": "2013-07-20",
+      "operating_hours": 3262.31,
+      "gross_generation_mwh": 821709.6,
+      "heat_input_mmbtu": 5992415.705,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 31.072,
+      "prev_heat_input_mmbtu": 5530826.92,
+      "prev_operating_hours": 3081.11
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 26.39220939474603,
+      "tree": 32.45152380952381
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 82.0,
+      "commercial_op_date": "1966-06-01",
+      "operating_hours": 7545.42,
+      "gross_generation_mwh": null,
+      "heat_input_mmbtu": 6547562.643,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air",
+      "prev_nox_mass_tons": 453.462,
+      "prev_heat_input_mmbtu": 7759928.95,
+      "prev_operating_hours": 8345.25
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 845.6665207394522,
+      "tree": 322.24363636363637
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 292.0,
+      "commercial_op_date": "2002-03-07",
+      "operating_hours": 4581.03,
+      "gross_generation_mwh": 1023270.4,
+      "heat_input_mmbtu": 7058508.618,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 40.818,
+      "prev_heat_input_mmbtu": 7682086.85,
+      "prev_operating_hours": 5139.54
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 34.774617069539225,
+      "tree": 42.057500000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Natural Gas",
+      "unit_type": "Combustion turbine",
+      "nameplate_capacity_mw": 130.0,
+      "commercial_op_date": "2018-04-09",
+      "operating_hours": 8245.5,
+      "gross_generation_mwh": 707792.4,
+      "heat_input_mmbtu": 7644115.151,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 27.867,
+      "prev_heat_input_mmbtu": 7521094.005,
+      "prev_operating_hours": 8234.22
+    },
+    "predictions": {
+      "baseline": 11.782499999999999,
+      "ridge": 168.81841995629085,
+      "tree": 30.836964285714284
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 175.0,
+      "commercial_op_date": "1954-06-05",
+      "operating_hours": 4746.67,
+      "gross_generation_mwh": 434987.93,
+      "heat_input_mmbtu": 4618248.878,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 262.955,
+      "prev_heat_input_mmbtu": 5951798.373,
+      "prev_operating_hours": 6836.11
+    },
+    "predictions": {
+      "baseline": 1113.545,
+      "ridge": 292.8159671260598,
+      "tree": 208.93947619047617
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 271.4,
+      "commercial_op_date": "1971-05-11",
+      "operating_hours": 6087.82,
+      "gross_generation_mwh": 811064.57,
+      "heat_input_mmbtu": 8503742.729,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 157.489,
+      "prev_heat_input_mmbtu": 12083023.686,
+      "prev_operating_hours": 6935.55
+    },
+    "predictions": {
+      "baseline": 47.119,
+      "ridge": 127.39214360400226,
+      "tree": 119.56205882352938
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 573.3,
+      "commercial_op_date": "2000-05-21",
+      "operating_hours": 5208.69,
+      "gross_generation_mwh": 1279273.35,
+      "heat_input_mmbtu": 8951789.109,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 194.686,
+      "prev_heat_input_mmbtu": 10328168.834,
+      "prev_operating_hours": 6169.67
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 129.14030622640988,
+      "tree": 163.598935483871
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 386.0,
+      "commercial_op_date": "2002-05-15",
+      "operating_hours": 6603.54,
+      "gross_generation_mwh": 1385292.62,
+      "heat_input_mmbtu": 9323579.173,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 42.076,
+      "prev_heat_input_mmbtu": 9076416.02,
+      "prev_operating_hours": 6609.2
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 52.50361543354543,
+      "tree": 45.8694
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 300.0,
+      "commercial_op_date": "2001-06-15",
+      "operating_hours": 6269.22,
+      "gross_generation_mwh": 1323756.75,
+      "heat_input_mmbtu": 9794350.038,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 64.768,
+      "prev_heat_input_mmbtu": 9699893.222,
+      "prev_operating_hours": 6286.81
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 67.31531674654272,
+      "tree": 57.181999999999995
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 383.6,
+      "commercial_op_date": "1992-05-01",
+      "operating_hours": 7824.59,
+      "gross_generation_mwh": 1196276.08,
+      "heat_input_mmbtu": 10143179.542,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction|Steam Injection",
+      "prev_nox_mass_tons": 156.764,
+      "prev_heat_input_mmbtu": 10396747.827,
+      "prev_operating_hours": 7877.06
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 80.25486451891001,
+      "tree": 150.15204545454546
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 351.3,
+      "commercial_op_date": "2002-05-15",
+      "operating_hours": 6490.19,
+      "gross_generation_mwh": 1566002.73,
+      "heat_input_mmbtu": 10667845.74,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 198.23,
+      "prev_heat_input_mmbtu": 12817603.34,
+      "prev_operating_hours": 7725.89
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 143.04453772272205,
+      "tree": 171.5269
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 494.0,
+      "commercial_op_date": "2011-05-03",
+      "operating_hours": 6169.84,
+      "gross_generation_mwh": 1649884.18,
+      "heat_input_mmbtu": 11380763.501,
+      "nox_controls": "Dry Low NOx Burners|Water Injection|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 37.686,
+      "prev_heat_input_mmbtu": 10150542.333,
+      "prev_operating_hours": 5328.44
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 59.71635193083556,
+      "tree": 43.06581481481481
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 301.3,
+      "commercial_op_date": "2002-06-29",
+      "operating_hours": 6127.39,
+      "gross_generation_mwh": 1522547.06,
+      "heat_input_mmbtu": 11443369.29,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 91.857,
+      "prev_heat_input_mmbtu": 12202566.306,
+      "prev_operating_hours": 6792.14
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 55.445503418700085,
+      "tree": 76.26407142857143
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 580.5,
+      "commercial_op_date": "1968-06-01",
+      "operating_hours": 4202.18,
+      "gross_generation_mwh": 1083870.04,
+      "heat_input_mmbtu": 11783464.555,
+      "nox_controls": "Overfire Air",
+      "prev_nox_mass_tons": 1081.106,
+      "prev_heat_input_mmbtu": 13139711.942,
+      "prev_operating_hours": 4054.83
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 530.2748859621532,
+      "tree": 911.3686000000002
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 573.2,
+      "commercial_op_date": "2001-04-22",
+      "operating_hours": 7162.1,
+      "gross_generation_mwh": 1707069.73,
+      "heat_input_mmbtu": 12098222.902,
+      "nox_controls": "Dry Low NOx Burners",
+      "prev_nox_mass_tons": 88.197,
+      "prev_heat_input_mmbtu": 4947626.482,
+      "prev_operating_hours": 3275.28
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 180.37343705211876,
+      "tree": 204.62244
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 504.0,
+      "commercial_op_date": "2005-05-05",
+      "operating_hours": 5574.05,
+      "gross_generation_mwh": 1953840.52,
+      "heat_input_mmbtu": 12414417.238,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 89.57,
+      "prev_heat_input_mmbtu": 13726494.022,
+      "prev_operating_hours": 5938.41
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 58.737858918752316,
+      "tree": 72.94430434782609
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 418.0,
+      "commercial_op_date": "2001-09-22",
+      "operating_hours": 5625.54,
+      "gross_generation_mwh": 1615534.36,
+      "heat_input_mmbtu": 12774536.721,
+      "nox_controls": "Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 160.974,
+      "prev_heat_input_mmbtu": 12388885.224,
+      "prev_operating_hours": 5591.28
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 81.82271903358489,
+      "tree": 172.7486153846154
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Circulating fluidized bed boiler",
+      "nameplate_capacity_mw": 297.5,
+      "commercial_op_date": "2002-04-22",
+      "operating_hours": 3760.2,
+      "gross_generation_mwh": 692119.73,
+      "heat_input_mmbtu": 7836524.044,
+      "nox_controls": "Selective Non-catalytic Reduction",
+      "prev_nox_mass_tons": 147.232,
+      "prev_heat_input_mmbtu": 5593074.212,
+      "prev_operating_hours": 2630.54
+    },
+    "predictions": {
+      "baseline": 204.326,
+      "ridge": 297.7748989549196,
+      "tree": 255.8973
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Cell burner boiler",
+      "nameplate_capacity_mw": 441.8,
+      "commercial_op_date": "1970-06-30",
+      "operating_hours": 5042.87,
+      "gross_generation_mwh": 1132262.29,
+      "heat_input_mmbtu": 13836231.354,
+      "nox_controls": "Low NOx Cell Burner",
+      "prev_nox_mass_tons": 1478.046,
+      "prev_heat_input_mmbtu": 15372129.331,
+      "prev_operating_hours": 4964.69
+    },
+    "predictions": {
+      "baseline": 531.966,
+      "ridge": 682.2777114091838,
+      "tree": 911.3686000000002
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 449.0,
+      "commercial_op_date": "2002-03-30",
+      "operating_hours": 7690.41,
+      "gross_generation_mwh": 2071862.02,
+      "heat_input_mmbtu": 14399312.448,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 66.411,
+      "prev_heat_input_mmbtu": 15014086.803,
+      "prev_operating_hours": 8129.84
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 78.68545305931241,
+      "tree": 62.06081818181818
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 456.0,
+      "commercial_op_date": "2003-04-15",
+      "operating_hours": 7884.08,
+      "gross_generation_mwh": 1582249.22,
+      "heat_input_mmbtu": 15045650.373,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 62.43,
+      "prev_heat_input_mmbtu": 15238103.376,
+      "prev_operating_hours": 7836.7
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 81.30670648951686,
+      "tree": 60.41724999999999
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 446.0,
+      "commercial_op_date": "1972-06-06",
+      "operating_hours": 5146.47,
+      "gross_generation_mwh": 1590108.62,
+      "heat_input_mmbtu": 15594136.471,
+      "nox_controls": null,
+      "prev_nox_mass_tons": 1377.26,
+      "prev_heat_input_mmbtu": 14800029.128,
+      "prev_operating_hours": 5675.82
+    },
+    "predictions": {
+      "baseline": 102.946,
+      "ridge": 572.3953835316406,
+      "tree": 1169.5681739130437
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 480.6,
+      "commercial_op_date": "2003-03-21",
+      "operating_hours": 7396.14,
+      "gross_generation_mwh": 2365368.15,
+      "heat_input_mmbtu": 16637359.057,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 60.384,
+      "prev_heat_input_mmbtu": 19255762.548,
+      "prev_operating_hours": 8485.78
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 83.83462128541478,
+      "tree": 52.11709523809524
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 435.0,
+      "commercial_op_date": "2016-01-06",
+      "operating_hours": 7533.5,
+      "gross_generation_mwh": 2673165.72,
+      "heat_input_mmbtu": 17989263.724,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 63.39,
+      "prev_heat_input_mmbtu": 20316096.634,
+      "prev_operating_hours": 8452.89
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 75.38287890120566,
+      "tree": 61.141000000000005
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Pipeline Natural Gas",
+      "unit_type": "Combined cycle",
+      "nameplate_capacity_mw": 800.0,
+      "commercial_op_date": "2017-09-20",
+      "operating_hours": 7055.01,
+      "gross_generation_mwh": 3022019.93,
+      "heat_input_mmbtu": 19376141.895,
+      "nox_controls": "Dry Low NOx Burners|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 119.432,
+      "prev_heat_input_mmbtu": 21475954.173,
+      "prev_operating_hours": 7402.81
+    },
+    "predictions": {
+      "baseline": 50.05,
+      "ridge": 84.31381035420551,
+      "tree": 130.20489999999998
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Tangentially-fired",
+      "nameplate_capacity_mw": 424.8,
+      "commercial_op_date": "1990-06-01",
+      "operating_hours": 5640.17,
+      "gross_generation_mwh": 1252725.89,
+      "heat_input_mmbtu": 12035038.554,
+      "nox_controls": "Low NOx Burner Technology w/ Closed-coupled OFA",
+      "prev_nox_mass_tons": 939.664,
+      "prev_heat_input_mmbtu": 12450349.675,
+      "prev_operating_hours": 6094.7
+    },
+    "predictions": {
+      "baseline": 1113.545,
+      "ridge": 1074.525722283454,
+      "tree": 1013.29465
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 315.0,
+      "commercial_op_date": "1975-03-01",
+      "operating_hours": 6208.78,
+      "gross_generation_mwh": 1366984.45,
+      "heat_input_mmbtu": 13267400.842,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 662.632,
+      "prev_heat_input_mmbtu": 14956455.441,
+      "prev_operating_hours": 7517.48
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 529.2184951908841,
+      "tree": 522.0670277777776
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 207.0,
+      "commercial_op_date": "1980-04-04",
+      "operating_hours": 7924.64,
+      "gross_generation_mwh": 1372161.11,
+      "heat_input_mmbtu": 14420305.82,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air",
+      "prev_nox_mass_tons": 964.268,
+      "prev_heat_input_mmbtu": 12108746.437,
+      "prev_operating_hours": 6800.12
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 1569.2194071826664,
+      "tree": 1081.7123333333336
+    }
+  },
+  {
+    "raw": {
+      "year": 2025,
+      "primary_fuel": "Coal",
+      "unit_type": "Dry bottom wall-fired boiler",
+      "nameplate_capacity_mw": 261.0,
+      "commercial_op_date": "1981-02-01",
+      "operating_hours": 6851.25,
+      "gross_generation_mwh": 1468776.36,
+      "heat_input_mmbtu": 17317530.036,
+      "nox_controls": "Low NOx Burner Technology w/ Overfire Air|Selective Catalytic Reduction",
+      "prev_nox_mass_tons": 871.787,
+      "prev_heat_input_mmbtu": 8941917.539,
+      "prev_operating_hours": 4194.96
+    },
+    "predictions": {
+      "baseline": 989.259,
+      "ridge": 720.708183429701,
+      "tree": 1891.592565217392
+    }
+  }
+]
