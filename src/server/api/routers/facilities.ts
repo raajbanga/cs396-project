@@ -327,6 +327,13 @@ function recordConditions(f: FilterInput): SQL[] {
   return conditions;
 }
 
+/** Unit-year filter over annual_records ⨝ units ⨝ facilities (Units view, exports, Analyze). */
+export const unitYearConditions = (f: FilterInput): SQL[] => [
+  ...facilityConditions(f),
+  ...unitConditions(f),
+  ...recordConditions(f),
+];
+
 /**
  * Facility-level filter (Facilities + Map views). Unit and unit-year filters keep facilities with at
  * least one matching unit(-year). IN-subqueries instead of joins: single-table selects render
@@ -462,14 +469,7 @@ export function rankedUnitYears(
     .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
     .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
     .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
-    .where(
-      and(
-        ...facilityConditions(input),
-        ...unitConditions(input),
-        ...recordConditions(input),
-        ...scope,
-      ),
-    )
+    .where(and(...unitYearConditions(input), ...scope))
     .as("ranked");
   return rankedView(database, ranked, input);
 }

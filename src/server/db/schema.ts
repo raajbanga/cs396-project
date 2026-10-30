@@ -255,3 +255,58 @@ export const importIssuesRelations = relations(importIssues, ({ one }) => ({
     references: [datasets.id],
   }),
 }));
+
+/**
+ * TRACI Factors: EPA TRACI characterization factors for the CAMPD pollutants (Phase 2 §3, §4.6),
+ * loaded from data/traci by `npm run traci:import`. One row per substance and impact category.
+ */
+export const traciFactors = sqliteTable(
+  "traci_factors",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    traciVersion: text("traci_version").notNull(), // e.g. "2.2"
+    pollutant: text("pollutant").notNull(), // CAMPD pollutant: "co2" | "so2" | "nox"
+    substance: text("substance").notNull(), // TRACI substance name, e.g. "NITROGEN OXIDES"
+    cas: text("cas").notNull(), // TRACI's formatted CAS number ("x" when TRACI lists none)
+    medium: text("medium").notNull(), // always "air" for CAMPD
+    impactCategory: text("impact_category").notNull(),
+    factor: real("factor").notNull(),
+    factorUnit: text("factor_unit").notNull(), // equivalent unit per kg of substance, e.g. "kg SO2 eq"
+    source: text("source").notNull(), // workbook, sheet, and column the factor was read from
+  },
+  (t) => [
+    uniqueIndex("traci_factor_idx").on(
+      t.traciVersion,
+      t.pollutant,
+      t.medium,
+      t.impactCategory,
+    ),
+  ],
+);
+
+/**
+ * Models: prediction models trained offline by ml/train.py (Phase 2 §5) and registered by
+ * `npm run ml:register`. `artifact` holds everything the app needs to predict without Python.
+ */
+export const models = sqliteTable("models", {
+  id: text("id").primaryKey(), // e.g. "nox-ridge"
+  name: text("name").notNull(),
+  kind: text("kind").notNull(), // "baseline" | "ridge" | "tree"
+  target: text("target").notNull(),
+  features: text("features", { mode: "json" }).$type<string[]>().notNull(),
+  params: text("params", { mode: "json" })
+    .$type<Record<string, unknown>>()
+    .notNull(),
+  trainYears: text("train_years").notNull(), // "2016-2021"
+  validationYears: text("validation_years").notNull(),
+  testYears: text("test_years").notNull(),
+  metrics: text("metrics", { mode: "json" })
+    .$type<Record<string, Record<string, number>>>()
+    .notNull(),
+  artifact: text("artifact", { mode: "json" })
+    .$type<Record<string, unknown>>()
+    .notNull(),
+  artifactPath: text("artifact_path").notNull(), // ml/models/<id>.joblib
+  pipelineVersion: text("pipeline_version").notNull(), // git commit + scikit-learn version
+  trainedAt: integer("trained_at", { mode: "timestamp" }).notNull(),
+});
