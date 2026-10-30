@@ -37,12 +37,16 @@ function readDetailParam(): DetailView | null {
   return unit ? { kind: "unit", id: unit } : null;
 }
 
-/** The §9 pages, in workflow order: look at the data, then get data in and out. */
+/** The pages in workflow order: look at the data, analyze and predict (Phase 2), then get data in and out. */
 const NAV = [
   [
     { href: "/", label: "Home" },
     { href: "/explore", label: "Explore" },
     { href: "/map", label: "Map" },
+  ],
+  [
+    { href: "/analyze", label: "Analyze" },
+    { href: "/predict", label: "Predict" },
   ],
   [
     { href: "/retrieve", label: "Retrieve" },

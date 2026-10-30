@@ -1,8 +1,10 @@
+import { analysisRouter } from "~/server/api/routers/analysis";
 import { facilitiesRouter } from "~/server/api/routers/facilities";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 export const appRouter = createTRPCRouter({
   facilities: facilitiesRouter,
+  analysis: analysisRouter,
 });
 
 export type AppRouter = typeof appRouter;
