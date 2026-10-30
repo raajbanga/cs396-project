@@ -39,7 +39,7 @@ export function VariableField({
   onChange,
   catalog,
   groups,
-  className = "w-72",
+  className = "w-80",
 }: {
   label?: string;
   value: string;

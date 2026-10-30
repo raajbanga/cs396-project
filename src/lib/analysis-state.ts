@@ -40,7 +40,9 @@ export const DEFAULT_VIEW = {
   color: "fuelClass",
   box: "", // "1" = box plot instead of histogram
   log: "", // "1" = log axis
-  order: "desc",
+  order: "desc", // ranking: "desc" = highest first
+  rankBy: "facility",
+  method: "pearson",
   compareBy: "noxControl",
   groups: "SCR|None",
   impactBy: "state",
