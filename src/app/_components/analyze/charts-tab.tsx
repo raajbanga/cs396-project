@@ -4,18 +4,21 @@ import type { Data } from "plotly.js";
 import { Chart } from "~/components/ui/chart";
 import { Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
-import { Select } from "~/components/ui/select";
-import { AGGREGATION_LABELS, formatStat } from "~/lib/analysis";
+import { formatStat } from "~/lib/analysis";
 import { CHART_TYPES, type ChartType } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import {
   asDimension,
+  bind,
+  combinedLabel,
   Controls,
   DimensionField,
   dimensionLabel,
   findInfo,
+  Toggle,
+  valueColumn,
   variableLabel,
   VariableField,
   type TabProps,
@@ -46,39 +49,13 @@ const CORRELATION_VARIABLES = [
   "capacityFactor",
 ];
 
-const toggle = (on: boolean) => (on ? "1" : "");
-
 /** Fuel classes keep the colors they have on the Map page; other groups use the chart palette. */
 const groupColor = (dimension: string | undefined, group: string) =>
   dimension === "fuelClass" ? getFuelTheme(group).color : undefined;
 
-/** An on/off choice as a two-way segmented control. */
-function Toggle({
-  label,
-  value,
-  onChange,
-  off,
-  on,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  off: string;
-  on: string;
-}) {
-  return (
-    <Field label={label}>
-      <SegmentedControl
-        value={value || "0"}
-        onChange={(v) => onChange(v === "1" ? "1" : "")}
-        options={[
-          { value: "0", label: off },
-          { value: "1", label: on },
-        ]}
-      />
-    </Field>
-  );
-}
+/** "; the 8 largest of 15 groups" when a chart shows only part of its groups. */
+const shownOf = (shown: number, total = 0, noun = "groups") =>
+  total > shown ? `; the ${shown} largest of ${total} ${noun}` : "";
 
 /** §4.4 dashboard: one chart at a time over the selection, chosen by type. */
 export function ChartsTab(props: TabProps) {
@@ -101,7 +78,8 @@ export function ChartsTab(props: TabProps) {
 }
 
 /** Line chart of a variable per year, one line per group. */
-function TrendChart({ filters, view, setView, catalog }: TabProps) {
+function TrendChart(props: TabProps) {
+  const { filters, view, catalog } = props;
   const info = findInfo(catalog, view.variable);
   const seriesBy = asDimension(view.series);
   const { data, isLoading } = api.analysis.aggregate.useQuery({
@@ -113,55 +91,43 @@ function TrendChart({ filters, view, setView, catalog }: TabProps) {
   });
   const rows = data?.rows ?? [];
   const names = [...new Set(rows.map((r) => r.series ?? "All"))];
-  const traces: Data[] = names.map((name) => {
-    const points = rows.filter((r) => (r.series ?? "All") === name);
-    return {
-      type: "scatter",
-      mode: "lines+markers",
-      name,
-      line: { color: groupColor(seriesBy, name) },
-      marker: { color: groupColor(seriesBy, name) },
-      x: points.map((r) => Number(r.group)),
-      y: points.map((r) => r.values[view.variable] ?? null),
-      hovertemplate: `%{x}: %{y:,.4~g} ${info?.unit}<extra>${name}</extra>`,
-    };
-  });
-  const combined = info ? AGGREGATION_LABELS[info.aggregation] : "";
   return (
     <>
       <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
+        <VariableField {...bind(props, "variable")} />
         <DimensionField
+          {...bind(props, "series")}
           label="One line per"
-          value={view.series}
-          onChange={(series) => setView({ series })}
-          catalog={catalog}
           none="Whole selection"
           exclude={["year"]}
         />
       </Controls>
       <Chart
         title={`${info?.label} by year${seriesBy ? ` and ${dimensionLabel(catalog, seriesBy).toLowerCase()}` : ""}`}
-        subtitle={`${combined} per year${seriesBy && data && data.total > 8 ? `; the 8 largest of ${data.total} groups` : ""}. ${info?.definition}`}
+        subtitle={`${combinedLabel(info)} per year${seriesBy ? shownOf(8, data?.total) : ""}. ${info?.definition}`}
         filename={`trend-${view.variable}`}
         meta={{ variables: [info] }}
         isLoading={isLoading}
-        data={traces}
+        data={names.map((name): Data => {
+          const points = rows.filter((r) => (r.series ?? "All") === name);
+          const color = groupColor(seriesBy, name);
+          return {
+            type: "scatter",
+            mode: "lines+markers",
+            name,
+            line: { color, width: 2 },
+            marker: { color, size: 6 },
+            x: points.map((r) => Number(r.group)),
+            y: points.map((r) => r.values[view.variable] ?? null),
+            hovertemplate: `%{x}: %{y:,.4~g} ${info?.unit}<extra>${name}</extra>`,
+          };
+        })}
         layout={{
           xaxis: { title: { text: "Reporting year" }, dtick: 1 },
-          yaxis: { title: { text: variableLabel(info) } },
+          yaxis: { title: { text: variableLabel(info) }, rangemode: "tozero" },
         }}
         table={{
-          head: [
-            "year",
-            "group",
-            `${view.variable} (${info?.unit})`,
-            "unit_years",
-          ],
+          head: ["year", "group", valueColumn(info), "unit_years"],
           rows: rows.map((r) => [
             r.group,
             r.series ?? "All",
@@ -174,57 +140,99 @@ function TrendChart({ filters, view, setView, catalog }: TabProps) {
   );
 }
 
-/** Bar chart of a variable per group, largest first. */
-function BarsChart({ filters, view, setView, catalog }: TabProps) {
+/**
+ * Bars per group (any grouping field), or, as a ranking, the highest or lowest 20 facilities or
+ * units drawn horizontally so their names stay readable.
+ */
+function BarsChart({ ranking, ...props }: TabProps & { ranking?: boolean }) {
+  const { filters, view, setView, catalog } = props;
   const info = findInfo(catalog, view.variable);
-  const by = asDimension(view.by) ?? "state";
+  const by = ranking
+    ? view.rankBy === "unit"
+      ? "unit"
+      : "facility"
+    : (asDimension(view.by) ?? "state");
+  const order = ranking && view.order === "asc" ? "asc" : "desc";
+  const limit = ranking ? 20 : 30;
   const { data, isLoading } = api.analysis.aggregate.useQuery({
     filters,
     variables: [view.variable],
     by,
-    limit: 30,
+    order,
+    limit,
   });
   const rows = data?.rows ?? [];
+  const values = rows.map((r) => r.values[view.variable] ?? null);
+  const groupName = dimensionLabel(catalog, by).toLowerCase();
   return (
     <>
       <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
-        <DimensionField
-          value={by}
-          onChange={(v) => setView({ by: v })}
-          catalog={catalog}
-          exclude={["unit", "facility"]}
-        />
+        <VariableField {...bind(props, "variable")} />
+        {ranking ? (
+          <>
+            <Toggle
+              label="Rank"
+              value={view.rankBy === "unit" ? "1" : ""}
+              onChange={(v) => setView({ rankBy: v ? "unit" : "facility" })}
+              off="Facilities"
+              on="Units"
+            />
+            <Toggle
+              label="Order"
+              value={order === "asc" ? "1" : ""}
+              onChange={(v) => setView({ order: v ? "asc" : "desc" })}
+              off="Highest"
+              on="Lowest"
+            />
+          </>
+        ) : (
+          <DimensionField
+            value={by}
+            onChange={(v) => setView({ by: v })}
+            catalog={catalog}
+            exclude={["unit", "facility"]}
+          />
+        )}
       </Controls>
       <Chart
-        title={`${info?.label} by ${dimensionLabel(catalog, by).toLowerCase()}`}
-        subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} per group${data && data.total > 30 ? `; the 30 largest of ${data.total}` : ""}. ${info?.definition}`}
-        filename={`bars-${view.variable}-by-${by}`}
+        title={
+          ranking
+            ? `${order === "desc" ? "Highest" : "Lowest"} ${limit} ${groupName === "unit" ? "units" : "facilities"} by ${info?.label}`
+            : `${info?.label} by ${groupName}`
+        }
+        subtitle={`${combinedLabel(info)} over the selected years${shownOf(limit, data?.total, ranking ? `${groupName === "unit" ? "units" : "facilities"}` : "groups")}. ${info?.definition}`}
+        filename={`${ranking ? "ranking" : "bars"}-${view.variable}-by-${by}-${order}`}
         meta={{ variables: [info] }}
         isLoading={isLoading}
+        height={ranking ? 560 : 400}
         data={[
           {
             type: "bar",
-            x: rows.map((r) => r.group),
-            y: rows.map((r) => r.values[view.variable] ?? null),
+            orientation: ranking ? "h" : "v",
+            [ranking ? "y" : "x"]: rows.map((r) => r.group),
+            [ranking ? "x" : "y"]: values,
             customdata: rows.map((r) => r.n),
-            hovertemplate: `%{x}: %{y:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
+            hovertemplate: `%{${ranking ? "y" : "x"}}<br>%{${ranking ? "x" : "y"}:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
           },
         ]}
-        layout={{
-          xaxis: {
-            title: { text: dimensionLabel(catalog, by) },
-            type: by === "year" ? "category" : undefined,
-          },
-          yaxis: { title: { text: variableLabel(info) } },
-        }}
+        layout={
+          ranking
+            ? {
+                yaxis: { autorange: "reversed", automargin: true },
+                xaxis: { title: { text: variableLabel(info) } },
+                margin: { l: 16, r: 16, t: 8, b: 48 },
+              }
+            : {
+                xaxis: {
+                  title: { text: dimensionLabel(catalog, by) },
+                  type: "category",
+                },
+                yaxis: { title: { text: variableLabel(info) } },
+              }
+        }
         table={{
-          head: [by, `${view.variable} (${info?.unit})`, "unit_years"],
-          rows: rows.map((r) => [r.group, r.values[view.variable], r.n]),
+          head: ["rank", by, valueColumn(info), "unit_years"],
+          rows: rows.map((r, i) => [i + 1, r.group, values[i], r.n]),
         }}
       />
     </>
@@ -232,7 +240,8 @@ function BarsChart({ filters, view, setView, catalog }: TabProps) {
 }
 
 /** Histogram (overlaid per group) or box plot of the unit-year values. */
-function DistributionChart({ filters, view, setView, catalog }: TabProps) {
+function DistributionChart(props: TabProps) {
+  const { filters, view, setView, catalog } = props;
   const info = findInfo(catalog, view.variable);
   const by = asDimension(view.by);
   const box = view.box === "1";
@@ -248,52 +257,27 @@ function DistributionChart({ filters, view, setView, catalog }: TabProps) {
   const dropped = log
     ? groups.reduce((n, g) => n + g.values.filter((x) => x <= 0).length, 0)
     : 0;
-  const traces: Data[] = groups.map((g) =>
-    box
-      ? {
-          type: "box",
-          name: g.group,
-          y: shown(g.values),
-          boxpoints: false,
-          marker: { color: groupColor(by, g.group) },
-        }
-      : {
-          type: "histogram",
-          name: g.group,
-          marker: { color: groupColor(by, g.group) },
-          x: log ? shown(g.values).map(Math.log10) : g.values,
-          opacity: groups.length > 1 ? 0.6 : 1,
-          nbinsx: 60,
-        },
-  );
   const axis = variableLabel(info);
   return (
     <>
       <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
+        <VariableField {...bind(props, "variable")} />
         <DimensionField
+          {...bind(props, "by")}
           label="Split by"
-          value={view.by}
-          onChange={(v) => setView({ by: v })}
-          catalog={catalog}
           none="No split"
           exclude={["unit", "facility"]}
         />
         <Toggle
+          {...bind(props, "box")}
           label="Chart"
-          value={view.box}
-          onChange={(box) => setView({ box })}
           off="Histogram"
           on="Box plot"
         />
         <Toggle
           label="Scale"
           value={view.log}
-          onChange={(log) => setView({ log })}
+          onChange={(v) => setView({ log: v })}
           off="Linear"
           on="Log"
         />
@@ -312,7 +296,24 @@ function DistributionChart({ filters, view, setView, catalog }: TabProps) {
         filename={`distribution-${view.variable}`}
         meta={{ variables: [info], sampled: data?.sampled }}
         isLoading={isLoading}
-        data={traces}
+        data={groups.map((g): Data =>
+          box
+            ? {
+                type: "box",
+                name: g.group,
+                y: shown(g.values),
+                boxpoints: false,
+                marker: { color: groupColor(by, g.group) },
+              }
+            : ({
+                type: "histogram",
+                name: g.group,
+                x: log ? shown(g.values).map(Math.log10) : g.values,
+                marker: { color: groupColor(by, g.group) },
+                opacity: groups.length > 1 ? 0.6 : 0.9,
+                nbinsx: 60, // a valid histogram key missing from @types/plotly.js
+              } as Data),
+        )}
         layout={
           box
             ? {
@@ -326,7 +327,7 @@ function DistributionChart({ filters, view, setView, catalog }: TabProps) {
               }
         }
         table={{
-          head: ["group", `${view.variable} (${info?.unit})`],
+          head: ["group", valueColumn(info)],
           rows: groups.flatMap((g) => g.values.map((v) => [g.group, v])),
         }}
       />
@@ -335,11 +336,12 @@ function DistributionChart({ filters, view, setView, catalog }: TabProps) {
 }
 
 /** Scatter of two variables over unit-years, colored by a dimension. */
-function ScatterChart({ filters, view, setView, catalog }: TabProps) {
+function ScatterChart(props: TabProps) {
+  const { filters, view, setView, catalog } = props;
   const x = findInfo(catalog, view.x);
   const y = findInfo(catalog, view.y);
   const color = asDimension(view.color) ?? "fuelClass";
-  const log = view.log === "1";
+  const axisType = view.log === "1" ? "log" : undefined;
   const { data, isLoading } = api.analysis.scatter.useQuery({
     filters,
     x: view.x,
@@ -348,41 +350,14 @@ function ScatterChart({ filters, view, setView, catalog }: TabProps) {
   });
   const points = data?.points ?? [];
   const groups = [...new Set(points.map((p) => p.group))].slice(0, 10);
-  const traces: Data[] = groups.map((group) => {
-    const pts = points.filter((p) => p.group === group);
-    return {
-      type: "scattergl",
-      mode: "markers",
-      name: group,
-      x: pts.map((p) => p.x),
-      y: pts.map((p) => p.y),
-      text: pts.map((p) => p.label),
-      marker: { size: 5, opacity: 0.6, color: groupColor(color, group) },
-      hovertemplate: `%{text}<br>${x?.label}: %{x:,.4~g} ${x?.unit}<br>${y?.label}: %{y:,.4~g} ${y?.unit}<extra>${group}</extra>`,
-    };
-  });
   return (
     <>
       <Controls>
-        <VariableField
-          label="X axis"
-          value={view.x}
-          onChange={(v) => setView({ x: v })}
-          catalog={catalog}
-          className="w-64"
-        />
-        <VariableField
-          label="Y axis"
-          value={view.y}
-          onChange={(v) => setView({ y: v })}
-          catalog={catalog}
-          className="w-64"
-        />
+        <VariableField {...bind(props, "x")} label="X axis" />
+        <VariableField {...bind(props, "y")} label="Y axis" />
         <DimensionField
+          {...bind(props, "color")}
           label="Color by"
-          value={color}
-          onChange={(v) => setView({ color: v })}
-          catalog={catalog}
           exclude={["unit", "facility", "state"]}
         />
         <Toggle
@@ -399,25 +374,26 @@ function ScatterChart({ filters, view, setView, catalog }: TabProps) {
         filename={`scatter-${view.y}-vs-${view.x}`}
         meta={{ variables: [x, y], pearsonR: data?.r, pairs: data?.total }}
         isLoading={isLoading}
-        data={traces}
         height={460}
+        data={groups.map((group): Data => {
+          const pts = points.filter((p) => p.group === group);
+          return {
+            type: "scattergl",
+            mode: "markers",
+            name: group,
+            x: pts.map((p) => p.x),
+            y: pts.map((p) => p.y),
+            text: pts.map((p) => p.label),
+            marker: { size: 5, opacity: 0.6, color: groupColor(color, group) },
+            hovertemplate: `%{text}<br>${x?.label}: %{x:,.4~g} ${x?.unit}<br>${y?.label}: %{y:,.4~g} ${y?.unit}<extra>${group}</extra>`,
+          };
+        })}
         layout={{
-          xaxis: {
-            title: { text: variableLabel(x) },
-            type: log ? "log" : undefined,
-          },
-          yaxis: {
-            title: { text: variableLabel(y) },
-            type: log ? "log" : undefined,
-          },
+          xaxis: { title: { text: variableLabel(x) }, type: axisType },
+          yaxis: { title: { text: variableLabel(y) }, type: axisType },
         }}
         table={{
-          head: [
-            "unit_year",
-            color,
-            `${view.x} (${x?.unit})`,
-            `${view.y} (${y?.unit})`,
-          ],
+          head: ["unit_year", color, valueColumn(x), valueColumn(y)],
           rows: points.map((p) => [p.label, p.group, p.x, p.y]),
         }}
       />
@@ -433,13 +409,13 @@ function CorrelationChart({ filters, view, setView, catalog }: TabProps) {
     variables: CORRELATION_VARIABLES,
     method,
   });
-  const labels = CORRELATION_VARIABLES.map(
-    (k) => findInfo(catalog, k)?.label ?? k,
-  );
+  const infos = CORRELATION_VARIABLES.map((k) => findInfo(catalog, k));
+  const labels = infos.map((v, i) => v?.label ?? CORRELATION_VARIABLES[i]!);
+  const matrix = data?.matrix ?? [];
   return (
     <>
       <Controls>
-        <Field label="Method">
+        <Field group label="Method">
           <SegmentedControl
             value={method}
             onChange={(m) => setView({ method: m })}
@@ -454,11 +430,7 @@ function CorrelationChart({ filters, view, setView, catalog }: TabProps) {
         title={`${method === "pearson" ? "Pearson" : "Spearman"} correlation between variables`}
         subtitle="Each cell uses the unit-years that report both variables (n on hover). Correlation is association, not cause."
         filename={`correlation-${method}`}
-        meta={{
-          variables: CORRELATION_VARIABLES.map((k) => findInfo(catalog, k)),
-          method,
-          pairCounts: data?.n,
-        }}
+        meta={{ variables: infos, method, pairCounts: data?.n }}
         isLoading={isLoading}
         height={560}
         data={[
@@ -466,12 +438,12 @@ function CorrelationChart({ filters, view, setView, catalog }: TabProps) {
             type: "heatmap",
             x: labels,
             y: labels,
-            z: data?.matrix ?? [],
+            z: matrix,
             customdata: (data?.n ?? []) as never,
             zmin: -1,
             zmax: 1,
             colorscale: "RdBu",
-            text: (data?.matrix ?? []).map((row) =>
+            text: matrix.map((row) =>
               row.map((v) => (v === null ? "" : v.toFixed(2))),
             ) as never,
             texttemplate: "%{text}",
@@ -481,90 +453,11 @@ function CorrelationChart({ filters, view, setView, catalog }: TabProps) {
         ]}
         layout={{
           yaxis: { autorange: "reversed" },
-          margin: { l: 140, b: 120, t: 16, r: 16 },
+          margin: { l: 140, b: 120, t: 8, r: 16 },
         }}
         table={{
           head: ["variable", ...CORRELATION_VARIABLES],
-          rows: (data?.matrix ?? []).map((row, i) => [
-            CORRELATION_VARIABLES[i],
-            ...row,
-          ]),
-        }}
-      />
-    </>
-  );
-}
-
-/** Top or bottom 20 facilities or units by a variable, as horizontal bars. */
-function RankingChart({ filters, view, setView, catalog }: TabProps) {
-  const info = findInfo(catalog, view.variable);
-  const by = view.rankBy === "unit" ? "unit" : "facility";
-  const order = view.order === "asc" ? "asc" : "desc";
-  const { data, isLoading } = api.analysis.aggregate.useQuery({
-    filters,
-    variables: [view.variable],
-    by,
-    order,
-    limit: 20,
-  });
-  const rows = data?.rows ?? [];
-  return (
-    <>
-      <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
-        <Field label="Rank">
-          <Select
-            value={by}
-            onValueChange={(rankBy) => setView({ rankBy })}
-            className="w-32"
-            options={[
-              { value: "facility", label: "Facilities" },
-              { value: "unit", label: "Units" },
-            ]}
-          />
-        </Field>
-        <Toggle
-          label="Order"
-          value={toggle(order === "asc")}
-          onChange={(v) => setView({ order: v ? "asc" : "desc" })}
-          off="Highest"
-          on="Lowest"
-        />
-      </Controls>
-      <Chart
-        title={`${order === "desc" ? "Highest" : "Lowest"} 20 ${by === "unit" ? "units" : "facilities"} by ${info?.label}`}
-        subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} over the selected years, among ${formatNumber(data?.total)} ${by === "unit" ? "units" : "facilities"}. ${info?.definition}`}
-        filename={`ranking-${by}-${view.variable}-${order}`}
-        meta={{ variables: [info] }}
-        isLoading={isLoading}
-        height={560}
-        data={[
-          {
-            type: "bar",
-            orientation: "h",
-            y: rows.map((r) => r.group),
-            x: rows.map((r) => r.values[view.variable] ?? null),
-            customdata: rows.map((r) => r.n),
-            hovertemplate: `%{y}<br>%{x:,.4~g} ${info?.unit}<br>%{customdata} unit-years<extra></extra>`,
-          },
-        ]}
-        layout={{
-          yaxis: { autorange: "reversed", automargin: true },
-          xaxis: { title: { text: variableLabel(info) } },
-          margin: { l: 16, r: 16, t: 16, b: 48 },
-        }}
-        table={{
-          head: ["rank", by, `${view.variable} (${info?.unit})`, "unit_years"],
-          rows: rows.map((r, i) => [
-            i + 1,
-            r.group,
-            r.values[view.variable],
-            r.n,
-          ]),
+          rows: matrix.map((row, i) => [CORRELATION_VARIABLES[i], ...row]),
         }}
       />
     </>
@@ -572,7 +465,8 @@ function RankingChart({ filters, view, setView, catalog }: TabProps) {
 }
 
 /** State choropleth of a variable (Plotly's built-in U.S. state shapes). */
-function MapChart({ filters, view, setView, catalog }: TabProps) {
+function MapChart(props: TabProps) {
+  const { filters, view, catalog } = props;
   const info = findInfo(catalog, view.variable);
   const { data, isLoading } = api.analysis.aggregate.useQuery({
     filters,
@@ -584,15 +478,11 @@ function MapChart({ filters, view, setView, catalog }: TabProps) {
   return (
     <>
       <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
+        <VariableField {...bind(props, "variable")} />
       </Controls>
       <Chart
         title={`${info?.label} by state`}
-        subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} per state. States with no value are blank. For facility locations, see the Map page.`}
+        subtitle={`${combinedLabel(info)} per state. States with no value are blank. For facility locations, see the Map page.`}
         filename={`map-${view.variable}`}
         meta={{ variables: [info] }}
         isLoading={isLoading}
@@ -606,16 +496,23 @@ function MapChart({ filters, view, setView, catalog }: TabProps) {
             customdata: rows.map((r) => r.n) as never,
             colorscale: "YlOrRd",
             reversescale: true,
-            colorbar: { title: { text: info?.unit } },
+            marker: { line: { width: 0.5, color: "rgba(128,128,128,0.5)" } },
+            colorbar: { title: { text: info?.unit }, thickness: 12 },
             hovertemplate: `%{location}: %{z:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
           },
         ]}
         layout={{
-          geo: { scope: "usa", bgcolor: "rgba(0,0,0,0)", showlakes: false },
+          geo: {
+            scope: "usa",
+            bgcolor: "rgba(0,0,0,0)",
+            showlakes: false,
+            showland: true,
+            landcolor: "rgba(128,128,128,0.12)",
+          },
           margin: { t: 8, r: 8, b: 8, l: 8 },
         }}
         table={{
-          head: ["state", `${view.variable} (${info?.unit})`, "unit_years"],
+          head: ["state", valueColumn(info), "unit_years"],
           rows: rows.map((r) => [r.group, r.values[view.variable], r.n]),
         }}
       />
@@ -629,6 +526,6 @@ const CHARTS: Record<ChartType, (props: TabProps) => React.ReactNode> = {
   distribution: DistributionChart,
   scatter: ScatterChart,
   correlation: CorrelationChart,
-  ranking: RankingChart,
+  ranking: (props) => <BarsChart {...props} ranking />,
   map: MapChart,
 };

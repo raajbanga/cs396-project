@@ -19,6 +19,19 @@ a check on a local machine. Put an owner's initials after a task when someone pi
 | F11 report, F12 slides + demo | Not started. README and `DATABASE_BREAKDOWN.md` already updated.                         |
 | Open code items               | Saved analyses (stretch), Download-page section, a few optional extras; see `[ ]` below. |
 
+## Audit (10/30, second pass)
+
+Checked every Phase 2 spec section against the code, the live app, and the docs. Fixed:
+
+- [x] §4.1 emissions-program filter was missing (docs claimed it); now a whole-code match ("CSNOX" ≠ "CSNOXOS"), verified against Python.
+- [x] Default 2015–2025 range was dropped by any URL parameter (`/analyze?tab=charts` analysed all 18 years).
+- [x] Analysis row cache ignored imports for up to 60 s; keyed by latest import time now.
+- [x] §4.5 rankings added to Compare; §6.2 min/max values in Sensitivity; §7 model-comparison export; "unusual observations" (Tukey far-out fences) on Statistics.
+- [x] Segmented controls inside `<label>` flipped on caption click (a11y bug); `Field group`.
+- [x] Deprecations: `@typescript-eslint/no-deprecated` on (0 hits); JSON named import fixed (build now warning-free); redundant `force-dynamic` removed, Home uses `connection()`; Python runs clean with `-W error`. Only remaining: drizzle-kit's transitive `@esbuild-kit/*` (upstream, dev-only).
+- [x] Dead code: knip clean (21 unused exports made private, missing `@types/topojson-specification` declared).
+- [x] UI: Analyze filter wall removed (year range up front, Advanced closed, no ignored Top-N); grouped 29-variable picker; numeric table columns right-aligned app-wide; chart headers fixed; Dataset tab regrouped; Compare chips; scenario table pivoted per model; humanized model features; best model scores in bold.
+
 ## 🧪 Needs local testing
 
 - [ ] **Python 3.9 venv** (the README's tested setup): `pip install -r requirements.txt`, then
@@ -204,7 +217,7 @@ Target: **annual NOₓ mass (short tons) per unit-year.** Pipeline lives in `ml/
 
 All computed in TS from the F7 JSON models — instant, works on Vercel.
 
-- [x] One input at a time over a % range of its baseline value (from, to, step); table with value, prediction, Δ, Δ %. Default baseline: Ghent unit 2, 2024 (coal, no SCR). [ ] Absolute min/max (only % today).
+- [x] One input at a time from a minimum to a maximum, in its own unit or as % of the baseline value; table with value, prediction, Δ, Δ %. Default baseline: Ghent unit 2, 2024 (coal, no SCR).
 - [x] Curve with baseline diamond, dashed reference lines, tooltips, shaded out-of-range regions, warning text.
 - [x] Scenarios: load ±%, heat input ±%, add/remove SCR, fuel switch, high efficiency, for Ridge and tree side by side. [ ] Fully custom scenario (only the two % values are editable).
 - [x] Grouped bar chart labeled with % change; faded bars and table warnings when outside the training range.
@@ -229,7 +242,7 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 
 ## F10 — Testing, quality, and repo hygiene (§12.3)
 
-- [x] `npm test`: 57 passing (stats vs SciPy, indicators, TRACI, model parity, ranges). [ ] Export metadata test.
+- [x] `npm test`: 60 passing (stats vs SciPy, indicators, TRACI, model parity, ranges). [ ] Export metadata test.
 - [x] `npm run test:py`: 6 passing.
 - [x] Small fixtures only (`ml/fixtures/parity.json`, 100 KB).
 - [x] Migration 0009; committed `db.sqlite` has the TRACI and model rows.

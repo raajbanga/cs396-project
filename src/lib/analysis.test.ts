@@ -5,11 +5,13 @@ import test from "node:test";
 import {
   aggregate,
   buildVariables,
+  formatPct,
   hoursInYear,
   noxControlClass,
   so2ControlClass,
   type AnalysisRow,
 } from "./analysis";
+import { parseAnalysisParams } from "./analysis-state";
 import { SHORT_TON_KG, type TraciFactor } from "./traci";
 
 /** The committed TRACI extract, as the import script reads it. */
@@ -149,4 +151,21 @@ void test("control classes", () => {
   assert.equal(noxControlClass(null), "None");
   assert.equal(so2ControlClass("Wet Limestone"), "Scrubber (FGD)");
   assert.equal(so2ControlClass("Dry Sorbent Injection"), "Sorbent injection");
+});
+
+void test("formatPct: signed, one decimal, dash when undefined", () => {
+  assert.equal(formatPct(12.345), "+12.3 %");
+  assert.equal(formatPct(-4), "-4.0 %");
+  assert.equal(formatPct(null), "—");
+  assert.equal(formatPct(Infinity), "—");
+});
+
+void test("parseAnalysisParams: default years unless the URL sets a filter", () => {
+  assert.equal(parseAnalysisParams({}).filters.yearMin, "2015");
+  // A tab or chart choice alone still gets the default range (was: any parameter dropped it).
+  assert.equal(parseAnalysisParams({ tab: "charts" }).filters.yearMax, "2025");
+  const filtered = parseAnalysisParams({ stateCode: "KY" }).filters;
+  assert.equal(filtered.yearMin, "");
+  assert.equal(filtered.stateCode, "KY");
+  assert.equal(parseAnalysisParams({ tab: "nonsense" }).view.tab, "dataset");
 });

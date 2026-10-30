@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  featureLabel,
   modelInputs,
   outOfRange,
   predict,
@@ -78,4 +79,12 @@ void test("predict: Ridge responds to heat input in the expected direction", () 
   const x = modelInputs(raw);
   const more = { ...x, heat_input_mmbtu: x.heat_input_mmbtu! * 1.1 };
   assert.ok(predict(models.ridge!, more) > predict(models.ridge!, x));
+});
+
+void test("featureLabel: inputs, categories, and controls in words", () => {
+  assert.equal(featureLabel("heat_input_mmbtu"), "Heat input");
+  assert.equal(featureLabel("primary_fuel=Coal"), "Primary fuel: Coal");
+  assert.equal(featureLabel("unit_type"), "Unit type");
+  assert.equal(featureLabel("scr"), "SCR");
+  assert.equal(featureLabel("unknown_thing"), "unknown_thing");
 });
