@@ -95,8 +95,10 @@ function activeChips(filters: FacilityFilters) {
     });
   }
   for (const { key, label, unit } of RANGE_FIELDS) {
-    const min = on(`${key}Min`) ? formatBound(filters[`${key}Min`]) : undefined;
-    const max = on(`${key}Max`) ? formatBound(filters[`${key}Max`]) : undefined;
+    // Years read as plain numbers ("2015", not "2,015").
+    const format = key === "year" ? (v: string) => v.trim() : formatBound;
+    const min = on(`${key}Min`) ? format(filters[`${key}Min`]) : undefined;
+    const max = on(`${key}Max`) ? format(filters[`${key}Max`]) : undefined;
     if (!min && !max) continue;
     const minStrict = on(`${key}MinStrict`);
     const maxStrict = on(`${key}MaxStrict`);
