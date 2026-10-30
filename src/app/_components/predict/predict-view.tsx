@@ -158,7 +158,7 @@ export function PredictView({ initial }: { initial: View }) {
                   className="w-24"
                 />
               </Field>
-              <Field label="Baseline unit-year">
+              <Field label="Baseline unit-year" className="w-full sm:w-auto">
                 <Select
                   value={current}
                   onValueChange={(v) => {
@@ -166,7 +166,7 @@ export function PredictView({ initial }: { initial: View }) {
                     setView({ fid, uid });
                   }}
                   options={unitOptions}
-                  className="w-96 max-w-full"
+                  className="w-full sm:w-96"
                 />
               </Field>
             </Controls>

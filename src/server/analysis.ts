@@ -1,5 +1,4 @@
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { and, count, eq, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
@@ -28,6 +27,7 @@ import {
 import type { TraciFactor } from "~/lib/traci";
 import { unitYearConditions } from "~/server/api/routers/facilities";
 import { db } from "~/server/db";
+import { version } from "../../package.json";
 import {
   annualRecords,
   datasets,
@@ -124,9 +124,6 @@ const appVersion = (() => {
   } catch {
     commit = "unknown";
   }
-  const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
-    version: string;
-  };
   return { name: "epaData", version, commit };
 })();
 
