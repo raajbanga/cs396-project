@@ -1,17 +1,87 @@
 "use client";
 
 import { Chart } from "~/components/ui/chart";
+import { ExportButton } from "~/components/ui/export-button";
 import { Field, ReportTable, Section } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
+import { featureLabel } from "~/lib/model";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
 import type { Model } from "./predict-view";
 
 const KIND_ORDER = ["baseline", "ridge", "tree"];
+
+const metric = (m: Model, split: string, key: string) =>
+  m.metrics[split]?.[key] ?? null;
+
+/** The comparison table's columns: which split and metric, and which direction is better. */
+const METRICS: {
+  key: string;
+  label: string;
+  get: (m: Model) => number | null;
+  lowerIsBetter?: boolean;
+  format: (v: number | null) => string;
+}[] = [
+  {
+    key: "validation_mae",
+    label: "Val. MAE (t)",
+    get: (m) => metric(m, "validation", "mae"),
+    lowerIsBetter: true,
+    format: formatStat,
+  },
+  {
+    key: "validation_r2",
+    label: "Val. R²",
+    get: (m) => metric(m, "validation", "r2"),
+    format: formatStat,
+  },
+  {
+    key: "test_mae",
+    label: "Test MAE (t)",
+    get: (m) => metric(m, "test", "mae"),
+    lowerIsBetter: true,
+    format: formatStat,
+  },
+  {
+    key: "test_rmse",
+    label: "Test RMSE (t)",
+    get: (m) => metric(m, "test", "rmse"),
+    lowerIsBetter: true,
+    format: formatStat,
+  },
+  {
+    key: "test_r2",
+    label: "Test R²",
+    get: (m) => metric(m, "test", "r2"),
+    format: formatStat,
+  },
+  {
+    key: "test_mape_pct",
+    label: "Test MAPE",
+    get: (m) => metric(m, "test", "mape"),
+    lowerIsBetter: true,
+    format: (v) => (v === null ? "—" : `${formatStat(v)} %`),
+  },
+  {
+    key: "validation_r2_without_activity",
+    label: "Val. R², no same-year activity",
+    get: (m) => metric(m, "validation_without_activity", "r2"),
+    format: formatStat,
+  },
+];
+
+/** Tuned settings in words: "α = 10", "depth 16, leaves ≥ 20". */
+const settings = (m: Model) => {
+  const p = m.params as Record<string, number>;
+  if (m.kind === "ridge") return `α = ${p.alpha}`;
+  if (m.kind === "tree")
+    return `depth ${p.max_depth}, leaves ≥ ${p.min_samples_leaf}`;
+  return "median of training years";
+};
 
 /** §5.3–§5.4: every model against the baseline on validation and test years, with its evidence. */
 export function ModelsTab({
@@ -26,7 +96,6 @@ export function ModelsTab({
   const sorted = [...models].sort(
     (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
   );
-  const base = sorted.find((m) => m.kind === "baseline");
   const chosen = sorted.find((m) => m.kind === view.model) ?? sorted[0]!;
   const [from, to] = chosen.testYears.split("-").map(Number);
   const { data, isLoading } = api.prediction.testPredictions.useQuery({
@@ -36,6 +105,17 @@ export function ModelsTab({
   const points = data ?? [];
   const fuels = [...new Set(points.map((p) => p.fuel))];
   const maxActual = Math.max(1, ...points.map((p) => p.actual));
+  const base = sorted.find((m) => m.kind === "baseline");
+  const gains = sorted
+    .filter((m) => m !== base && base)
+    .map((m) => {
+      const b = metric(base!, "test", "mae");
+      const t = metric(m, "test", "mae");
+      return b && t !== null
+        ? `${m.name} ${((1 - t / b) * 100).toFixed(0)} %`
+        : null;
+    })
+    .filter(Boolean);
   const importance = Object.entries(chosen.artifact.importance)
     .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
     .slice(0, 15);
@@ -44,46 +124,46 @@ export function ModelsTab({
     <div className="space-y-8">
       <Section
         title="Model comparison"
-        note={`Target: ${chosen.target}. Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. MAPE counts only unit-years of at least 1 ton (smaller ones make percentages explode).`}
+        note={`Target: ${chosen.target}. Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. Against the baseline, test MAE is lower by: ${gains.join("; ")}. “Val.” is validation; the last column refits without same-year heat input, load, and hours. MAPE counts only unit-years of at least 1 ton (smaller ones make percentages explode). The best value in each column is in bold.`}
+        actions={
+          <ExportButton
+            name="model-comparison"
+            title="NOₓ model comparison"
+            table={{
+              head: ["model", "settings", ...METRICS.map((m) => m.key)],
+              rows: sorted.map((m) => [
+                m.id,
+                settings(m),
+                ...METRICS.map((c) => c.get(m)),
+              ]),
+            }}
+            meta={{ models: sorted.map(({ artifact: _a, ...m }) => m) }}
+          />
+        }
       >
         <ReportTable
-          head={[
-            "Model",
-            "Settings (tuned on validation)",
-            "Validation MAE (t)",
-            "Validation R²",
-            "Test MAE (t)",
-            "Test RMSE (t)",
-            "Test R²",
-            "Test MAPE",
-            "Test MAE vs baseline",
-            "Validation R² without same-year activity",
-          ]}
-          rows={sorted.map((m) => {
-            const {
-              validation,
-              test,
-              validation_without_activity: abl,
-            } = m.metrics;
-            const gain =
-              base && m !== base
-                ? `${(((base.metrics.test!.mae! - test!.mae!) / base.metrics.test!.mae!) * 100).toFixed(0)} % lower`
-                : "—";
-            return [
-              m.name,
-              Object.entries(m.params)
-                .map(([k, v]) => `${k} = ${String(v)}`)
-                .join(", ") || "—",
-              formatStat(validation?.mae),
-              formatStat(validation?.r2),
-              formatStat(test?.mae),
-              formatStat(test?.rmse),
-              formatStat(test?.r2),
-              `${formatStat(test?.mape)} %`,
-              gain,
-              formatStat(abl?.r2),
-            ];
-          })}
+          head={["Model", "Settings", ...METRICS.map((m) => m.label)]}
+          rows={sorted.map((m) => [
+            <span key="n" className="text-fg font-medium">
+              {m.name}
+            </span>,
+            settings(m),
+            ...METRICS.map((c) => {
+              const v = c.get(m);
+              const values = sorted.map(c.get).filter((x) => x !== null);
+              const best = c.lowerIsBetter
+                ? Math.min(...values)
+                : Math.max(...values);
+              const text = c.format(v);
+              return v === best && values.length > 1 ? (
+                <span key={c.key} className="text-fg font-semibold">
+                  {text}
+                </span>
+              ) : (
+                text
+              );
+            }),
+          ])}
         />
         <p className="text-fg-muted max-w-4xl text-xs">
           Leakage rules: no same-year NOₓ, NOₓ rate, or value computed from them
@@ -96,7 +176,7 @@ export function ModelsTab({
       </Section>
 
       <Controls>
-        <Field label="Model">
+        <Field group label="Model">
           <SegmentedControl
             value={chosen.kind}
             onChange={(model) => setView({ model })}
@@ -108,7 +188,7 @@ export function ModelsTab({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Chart
           title={`Predicted vs actual NOₓ, ${chosen.testYears}`}
-          subtitle={`An even sample of ${formatNumber(points.length)} test unit-years, log scales. On the dashed line the prediction is exact.`}
+          subtitle={`An even sample of ${formatNumber(points.length)} test unit-years, log scales. On the dashed line the prediction is exact; predictions below 0.01 t are drawn at 0.01.`}
           filename={`predicted-vs-actual-${chosen.id}`}
           isLoading={isLoading}
           height={440}
@@ -183,7 +263,7 @@ export function ModelsTab({
               {
                 type: "bar",
                 orientation: "h",
-                y: importance.map(([k]) => k),
+                y: importance.map(([k]) => featureLabel(k)),
                 x: importance.map(([, v]) => v),
                 hovertemplate: "%{y}: %{x:.4f}<extra></extra>",
               },
@@ -202,7 +282,10 @@ export function ModelsTab({
                 "feature",
                 chosen.kind === "tree" ? "importance" : "coefficient",
               ],
-              rows: Object.entries(chosen.artifact.importance),
+              rows: Object.entries(chosen.artifact.importance).map(([k, v]) => [
+                featureLabel(k),
+                v,
+              ]),
             }}
           />
         )}
@@ -211,9 +294,10 @@ export function ModelsTab({
       <Section title="Model record">
         <ReportTable
           head={["Field", "Value"]}
+          wrap={[1]}
           rows={[
             ["Model ID", chosen.id],
-            ["Inputs", chosen.features.join(", ")],
+            ["Inputs", chosen.features.map(featureLabel).join(", ")],
             [
               "Training / validation / test years",
               `${chosen.trainYears} / ${chosen.validationYears} / ${chosen.testYears}`,

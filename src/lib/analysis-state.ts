@@ -9,14 +9,13 @@ import {
  * plus the active tab and each tab's choices, all as strings so they round-trip through the URL.
  */
 
-export const ANALYSIS_TABS = [
+const ANALYSIS_TABS = [
   "dataset",
   "statistics",
   "charts",
   "compare",
   "impacts",
 ] as const;
-export type AnalysisTab = (typeof ANALYSIS_TABS)[number];
 
 export const CHART_TYPES = [
   "trend",
@@ -30,7 +29,7 @@ export const CHART_TYPES = [
 export type ChartType = (typeof CHART_TYPES)[number];
 
 export const DEFAULT_VIEW = {
-  tab: "dataset" as AnalysisTab,
+  tab: "dataset" as (typeof ANALYSIS_TABS)[number],
   variable: "co2MassTons",
   by: "state", // "" = no grouping
   chart: "trend" as ChartType,
@@ -51,7 +50,7 @@ export const DEFAULT_VIEW = {
 export type AnalysisView = typeof DEFAULT_VIEW;
 
 /** The selection when the page opens with no parameters: the complete API years. */
-export const DEFAULT_ANALYSIS_FILTERS: FacilityFilters = {
+const DEFAULT_ANALYSIS_FILTERS: FacilityFilters = {
   ...DEFAULT_FILTERS,
   yearMin: "2015",
   yearMax: "2025",
@@ -65,7 +64,7 @@ const first = (params: Params, key: string) => {
 };
 
 /** `defaults` overridden by the URL's values for the same keys. */
-export function readView<T extends Record<string, string>>(
+function readView<T extends Record<string, string>>(
   defaults: T,
   params: Params,
 ): T {
@@ -90,9 +89,10 @@ export function writeView<T extends Record<string, string>>(
 }
 
 export function parseAnalysisParams(params: Params) {
-  const empty = Object.keys(params).length === 0;
+  // Without any filter in the URL (a tab link, say), start from the complete API years.
+  const unfiltered = !Object.keys(params).some((k) => k in DEFAULT_FILTERS);
   const filters = readView(
-    empty ? DEFAULT_ANALYSIS_FILTERS : DEFAULT_FILTERS,
+    unfiltered ? DEFAULT_ANALYSIS_FILTERS : DEFAULT_FILTERS,
     params,
   );
   const view = readView(DEFAULT_VIEW, params);
@@ -122,7 +122,8 @@ export const DEFAULT_PREDICT_VIEW = {
   uid: "2",
   year: "2024",
   input: "heat_input_mmbtu",
-  from: "-50", // sensitivity range, % of the baseline value
+  values: "", // "1" = sensitivity range in the input's own unit, else % of the baseline value
+  from: "-50",
   to: "50",
   step: "5",
   load: "10", // scenarios: gross load +10 %
