@@ -1,14 +1,15 @@
 "use client";
 
-import { Badge } from "~/components/ui/badge";
 import { Chart } from "~/components/ui/chart";
 import { ReportTable, Section } from "~/components/ui/report";
 import { TryExamples } from "~/components/ui/try-examples";
-import { AGGREGATION_LABELS, formatStat } from "~/lib/analysis";
+import { formatPct, formatStat } from "~/lib/analysis";
 import { cn, formatNumber } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import {
   asDimension,
+  bind,
+  combinedLabel,
   Controls,
   DimensionField,
   dimensionLabel,
@@ -82,7 +83,8 @@ function explain(result: Result, label: string, unit: string) {
 }
 
 /** §4.5: two or more groups along one dimension, with differences, confidence intervals, and tests. */
-export function CompareTab({ filters, view, setView, catalog }: TabProps) {
+export function CompareTab(props: TabProps) {
+  const { filters, view, setView, catalog } = props;
   const info = findInfo(catalog, view.variable);
   const by = asDimension(view.compareBy) ?? "noxControl";
   const groups = view.groups.split("|").filter(Boolean);
@@ -104,19 +106,21 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
         : [...groups, g].slice(-8)
       ).join("|"),
     });
-  const combined = info ? AGGREGATION_LABELS[info.aggregation] : "Value";
+  const combined = combinedLabel(info);
   const unit = info?.unit ?? "";
   const rows = result.data?.groups ?? [];
+  // §4.5 rankings: 1 = the largest value among the compared groups.
+  const ranked = rows
+    .filter((g) => g.value !== null)
+    .sort((a, b) => b.value! - a.value!);
+  const rankOf = (g: (typeof rows)[number]) =>
+    g.value === null ? "—" : String(ranked.indexOf(g) + 1);
   const t = result.data?.tests;
 
   return (
     <div className="space-y-6">
       <Controls>
-        <VariableField
-          value={view.variable}
-          onChange={(variable) => setView({ variable })}
-          catalog={catalog}
-        />
+        <VariableField {...bind(props, "variable")} />
         <DimensionField
           label="Compare"
           value={by}
@@ -135,26 +139,31 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
         title={`${dimensionLabel(catalog, by)} groups`}
         note="Pick two to eight; the first one picked is the baseline for differences."
       >
-        <div className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+        <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
           {(options.data?.rows ?? []).map((r) => {
             const on = groups.includes(r.group);
             return (
               <button
                 key={r.group}
                 type="button"
+                aria-pressed={on}
                 onClick={() => toggleGroup(r.group)}
+                className={cn(
+                  "flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-sm transition-colors",
+                  on
+                    ? "border-primary/50 bg-primary/10 text-fg font-medium"
+                    : "border-edge bg-surface text-fg-2 hover:bg-surface-2",
+                )}
               >
-                <Badge
-                  variant={on ? "sky" : "outline"}
-                  className={cn(
-                    "cursor-pointer font-normal",
-                    on && "font-medium",
-                  )}
-                >
-                  {on && `${groups.indexOf(r.group) + 1}. `}
-                  {r.group}
-                  <span className="opacity-60">{formatNumber(r.n)}</span>
-                </Badge>
+                {on && (
+                  <span className="bg-primary text-canvas flex h-4 min-w-4 items-center justify-center rounded-sm px-1 text-[11px] tabular-nums">
+                    {groups.indexOf(r.group) + 1}
+                  </span>
+                )}
+                {r.group}
+                <span className="text-fg-muted text-xs tabular-nums">
+                  {formatNumber(r.n)}
+                </span>
               </button>
             );
           })}
@@ -170,7 +179,7 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
         info && (
           <>
             <Section title="Result">
-              <ul className="text-fg-2 max-w-4xl list-disc space-y-1 pl-5 text-sm">
+              <ul className="border-primary/40 text-fg-2 max-w-4xl space-y-1.5 border-l-2 pl-4 text-sm">
                 {explain(result.data, info.label, unit).map((line) => (
                   <li key={line}>{line}</li>
                 ))}
@@ -180,6 +189,7 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
               sortable
               head={[
                 dimensionLabel(catalog, by),
+                "Rank",
                 `${combined} (${unit})`,
                 "Difference",
                 "% difference",
@@ -191,11 +201,10 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
               ]}
               rows={rows.map((g, i) => [
                 g.group,
+                rankOf(g),
                 formatStat(g.value),
                 i === 0 ? "baseline" : formatStat(g.diff),
-                i === 0 || g.diffPct === null
-                  ? "—"
-                  : `${g.diffPct > 0 ? "+" : ""}${g.diffPct.toFixed(1)} %`,
+                i === 0 ? "—" : formatPct(g.diffPct),
                 formatNumber(g.count),
                 formatStat(g.mean),
                 g.ci
@@ -265,6 +274,7 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
               table={{
                 head: [
                   "group",
+                  "rank",
                   `${combined} (${unit})`,
                   "diff",
                   "diff_pct",
@@ -277,6 +287,7 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
                 ],
                 rows: rows.map((g) => [
                   g.group,
+                  rankOf(g),
                   g.value,
                   g.diff,
                   g.diffPct,

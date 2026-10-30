@@ -3,7 +3,6 @@ import { AnalyzeView } from "~/app/_components/analyze/analyze-view";
 import { parseAnalysisParams } from "~/lib/analysis-state";
 import { api, HydrateClient } from "~/trpc/server";
 
-export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Analyze" };
 
 export default async function AnalyzePage({

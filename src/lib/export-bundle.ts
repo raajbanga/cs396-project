@@ -16,7 +16,7 @@ export interface ExportTable {
   rows: readonly CsvValue[][];
 }
 
-export const tableCsv = ({ head, rows }: ExportTable) =>
+const tableCsv = ({ head, rows }: ExportTable) =>
   toCsv(
     rows,
     head.map((h, i): CsvColumn<readonly CsvValue[]> => [h, (r) => r[i]]),

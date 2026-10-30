@@ -11,7 +11,7 @@ import {
   DEFAULT_PREDICT_VIEW,
   type PredictView as View,
 } from "~/lib/analysis-state";
-import { NUMERIC_INPUTS, type ModelInputs } from "~/lib/model";
+import { featureLabel, type ModelInputs } from "~/lib/model";
 import { formatStat } from "~/lib/analysis";
 import { ExportContext } from "~/components/ui/export-button";
 import { replaceUrlQuery } from "~/lib/utils";
@@ -41,19 +41,10 @@ const TABS = {
 
 const YEARS = Array.from({ length: 10 }, (_, i) => 2025 - i);
 
-export const inputLabel = (name: string) =>
-  name in NUMERIC_INPUTS
-    ? NUMERIC_INPUTS[name as keyof typeof NUMERIC_INPUTS].label
-    : name === "primary_fuel"
-      ? "Primary fuel"
-      : name === "unit_type"
-        ? "Unit type"
-        : name;
-
 /** The warning shown when inputs leave the training data's range. */
 export const rangeWarning = (names: string[]) =>
   names.length
-    ? `Outside the training data: ${names.map(inputLabel).join(", ")}. The prediction is an extrapolation.`
+    ? `Outside the training data: ${names.map(featureLabel).join(", ")}. The prediction is an extrapolation.`
     : "";
 
 /** Phase 2 §5–§6: model evaluation, then how predictions respond to changed inputs. */
