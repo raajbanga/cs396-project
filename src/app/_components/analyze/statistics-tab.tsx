@@ -1,12 +1,10 @@
 "use client";
 
-import { Download } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { ExportButton } from "~/components/ui/export-button";
 import { ReportTable, Section } from "~/components/ui/report";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import { TryExamples } from "~/components/ui/try-examples";
 import { AGGREGATION_LABELS, formatStat } from "~/lib/analysis";
-import { downloadCsv } from "~/lib/csv";
 import { PERCENTILES, type Summary } from "~/lib/stats";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -133,20 +131,12 @@ export function StatisticsTab({ filters, view, setView, catalog }: TabProps) {
           note={`${formatNumber(data.groups.length)} of ${formatNumber(data.totalGroups)} groups, ${by === "year" ? "in year order" : `largest ${combined.toLowerCase()} first`}. Click a column to sort.`}
         >
           <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                downloadCsv(
-                  `statistics-${view.variable}-by-${by}.csv`,
-                  head,
-                  rows,
-                )
-              }
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download CSV
-            </Button>
+            <ExportButton
+              name={`statistics-${view.variable}-by-${by}`}
+              title={`${info?.label} statistics by ${dimensionLabel(catalog, by).toLowerCase()}`}
+              table={{ head, rows }}
+              meta={{ variables: [info] }}
+            />
           </div>
           <ReportTable
             sortable

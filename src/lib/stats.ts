@@ -115,6 +115,13 @@ export function ranks(xs: readonly number[]) {
   return out;
 }
 
+/** Σ (t³ − t) over groups of tied values: the tie correction of rank tests. */
+function tieSum(xs: readonly number[]) {
+  const counts = new Map<number, number>();
+  for (const x of xs) counts.set(x, (counts.get(x) ?? 0) + 1);
+  return [...counts.values()].reduce((s, t) => s + t ** 3 - t, 0);
+}
+
 /** Spearman ρ: Pearson r of the ranks of the complete pairs. */
 export function spearman(
   xs: readonly (number | null)[],
@@ -288,10 +295,9 @@ export function mannWhitney(a: readonly number[], b: readonly number[]) {
   const r1 = r.slice(0, n1).reduce((s, x) => s + x, 0);
   const u = r1 - (n1 * (n1 + 1)) / 2;
   const n = n1 + n2;
-  const ties = new Map<number, number>();
-  for (const x of all) ties.set(x, (ties.get(x) ?? 0) + 1);
-  const tieSum = [...ties.values()].reduce((s, t) => s + t ** 3 - t, 0);
-  const sd = Math.sqrt(((n1 * n2) / 12) * (n + 1 - tieSum / (n * (n - 1))));
+  const sd = Math.sqrt(
+    ((n1 * n2) / 12) * (n + 1 - tieSum(all) / (n * (n - 1))),
+  );
   if (!sd) return null;
   const z = (u - (n1 * n2) / 2) / sd;
   return { u, z, p: Math.min(1, 2 * (1 - normalCdf(Math.abs(z)))) };
@@ -315,11 +321,12 @@ export function anova(groups: readonly (readonly number[])[]) {
   return { f, df1: k - 1, df2: n - k, p: fUpper(f, k - 1, n - k) };
 }
 
-/** Kruskal–Wallis H (χ² approximation, no tie correction). */
+/** Kruskal–Wallis H (χ² approximation, with the tie correction). */
 export function kruskalWallis(groups: readonly (readonly number[])[]) {
-  const n = groups.reduce((s, g) => s + g.length, 0);
+  const all = groups.flat();
+  const n = all.length;
   if (groups.length < 2 || n < 3) return null;
-  const r = ranks(groups.flat());
+  const r = ranks(all);
   let offset = 0;
   let h = 0;
   for (const g of groups) {
@@ -328,6 +335,8 @@ export function kruskalWallis(groups: readonly (readonly number[])[]) {
     offset += g.length;
   }
   h = (12 / (n * (n + 1))) * h - 3 * (n + 1);
+  const ties = tieSum(all);
+  if (ties) h /= 1 - ties / (n ** 3 - n);
   const df = groups.length - 1;
   return { h, df, p: chiSquareUpper(h, df) };
 }

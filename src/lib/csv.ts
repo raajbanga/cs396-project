@@ -7,6 +7,7 @@ export const EXPORT_TYPES = [
   "search",
   "selection",
   "provenance",
+  "analysis",
 ] as const;
 export type ExportType = (typeof EXPORT_TYPES)[number];
 
@@ -48,23 +49,4 @@ export function exportUrl(
     if (value) search.set(key, value);
   }
   return `/api/export?${[search.toString(), query].filter(Boolean).join("&")}`;
-}
-
-/** Saves a table built in the browser (chart data, statistics) as a CSV file. */
-export function downloadCsv(
-  filename: string,
-  head: readonly string[],
-  rows: readonly CsvValue[][],
-) {
-  const csv = toCsv(
-    rows,
-    head.map((h, i): CsvColumn<CsvValue[]> => [h, (r) => r[i]]),
-  );
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  const a = Object.assign(document.createElement("a"), {
-    href: url,
-    download: filename,
-  });
-  a.click();
-  URL.revokeObjectURL(url);
 }

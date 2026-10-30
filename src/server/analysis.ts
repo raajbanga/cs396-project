@@ -1,4 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
+import { execSync } from "node:child_process";
+import { and, count, eq, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 import {
@@ -26,8 +27,10 @@ import {
 import type { TraciFactor } from "~/lib/traci";
 import { unitYearConditions } from "~/server/api/routers/facilities";
 import { db } from "~/server/db";
+import { version } from "../../package.json";
 import {
   annualRecords,
+  datasets,
   facilities,
   traciFactors,
   units,
@@ -109,6 +112,37 @@ export function findVariable(variables: Variable[], key: string) {
   const v = variables.find((x) => x.key === key);
   if (!v) throw new Error(`Unknown variable: ${key}`);
   return v;
+}
+
+/** The app version and commit, read once (Vercel provides the commit; locally, git does). */
+const appVersion = (() => {
+  let commit = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7);
+  try {
+    commit ??= execSync("git rev-parse --short HEAD", { stdio: "pipe" })
+      .toString()
+      .trim();
+  } catch {
+    commit = "unknown";
+  }
+  return { name: "epaData", version, commit };
+})();
+
+/** §7 reproducibility: which software and which state of the database produced an export. */
+export async function provenance() {
+  const [[d], [r]] = await Promise.all([
+    db
+      .select({ datasets: count(), lastImport: max(datasets.importedAt) })
+      .from(datasets),
+    db.select({ unitYears: count() }).from(annualRecords),
+  ]);
+  return {
+    software: appVersion,
+    database: {
+      unitYears: r?.unitYears ?? 0,
+      datasets: d?.datasets ?? 0,
+      lastImport: d?.lastImport ?? null,
+    },
+  };
 }
 
 /** Variables, dimensions, and TRACI factors for the page's pickers and notes. */
