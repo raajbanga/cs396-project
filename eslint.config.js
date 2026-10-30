@@ -6,7 +6,13 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: [".next/**", "out/**", "build/**", "next-env.d.ts"],
+    ignores: [
+      ".next/**",
+      "out/**",
+      "build/**",
+      "next-env.d.ts",
+      "epaDataVENV/**",
+    ],
   },
   nextPlugin.configs["core-web-vitals"],
   {
@@ -27,6 +33,7 @@ export default tseslint.config(
       ...tseslint.configs.stylisticTypeChecked,
     ],
     rules: {
+      "@typescript-eslint/no-deprecated": "error",
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/consistent-type-imports": [

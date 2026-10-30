@@ -17,6 +17,8 @@ const SCROLL_BUTTON =
 interface SelectOption {
   value: string;
   label: ReactNode;
+  /** Options sharing a group are listed under its heading, in first-seen order. */
+  group?: string;
 }
 
 export function Select({
@@ -56,27 +58,38 @@ export function Select({
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
           position="popper"
-          className="border-edge bg-surface text-fg relative z-[10001] max-h-72 min-w-[8rem] overflow-hidden rounded-md border shadow-lg shadow-black/10 data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1"
+          className="border-edge bg-surface text-fg relative z-[10001] max-h-80 min-w-[8rem] overflow-hidden rounded-md border shadow-lg shadow-black/10 data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1"
         >
           <SelectPrimitive.ScrollUpButton className={SCROLL_BUTTON}>
             <ChevronUp className="h-4 w-4" />
           </SelectPrimitive.ScrollUpButton>
           <SelectPrimitive.Viewport className="h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] p-1">
-            {shown.map((option) => (
-              <SelectPrimitive.Item
-                key={option.value}
-                value={option.value}
-                className="text-fg focus:bg-surface-2 relative flex w-full cursor-pointer items-center rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none"
-              >
-                <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
-                  <SelectPrimitive.ItemIndicator>
-                    <Check className="text-primary h-3.5 w-3.5" />
-                  </SelectPrimitive.ItemIndicator>
-                </span>
-                <SelectPrimitive.ItemText>
-                  {option.label}
-                </SelectPrimitive.ItemText>
-              </SelectPrimitive.Item>
+            {[...new Set(shown.map((o) => o.group))].map((group) => (
+              <SelectPrimitive.Group key={group ?? ""}>
+                {group && (
+                  <SelectPrimitive.Label className="text-fg-muted px-2 pt-2 pb-1 text-[11px] font-medium tracking-wide uppercase">
+                    {group}
+                  </SelectPrimitive.Label>
+                )}
+                {shown
+                  .filter((o) => o.group === group)
+                  .map((option) => (
+                    <SelectPrimitive.Item
+                      key={option.value}
+                      value={option.value}
+                      className="text-fg focus:bg-surface-2 data-[state=checked]:text-primary relative flex w-full cursor-pointer items-center rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none"
+                    >
+                      <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+                        <SelectPrimitive.ItemIndicator>
+                          <Check className="text-primary h-3.5 w-3.5" />
+                        </SelectPrimitive.ItemIndicator>
+                      </span>
+                      <SelectPrimitive.ItemText>
+                        {option.label}
+                      </SelectPrimitive.ItemText>
+                    </SelectPrimitive.Item>
+                  ))}
+              </SelectPrimitive.Group>
             ))}
           </SelectPrimitive.Viewport>
           <SelectPrimitive.ScrollDownButton className={SCROLL_BUTTON}>

@@ -7,10 +7,12 @@ export const EXPORT_TYPES = [
   "search",
   "selection",
   "provenance",
+  "analysis",
 ] as const;
 export type ExportType = (typeof EXPORT_TYPES)[number];
 
-type CsvValue = string | number | boolean | Date | object | null | undefined;
+export type CsvValue =
+  string | number | boolean | Date | object | null | undefined;
 
 /** A CSV column: header plus how a row's value is read. */
 export type CsvColumn<T> = [header: string, value: (row: T) => CsvValue];

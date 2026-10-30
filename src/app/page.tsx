@@ -1,12 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { ChevronRight } from "lucide-react";
 import { DataCoverage, DataSources } from "~/app/_components/data-coverage";
 import { EpaPrimer } from "~/app/_components/epa-primer";
 import { Section } from "~/components/ui/report";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/server";
-
-export const dynamic = "force-dynamic";
 
 /** The §9 functions, in the order data moves through the app. */
 const FUNCTIONS = [
@@ -31,6 +30,16 @@ const FUNCTIONS = [
     body: "The same facilities on a globe or a flat map, colored by fuel.",
   },
   {
+    href: "/analyze",
+    label: "Analyze",
+    body: "Summary statistics, intensities, and year-over-year change; interactive charts; group comparisons with tests; and TRACI 2.2 impact indicators.",
+  },
+  {
+    href: "/predict",
+    label: "Predict",
+    body: "Annual NOₓ per unit predicted by Ridge regression and a decision tree, compared with a baseline, with sensitivity curves and what-if scenarios.",
+  },
+  {
     href: "/download",
     label: "Download",
     body: "Export datasets, search results, a selection, data-quality reports, or provenance as CSV.",
@@ -38,7 +47,11 @@ const FUNCTIONS = [
 ];
 
 export default async function Home() {
-  const stats = await api.facilities.getStats();
+  await connection(); // the figures come from the database at request time, never from the build
+  const [stats, { factors }] = await Promise.all([
+    api.facilities.getStats(),
+    api.analysis.catalog(),
+  ]);
   const unitYears = stats.coverage.reduce((n, c) => n + c.records, 0);
   const years = stats.coverage.map((c) => c.year);
   const figures = [
@@ -59,8 +72,9 @@ export default async function Home() {
           epaData collects annual operating and emissions data for U.S.
           power-plant units from the EPA Clean Air Markets Program (CAMPD) and
           from validated CSV and Excel uploads, stores it in a local SQLite
-          database, and lets you search, compare, and download it. TRACI impact
-          factors and scoring follow in Phase 2.
+          database, and lets you search, compare, analyze, and download it. It
+          converts emissions into EPA TRACI impact indicators and predicts NOₓ
+          emissions under what-if scenarios.
         </p>
         <dl className="flex flex-wrap gap-x-8 gap-y-3 pt-2">
           {figures.map(([value, label]) => (
@@ -115,7 +129,13 @@ export default async function Home() {
             title="Data sources"
             note="Explore, Map, the facility and unit details, and downloads read only the local database. Retrieve and the hourly and daily view call the EPA API live."
           >
-            <DataSources sources={stats.sources} />
+            <DataSources
+              sources={stats.sources}
+              traci={{
+                version: factors[0]?.traciVersion,
+                factors: factors.length,
+              }}
+            />
           </Section>
         </div>
       </div>
