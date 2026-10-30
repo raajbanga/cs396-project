@@ -17,9 +17,11 @@
     "start": "next start",
     "sync:campd": "tsx --env-file=.env scripts/sync_campd.ts",
     "test": "node --import tsx --test src/lib/*.test.ts",
+    "test:py": "epaDataVENV/bin/python -m pytest -q ml",
     "typecheck": "tsc --noEmit",
     "validate": "npm run format:check && npm run check && npm test && npm run build",
     "traci:import": "tsx --env-file=.env scripts/import_traci.ts",
+    "ml:train": "epaDataVENV/bin/python ml/train.py",
     "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle",
     "report": "tectonic -X compile report/main.tex"
   },
