@@ -1,0 +1,7 @@
+traci_version,pollutant,substance,cas,medium,impact_category,factor,factor_unit,source
+2.2,co2,CARBON DIOXIDE,124389,air,Global warming,1,kg CO2 eq,Substances sheet: Global Climate Air (kg CO2 eq / kg substance)
+2.2,so2,SULFUR DIOXIDE,7446095,air,Acidification,1,kg SO2 eq,Substances sheet: Acidification Air (kg SO2 eq / kg substance)
+2.2,nox,NITROGEN OXIDES,x,air,Acidification,0.7,kg SO2 eq,Substances sheet: Acidification Air (kg SO2 eq / kg substance)
+2.2,so2,SULFUR DIOXIDE,7446095,air,Human health (particulate),0.06111111111111111,kg PM2.5 eq,Substances sheet: HH Particulate Air (PM2.5 eq / kg substance)
+2.2,nox,NITROGEN OXIDES,x,air,Human health (particulate),0.007222222222222222,kg PM2.5 eq,Substances sheet: HH Particulate Air (PM2.5 eq / kg substance)
+2.2,nox,NITROGEN OXIDES,x,air,Smog formation,24.793589743589738,kg O3 eq,Substances sheet: Photochemical Oxidation Formation Air (kg O3 eq / kg substance)

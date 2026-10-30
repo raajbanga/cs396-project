@@ -57,6 +57,7 @@ const CHIP_LABELS: Partial<Record<keyof FacilityFilters, string>> = {
   so2Control: "SO₂ control",
   noxControl: "NOₓ control",
   pmControl: "PM control",
+  programCode: "Program",
   operatingStatus: "Status",
   auditFlag: "Flag",
   auditSeverity: "Severity",
@@ -95,8 +96,10 @@ function activeChips(filters: FacilityFilters) {
     });
   }
   for (const { key, label, unit } of RANGE_FIELDS) {
-    const min = on(`${key}Min`) ? formatBound(filters[`${key}Min`]) : undefined;
-    const max = on(`${key}Max`) ? formatBound(filters[`${key}Max`]) : undefined;
+    // Years read as plain numbers ("2015", not "2,015").
+    const format = key === "year" ? (v: string) => v.trim() : formatBound;
+    const min = on(`${key}Min`) ? format(filters[`${key}Min`]) : undefined;
+    const max = on(`${key}Max`) ? format(filters[`${key}Max`]) : undefined;
     if (!min && !max) continue;
     const minStrict = on(`${key}MinStrict`);
     const maxStrict = on(`${key}MaxStrict`);
@@ -180,14 +183,21 @@ function BasicFilters({
   filters,
   filterOptions,
   onFilterChange,
+  yearRange,
 }: {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
   onFilterChange: FilterChangeHandler;
+  yearRange?: boolean;
 }) {
+  const years = [...(filterOptions?.years ?? [])].reverse();
   const selects = [
     ["stateCode", "State", toOptions(filterOptions?.states, "All states")],
-    ["year", "Year", toOptions(filterOptions?.years, "All years")],
+    ...(yearRange
+      ? []
+      : ([
+          ["year", "Year", toOptions(filterOptions?.years, "All years")],
+        ] as const)),
     ["primaryFuel", "Fuel", toOptions(filterOptions?.fuels, "All fuels")],
     [
       "unitType",
@@ -201,6 +211,23 @@ function BasicFilters({
   ] as const;
   return (
     <>
+      {yearRange && (
+        <div className="space-y-1">
+          <span className={cn(FIELD_LABEL, "block")}>Reporting years</span>
+          <div className="flex items-center gap-1">
+            {(["yearMin", "yearMax"] as const).map((key, i) => (
+              <Select
+                key={key}
+                value={filters[key] || "ALL"}
+                onValueChange={(v) => onFilterChange(key, v === "ALL" ? "" : v)}
+                options={toOptions(years, i ? "Last" : "First")}
+                size="drawer"
+                className="min-w-0 px-2"
+              />
+            ))}
+          </div>
+        </div>
+      )}
       {selects.map(([key, label, options]) => (
         <Field key={key} label={label}>
           <Select
@@ -231,11 +258,13 @@ function AdvancedFilters({
   filterOptions,
   onFilterChange,
   view,
+  analysis,
 }: {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
   onFilterChange: FilterChangeHandler;
   view: FilterBarProps["itemLabel"];
+  analysis?: boolean;
 }) {
   const counties = [
     ...new Set(
@@ -262,6 +291,7 @@ function AdvancedFilters({
     ["so2Control", "SO₂ control", toOptions(filterOptions?.so2Controls, "Any")],
     ["noxControl", "NOₓ control", toOptions(filterOptions?.noxControls, "Any")],
     ["pmControl", "PM control", toOptions(filterOptions?.pmControls, "Any")],
+    ["programCode", "Program", toOptions(filterOptions?.programCodes, "Any")],
     [
       "operatingStatus",
       "Operating status",
@@ -307,54 +337,56 @@ function AdvancedFilters({
           Ranges per unit-year (click ≥ / ≤ to switch to strict &gt; / &lt;)
         </legend>
         <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
-          {RANGE_FIELDS.map(({ key, label, unit }) => (
-            <div key={key} className="flex items-center gap-1 text-sm">
-              <span className="text-fg-2 mr-1 w-32 shrink-0">
-                {label} <span className="text-fg-muted">({unit})</span>
-              </span>
-              {(["Min", "Max"] as const).map((bound) => {
-                const strictKey = `${key}${bound}Strict` as const;
-                const strict = filters[strictKey] === "1";
-                const [inclusiveOp, strictOp] =
-                  bound === "Min" ? ["≥", ">"] : ["≤", "<"];
-                return (
-                  <div key={bound} className="flex min-w-0 items-center">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        onFilterChange(strictKey, strict ? "" : "1")
-                      }
-                      aria-pressed={strict}
-                      aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"}: ${strict ? "strict" : "inclusive"}`}
-                      title={
-                        strict
-                          ? "Strict (click for inclusive)"
-                          : "Inclusive (click for strict)"
-                      }
-                      className="aria-pressed:bg-surface-2 aria-pressed:text-fg w-6 font-mono"
-                    >
-                      {strict ? strictOp : inclusiveOp}
-                    </Button>
-                    <Input
-                      value={filters[`${key}${bound}`]}
-                      onChange={(e) =>
-                        onFilterChange(`${key}${bound}`, e.target.value)
-                      }
-                      placeholder={bound === "Min" ? "min" : "max"}
-                      inputMode="decimal"
-                      aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
-                      className="h-8 min-w-0"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {RANGE_FIELDS.filter((f) => !analysis || f.key !== "year").map(
+            ({ key, label, unit }) => (
+              <div key={key} className="flex items-center gap-1 text-sm">
+                <span className="text-fg-2 mr-1 w-32 shrink-0">
+                  {label} <span className="text-fg-muted">({unit})</span>
+                </span>
+                {(["Min", "Max"] as const).map((bound) => {
+                  const strictKey = `${key}${bound}Strict` as const;
+                  const strict = filters[strictKey] === "1";
+                  const [inclusiveOp, strictOp] =
+                    bound === "Min" ? ["≥", ">"] : ["≤", "<"];
+                  return (
+                    <div key={bound} className="flex min-w-0 items-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          onFilterChange(strictKey, strict ? "" : "1")
+                        }
+                        aria-pressed={strict}
+                        aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"}: ${strict ? "strict" : "inclusive"}`}
+                        title={
+                          strict
+                            ? "Strict (click for inclusive)"
+                            : "Inclusive (click for strict)"
+                        }
+                        className="aria-pressed:bg-surface-2 aria-pressed:text-fg w-6 font-mono"
+                      >
+                        {strict ? strictOp : inclusiveOp}
+                      </Button>
+                      <Input
+                        value={filters[`${key}${bound}`]}
+                        onChange={(e) =>
+                          onFilterChange(`${key}${bound}`, e.target.value)
+                        }
+                        placeholder={bound === "Min" ? "min" : "max"}
+                        inputMode="decimal"
+                        aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
+                        className="h-8 min-w-0"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ),
+          )}
         </div>
       </fieldset>
 
-      {view !== "flags" && (
+      {view !== "flags" && !analysis && (
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Ranking">
             <Select
@@ -407,6 +439,8 @@ interface FilterBarProps {
   /** Extra controls beside the result count, e.g. a CSV download. */
   actions?: ReactNode;
   describe?: DescribeProps;
+  /** Analyze page: the year range among the basic fields, no Top-N ranking (analyses ignore it). */
+  analysis?: boolean;
 }
 
 /**
@@ -424,9 +458,12 @@ export function FacilityFilterBar({
   isLoading,
   actions,
   describe,
+  analysis,
 }: FilterBarProps) {
-  const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter((key) =>
-    isFilterActive(filters, key),
+  const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter(
+    (key) =>
+      isFilterActive(filters, key) &&
+      !(analysis && /^year|^topN|^rankGroup/.test(key)),
   ).length;
   // Until toggled by hand, Advanced is open exactly when one of its filters is set.
   const [advancedToggled, setAdvancedToggled] = useState<boolean | null>(null);
@@ -506,6 +543,7 @@ export function FacilityFilterBar({
           filters={filters}
           filterOptions={filterOptions}
           onFilterChange={onFilterChange}
+          yearRange={analysis}
         />
         <Button
           variant="outline"
@@ -534,6 +572,7 @@ export function FacilityFilterBar({
           filterOptions={filterOptions}
           onFilterChange={onFilterChange}
           view={itemLabel}
+          analysis={analysis}
         />
       )}
 

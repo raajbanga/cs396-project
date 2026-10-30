@@ -1,0 +1,70 @@
+% Shared preamble of the epaData reports (main.tex: Phase 1, phase2.tex: Phase 2).
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{fontspec}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.multipart,fit,calc,backgrounds}
+\usepackage[hidelinks]{hyperref}
+\usepackage{url}
+\usepackage[htt]{hyphenat}
+\setlength{\emergencystretch}{2.5em}
+
+\graphicspath{{figures/}}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\captionsetup{font=small,labelfont=bf}
+\setlist{itemsep=0.15em,topsep=0.3em}
+
+% Chemistry and units used throughout the text.
+\newcommand{\COtwo}{CO\textsubscript{2}}
+\newcommand{\SOtwo}{SO\textsubscript{2}}
+\newcommand{\NOx}{NO\textsubscript{x}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{R}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------------------------------------------------------------- listings
+\definecolor{codebg}{RGB}{248,248,246}
+\definecolor{codekw}{RGB}{0,92,158}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecom}{RGB}{96,120,96}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  numbers=left, numberstyle=\tiny\color{gray}, numbersep=6pt,
+  frame=single, rulecolor=\color{black!15}, framesep=4pt,
+  breaklines=true, columns=fullflexible, keepspaces=true,
+  showstringspaces=false, tabsize=2, captionpos=b,
+  xleftmargin=1.4em, framexleftmargin=1.4em,
+}
+\lstdefinelanguage{TypeScript}{
+  keywords={const,let,function,async,await,return,if,else,for,of,in,new,export,import,from,type,interface,true,false,undefined,null,typeof},
+  sensitive=true, morecomment=[l]{//}, morecomment=[s]{/*}{*/},
+  morestring=[b]", morestring=[b]', morestring=[b]`,
+}
+\lstdefinestyle{sql}{language=SQL, morekeywords={OVER,PARTITION,ROW_NUMBER,LIMIT,OFFSET,EXISTS,COALESCE,NULLIF,IF,REFERENCES,CASCADE,UNIQUE,INDEX}}
+
+% ---------------------------------------------------------------- TikZ styles
+\tikzset{
+  box/.style={draw, rounded corners=2pt, align=center, font=\small, inner sep=5pt, fill=white},
+  store/.style={box, fill=black!4},
+  ext/.style={box, dashed},
+  flow/.style={-{Latex[length=2mm]}, thick},
+  lflow/.style={-{Latex[length=2mm]}, thick, dashed},
+  lbl/.style={font=\scriptsize, fill=white, inner sep=1.5pt},
+}

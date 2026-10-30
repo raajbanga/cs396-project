@@ -292,6 +292,12 @@ function recordConditions(f: FilterInput): SQL[] {
   for (const [col, value] of controlFilters) {
     if (active(value)) conditions.push(contains(col, value));
   }
+  // Programs are a ", "-separated list: match a whole code ("CSNOX" must not catch "CSNOXOS").
+  if (active(f.programCode)) {
+    conditions.push(
+      sql`(', ' || ${annualRecords.programCode} || ',') LIKE ${`%, ${f.programCode.trim()},%`}`,
+    );
+  }
   const year = filterYear(f);
   if (year !== undefined) conditions.push(eq(annualRecords.year, year));
   const sources = active(f.origin) ? ORIGIN_SOURCES[f.origin] : undefined;
@@ -326,6 +332,13 @@ function recordConditions(f: FilterInput): SQL[] {
   }
   return conditions;
 }
+
+/** Unit-year filter over annual_records ⨝ units ⨝ facilities (Units view, exports, Analyze). */
+export const unitYearConditions = (f: FilterInput): SQL[] => [
+  ...facilityConditions(f),
+  ...unitConditions(f),
+  ...recordConditions(f),
+];
 
 /**
  * Facility-level filter (Facilities + Map views). Unit and unit-year filters keep facilities with at
@@ -462,14 +475,7 @@ export function rankedUnitYears(
     .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
     .innerJoin(facilities, eq(annualRecords.facilityId, facilities.id))
     .leftJoin(datasets, eq(annualRecords.datasetId, datasets.id))
-    .where(
-      and(
-        ...facilityConditions(input),
-        ...unitConditions(input),
-        ...recordConditions(input),
-        ...scope,
-      ),
-    )
+    .where(and(...unitYearConditions(input), ...scope))
     .as("ranked");
   return rankedView(database, ranked, input);
 }
@@ -540,6 +546,7 @@ async function filterOptions(database: typeof Database) {
     so2Controls: await tokens(annualRecords.so2Controls),
     noxControls: await tokens(annualRecords.noxControls),
     pmControls: await tokens(annualRecords.pmControls),
+    programCodes: await tokens(annualRecords.programCode),
     operatingStatuses: await tokens(units.operatingStatus),
   };
 }

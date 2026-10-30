@@ -2,7 +2,7 @@ import { buttonClass } from "~/components/ui/button";
 import { EmptyState } from "~/components/ui/empty-state";
 import { PageTitle, PageView } from "~/components/ui/page";
 
-export const REPO_URL = "https://github.com/raajbanga/cs396-project";
+const REPO_URL = "https://github.com/raajbanga/cs396-project";
 
 /** Stands in for a page that writes to the database when the hosted build is read-only. */
 export function LocalOnly({ title }: { title: string }) {

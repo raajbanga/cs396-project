@@ -1,7 +1,12 @@
 import { asc, count, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import { buildVariables, dimension } from "~/lib/analysis";
+import { parseAnalysisParams } from "~/lib/analysis-state";
 import { EXPORT_TYPES, toCsv, type CsvColumn } from "~/lib/csv";
+import { zipBundle } from "~/lib/export-bundle";
+import { filterSearchParams } from "~/lib/facility-filters";
+import { analysisRows, loadFactors, provenance } from "~/server/analysis";
 import {
   parseExplorerParams,
   parseFacilityIds,
@@ -180,7 +185,7 @@ const datasetLabel = (d: DatasetRow) =>
 /** Every `annual_records` row of a dataset is valid when no physical-sanity rule flagged it. */
 const unflagged = sql`NOT EXISTS (SELECT 1 FROM ${dataAuditLogs} WHERE ${dataAuditLogs.annualRecordId} = ${annualRecords.id})`;
 
-/** Builds the CSV for an `/api/export` query string; throws ExportError on a bad request. */
+/** Builds the CSV (or, for analyses, the ZIP) for an `/api/export` query string; throws ExportError on a bad request. */
 export async function buildExport(params: URLSearchParams) {
   const parsed = requestSchema.safeParse(Object.fromEntries(params));
   if (!parsed.success) {
@@ -328,6 +333,67 @@ export async function buildExport(params: URLSearchParams) {
         filename: `epadata_selection_${today()}.csv`,
         csv: await unitYearCsv(
           await selectUnitYears(NATURAL_ORDER, [scope], true),
+        ),
+      };
+    }
+
+    case "analysis": {
+      // Phase 2 §7: the analytical dataset with every variable, plus metadata to reproduce it.
+      const { filters } = parseAnalysisParams(Object.fromEntries(params));
+      const [rows, factors, source] = await Promise.all([
+        analysisRows(filters),
+        loadFactors(),
+        provenance(),
+      ]);
+      const variables = buildVariables(factors);
+      const identity = (
+        [
+          "facility",
+          "unit",
+          "state",
+          "fuelClass",
+          "unitType",
+          "noxControl",
+          "so2Control",
+        ] as const
+      ).map(dimension);
+      const name = `epadata_analysis_${today()}`;
+      return {
+        filename: `${name}.zip`,
+        zip: zipBundle(
+          name,
+          {
+            head: [
+              "year",
+              ...identity.map((d) => d.key),
+              ...variables.map((v) => `${v.key} (${v.unit})`),
+            ],
+            rows: rows.map((r) => [
+              r.year,
+              ...identity.map((d) => d.value(r)),
+              ...variables.map((v) => v.value(r)),
+            ]),
+          },
+          {
+            title: "Analytical dataset",
+            exportedAt: new Date().toISOString(),
+            ...source,
+            filters: Object.fromEntries(filterSearchParams(filters)),
+            unitYears: rows.length,
+            variables: variables.map(
+              ({ key, label, unit, group, definition, aggregation }) => ({
+                key,
+                label,
+                unit,
+                group,
+                definition,
+                aggregation,
+              }),
+            ),
+            traciFactors: factors,
+            missingValues:
+              "Blank cells are missing: not reported, or undefined (an input missing or a zero denominator). Never read them as 0.",
+          },
         ),
       };
     }

@@ -66,6 +66,7 @@ export const facilityFilterSchema = z.object({
   so2Control: text,
   noxControl: text,
   pmControl: text,
+  programCode: text, // emissions program as reported that year, e.g. "ARP", "CSNOX"
   operatingStatus: text,
   topN: text,
   rankGroup: text, // "state" = rank within each state
@@ -92,6 +93,7 @@ export const DEFAULT_FILTERS = {
   so2Control: "ALL",
   noxControl: "ALL",
   pmControl: "ALL",
+  programCode: "ALL",
   operatingStatus: "ALL",
   topN: "ALL",
   rankGroup: "ALL",
