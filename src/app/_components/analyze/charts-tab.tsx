@@ -148,6 +148,7 @@ function TrendChart({ filters, view, setView, catalog }: TabProps) {
         title={`${info?.label} by year${seriesBy ? ` and ${dimensionLabel(catalog, seriesBy).toLowerCase()}` : ""}`}
         subtitle={`${combined} per year${seriesBy && data && data.total > 8 ? `; the 8 largest of ${data.total} groups` : ""}. ${info?.definition}`}
         filename={`trend-${view.variable}`}
+        meta={{ variables: [info] }}
         isLoading={isLoading}
         data={traces}
         layout={{
@@ -203,6 +204,7 @@ function BarsChart({ filters, view, setView, catalog }: TabProps) {
         title={`${info?.label} by ${dimensionLabel(catalog, by).toLowerCase()}`}
         subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} per group${data && data.total > 30 ? `; the 30 largest of ${data.total}` : ""}. ${info?.definition}`}
         filename={`bars-${view.variable}-by-${by}`}
+        meta={{ variables: [info] }}
         isLoading={isLoading}
         data={[
           {
@@ -308,6 +310,7 @@ function DistributionChart({ filters, view, setView, catalog }: TabProps) {
           .filter(Boolean)
           .join("; ")}
         filename={`distribution-${view.variable}`}
+        meta={{ variables: [info], sampled: data?.sampled }}
         isLoading={isLoading}
         data={traces}
         layout={
@@ -394,6 +397,7 @@ function ScatterChart({ filters, view, setView, catalog }: TabProps) {
         title={`${y?.label} against ${x?.label}`}
         subtitle={`${formatNumber(data?.total)} unit-years with both values${data && data.total > points.length ? `; an even sample of ${formatNumber(points.length)} is drawn` : ""}. Pearson r = ${formatStat(data?.r)} over all of them.`}
         filename={`scatter-${view.y}-vs-${view.x}`}
+        meta={{ variables: [x, y], pearsonR: data?.r, pairs: data?.total }}
         isLoading={isLoading}
         data={traces}
         height={460}
@@ -450,6 +454,11 @@ function CorrelationChart({ filters, view, setView, catalog }: TabProps) {
         title={`${method === "pearson" ? "Pearson" : "Spearman"} correlation between variables`}
         subtitle="Each cell uses the unit-years that report both variables (n on hover). Correlation is association, not cause."
         filename={`correlation-${method}`}
+        meta={{
+          variables: CORRELATION_VARIABLES.map((k) => findInfo(catalog, k)),
+          method,
+          pairCounts: data?.n,
+        }}
         isLoading={isLoading}
         height={560}
         data={[
@@ -530,6 +539,7 @@ function RankingChart({ filters, view, setView, catalog }: TabProps) {
         title={`${order === "desc" ? "Highest" : "Lowest"} 20 ${by === "unit" ? "units" : "facilities"} by ${info?.label}`}
         subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} over the selected years, among ${formatNumber(data?.total)} ${by === "unit" ? "units" : "facilities"}. ${info?.definition}`}
         filename={`ranking-${by}-${view.variable}-${order}`}
+        meta={{ variables: [info] }}
         isLoading={isLoading}
         height={560}
         data={[
@@ -584,6 +594,7 @@ function MapChart({ filters, view, setView, catalog }: TabProps) {
         title={`${info?.label} by state`}
         subtitle={`${info ? AGGREGATION_LABELS[info.aggregation] : ""} per state. States with no value are blank. For facility locations, see the Map page.`}
         filename={`map-${view.variable}`}
+        meta={{ variables: [info] }}
         isLoading={isLoading}
         height={480}
         data={[

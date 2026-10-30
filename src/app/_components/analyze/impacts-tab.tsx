@@ -1,12 +1,10 @@
 "use client";
 
-import { Download } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { ExportButton } from "~/components/ui/export-button";
 import { Chart } from "~/components/ui/chart";
 import { Field, ReportTable, Section } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
-import { downloadCsv } from "~/lib/csv";
 import { IMPACT_DISCLAIMER, SHORT_TON_KG } from "~/lib/traci";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -49,6 +47,12 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
     ...impacts.map((v) => r.values[v.key] ?? null),
   ]);
   const version = catalog.factors[0]?.traciVersion;
+  const traciMeta = {
+    variables: impacts,
+    traciFactors: catalog.factors,
+    shortTonKg: SHORT_TON_KG,
+    note: IMPACT_DISCLAIMER,
+  };
 
   return (
     <div className="space-y-6">
@@ -86,6 +90,7 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
               title={`${v.label} by ${dimensionLabel(catalog, by).toLowerCase()}`}
               subtitle={`${v.unit}; the 15 largest of ${formatNumber(data?.total)} groups.`}
               filename={`impact-${v.key}-by-${by}`}
+              meta={traciMeta}
               isLoading={isLoading}
               height={340}
               data={[
@@ -116,21 +121,12 @@ export function ImpactsTab({ filters, view, setView, catalog }: TabProps) {
         note={`Each category is summed only over its own pollutants and keeps its own unit; categories are never added together. A unit-year is left out of a category when one of its pollutants was not reported. ${formatNumber(rows.length)} of ${formatNumber(data?.total)} groups, largest ${impacts[0]?.label.toLowerCase()} first.`}
       >
         <div className="flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!rows.length}
-            onClick={() =>
-              downloadCsv(
-                `traci-${version}-impacts-by-${by}${perMWh ? "-per-mwh" : ""}.csv`,
-                head,
-                table,
-              )
-            }
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download CSV
-          </Button>
+          <ExportButton
+            name={`traci-${version}-impacts-by-${by}${perMWh ? "-per-mwh" : ""}`}
+            title={`TRACI ${version} impacts by ${dimensionLabel(catalog, by).toLowerCase()}`}
+            table={{ head, rows: table }}
+            meta={traciMeta}
+          />
         </div>
         <ReportTable
           sortable

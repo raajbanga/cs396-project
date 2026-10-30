@@ -238,6 +238,7 @@ export function CompareTab({ filters, view, setView, catalog }: TabProps) {
               title={`Mean ${info.label} per unit-year, with 95 % confidence intervals`}
               subtitle={`The table's ${combined.toLowerCase()} weights every unit-year by its size; the mean here counts each unit-year once.`}
               filename={`compare-${view.variable}-by-${by}`}
+              meta={{ variables: [info], groups, tests: result.data.tests }}
               data={[
                 {
                   type: "bar",

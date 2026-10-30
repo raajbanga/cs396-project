@@ -14,6 +14,7 @@ import {
   distribution,
   findVariable,
   loadVariables,
+  provenance,
   scatterPoints,
 } from "~/server/analysis";
 
@@ -36,6 +37,8 @@ async function load(input: z.infer<typeof filters>, keys: string[]) {
 
 export const analysisRouter = createTRPCRouter({
   catalog: publicProcedure.query(() => catalog()),
+
+  provenance: publicProcedure.query(() => provenance()),
 
   summary: publicProcedure
     .input(z.object({ filters }))
