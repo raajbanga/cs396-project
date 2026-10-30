@@ -177,10 +177,7 @@ export function Chart({
         </div>
       </div>
       {isLoading ? (
-        <InlineLoading
-          title="Loading…"
-          className="flex items-center justify-center"
-        />
+        <InlineLoading title="Loading…" />
       ) : (
         <div ref={ref} style={{ minHeight: height }} />
       )}

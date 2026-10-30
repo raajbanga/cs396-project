@@ -20,6 +20,7 @@ reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 | [report/epaData-slides.pptx](./report/epaData-slides.pptx) | Presentation slides (speaker notes in each slide)                            |
 | [report/slides-outline.md](./report/slides-outline.md)     | Speaker notes and live-demo script: steps, inputs, expected results, timings |
 | [report/main.pdf](./report/main.pdf)                       | Project report (LaTeX sources in `report/`, build with `npm run report`)     |
+| [report/phase2.tex](./report/phase2.tex)                   | Phase 2 report source (build with `npm run report`)                          |
 
 ---
 

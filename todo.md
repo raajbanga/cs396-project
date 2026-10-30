@@ -36,6 +36,7 @@ a check on a local machine. Put an owner's initials after a task when someone pi
       session had a Postgres URL set and every script failed until it was pinned to
       `file:./db.sqlite`). Run `echo $DATABASE_URL` if migrations or scripts fail.
 - [ ] Eyeball every tab in dark mode (headless screenshots only covered light mode).
+- [ ] `npm run report`: compile both reports (see F11).
 
 ---
 
@@ -241,17 +242,22 @@ All computed in TS from the F7 JSON models — instant, works on Vercel.
 
 ## F11 — Updated report (§12.4, same structure as Phase 1 `report/main.tex`)
 
-- [ ] Project description: Phase 2 analytical question(s) and goals; intended users.
-- [ ] Functions implemented: one subsection per F1–F9 with screenshots (`report/figures/`).
-- [ ] Requirement traceability table for Phase 2 spec §4–§7.
-- [ ] System design: updated architecture diagram (hybrid TS + offline Python), new tables in the ER diagram.
-- [ ] Methods: indicator definitions, quantile method, TRACI mapping + worked example, statistical tests and assumptions, model features, leakage rules, split, metrics.
-- [ ] Results: model comparison table vs baseline, ablation, sensitivity and scenario findings, two interpreted charts.
-- [ ] Testing: new test cases, parity test, stats cross-checks.
-- [ ] Limitations: potential vs actual impacts, model ≠ causation, fuel/unit type not versioned per year, extrapolation outside training range, sparse pre-2015 data.
-- [ ] Planned-vs-delivered table for Phase 2; individual contributions; references (TRACI 2.2, CAMPD, scikit-learn, Plotly); generative AI disclosure.
-- [x] Update README (Phase 2 section, results table, scripts) and `DATABASE_BREAKDOWN.md` (tables 7–8).
-- [ ] `npm run report` builds cleanly.
+Drafted as **`report/phase2.tex`** (Phase 1's `main.tex` text is untouched; both now share
+`report/preamble.tex`). Figures `report/figures/p2-*.jpg` were captured from the production
+build. Every number was produced by the app or the training pipeline.
+
+- [x] Project description: four analytical questions (Q1–Q4), users, objectives, scope.
+- [x] Functions implemented, one subsection each, with screenshots.
+- [x] Requirement traceability table (§3–§12.3) and plan-vs-delivered table.
+- [x] System design: architecture diagram (TikZ), life cycle of an analysis, new tables, prediction without Python.
+- [x] Methods: variable definitions and missing rules, pooling, quantiles, tests and their assumptions, TRACI mapping + **Ghent 2024 worked example**, prediction target, inputs, leakage, split, models, metrics.
+- [x] Results: Q1 coal→gas shift, Q2 SCR comparison + correlation outlier, Q3 state impacts (total vs per MWh), Q4 model table, ablation, sensitivity, scenario disagreement.
+- [x] Testing, defects found, assessment against the goals; discussion; limitations; future work.
+- [x] Contributions (Phase 1 roles mirrored: RB back end and models, AB interface and slides). 🧪 Both of you check that this matches who does the remaining work.
+- [x] References (TRACI 2.2, scikit-learn, Ridge, CART, Welch, Mann–Whitney, Kruskal–Wallis, SciPy, Plotly) and AI disclosure.
+- [x] Update README and `DATABASE_BREAKDOWN.md`.
+- [ ] 🧪 `npm run report` (needs `tectonic`; it could not be installed in the cloud session, so neither report was compiled there). The source passed static checks (braces, environments, refs, citations, figure paths, escaping); fix whatever the first build reports.
+- [ ] Proofread on paper; check figure sizes and page breaks once compiled.
 
 ---
 
