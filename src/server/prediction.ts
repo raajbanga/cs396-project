@@ -1,12 +1,7 @@
 import { and, between, desc, eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
-import {
-  modelInputs,
-  predict,
-  type ModelArtifact,
-  type ModelRaw,
-} from "~/lib/model";
+import { modelInputs, predict, type ModelArtifact } from "~/lib/model";
 import { getFuelTheme } from "~/lib/map-utils";
 import { sample } from "~/server/analysis";
 import { db } from "~/server/db";
