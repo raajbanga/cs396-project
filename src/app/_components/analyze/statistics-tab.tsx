@@ -155,9 +155,7 @@ export function StatisticsTab({ filters, view, setView, catalog }: TabProps) {
               group,
               ...nums.map((n) => formatStat(n as number | null)),
             ])}
-            sortKeys={rows.map((r) =>
-              r.map((c) => c),
-            )}
+            sortKeys={rows.map((r) => r.map((c) => c))}
           />
         </Section>
       )}
