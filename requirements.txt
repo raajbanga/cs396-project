@@ -1,1 +1,8 @@
 openpyxl>=3.1
+# Phase 2 analysis and prediction (ml/train.py, ml/test_pipeline.py)
+pandas==3.1.0
+numpy==2.5.4
+scikit-learn==1.9.1
+scipy==1.18.1
+joblib>=1.4
+pytest>=8
