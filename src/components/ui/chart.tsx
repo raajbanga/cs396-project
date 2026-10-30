@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Download } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { Config, Data, Layout } from "plotly.js";
-import { Button } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { InlineLoading } from "~/components/ui/empty-state";
-import { downloadCsv, type CsvValue } from "~/lib/csv";
+import { ExportButton } from "~/components/ui/export-button";
+import type { ExportMetadata, ExportTable } from "~/lib/export-bundle";
 
 /** Series colors per theme, led by the app's own accent and status tokens. */
 const COLORWAY = {
@@ -80,7 +79,7 @@ function mergeLayout(base: Partial<Layout>, layout: Partial<Layout>) {
 
 /**
  * A titled Plotly chart in a panel (Phase 2 §4.4): zoom, hover tooltips, and PNG export from the
- * mode bar, plus a "Data" button that saves `table` as CSV. Plotly loads only when a chart mounts.
+ * mode bar, plus a "Data" button that saves `table`, the image, and metadata as a ZIP (§7). Plotly loads only when a chart mounts.
  */
 export function Chart({
   title,
@@ -88,6 +87,7 @@ export function Chart({
   data,
   layout = {},
   table,
+  meta,
   filename,
   isLoading,
   height = 380,
@@ -97,7 +97,9 @@ export function Chart({
   subtitle?: ReactNode;
   data: Data[];
   layout?: Partial<Layout>;
-  table?: { head: string[]; rows: CsvValue[][] };
+  table?: ExportTable;
+  /** Added to the export's metadata.json, e.g. the definitions of the variables shown. */
+  meta?: ExportMetadata;
   filename: string;
   isLoading?: boolean;
   height?: number;
@@ -151,18 +153,26 @@ export function Chart({
         <div className="flex items-center gap-2">
           {actions}
           {table && (
-            <Button
+            <ExportButton
               variant="ghost"
-              size="sm"
-              disabled={isLoading === true || table.rows.length === 0}
-              onClick={() =>
-                downloadCsv(`${filename}.csv`, table.head, table.rows)
-              }
-              title="Download the chart's data as CSV (the camera icon on the chart saves a PNG)"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Data
-            </Button>
+              label="Data"
+              name={filename}
+              title={title}
+              table={table}
+              meta={meta}
+              png={async () => {
+                const el = ref.current;
+                if (!el) return undefined;
+                const { default: Plotly } = await import("plotly.js-dist-min");
+                const url = await Plotly.toImage(el, {
+                  format: "png",
+                  scale: 2,
+                  width: el.clientWidth,
+                  height,
+                });
+                return new Uint8Array(await (await fetch(url)).arrayBuffer());
+              }}
+            />
           )}
         </div>
       </div>

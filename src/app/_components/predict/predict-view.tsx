@@ -13,6 +13,7 @@ import {
 } from "~/lib/analysis-state";
 import { NUMERIC_INPUTS, type ModelInputs } from "~/lib/model";
 import { formatStat } from "~/lib/analysis";
+import { ExportContext } from "~/components/ui/export-button";
 import { replaceUrlQuery } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
@@ -75,6 +76,7 @@ export function PredictView({ initial }: { initial: View }) {
     { facilityId: Number(view.fid), unitId: view.uid, year },
     { enabled: view.tab !== "models" },
   );
+  const { data: source } = api.analysis.provenance.useQuery();
   const current = `${view.fid}|${view.uid}`;
   const unitOptions = (options.data ?? []).map((o) => ({
     value: `${o.facilityId}|${o.unitId}`,
@@ -85,97 +87,121 @@ export function PredictView({ initial }: { initial: View }) {
   }
 
   return (
-    <div className="space-y-6">
-      <PageTitle lead="Annual NOₓ emissions per unit-year, predicted from operating data, unit attributes, NOₓ controls, and the unit's previous year. Compare the models with a baseline, then see how a prediction responds when inputs change.">
-        Predict
-      </PageTitle>
-      <SegmentedControl
-        variant="tabs"
-        value={view.tab}
-        onChange={(tab) => setView({ tab })}
-        options={Object.entries(TABS).map(([value, label]) => ({
-          value: value as View["tab"],
-          label,
-        }))}
-      />
+    <ExportContext
+      value={{
+        page: "Predict",
+        ...source,
+        view,
+        model: model && {
+          id: model.id,
+          name: model.name,
+          target: model.target,
+          features: model.features,
+          settings: model.params,
+          trainYears: model.trainYears,
+          validationYears: model.validationYears,
+          testYears: model.testYears,
+          metrics: model.metrics,
+          savedModel: model.artifactPath,
+          pipeline: model.pipelineVersion,
+          trainedAt: model.trainedAt,
+        },
+        baseline: view.tab === "models" ? undefined : baseline.data,
+      }}
+    >
+      <div className="space-y-6">
+        <PageTitle lead="Annual NOₓ emissions per unit-year, predicted from operating data, unit attributes, NOₓ controls, and the unit's previous year. Compare the models with a baseline, then see how a prediction responds when inputs change.">
+          Predict
+        </PageTitle>
+        <SegmentedControl
+          variant="tabs"
+          value={view.tab}
+          onChange={(tab) => setView({ tab })}
+          options={Object.entries(TABS).map(([value, label]) => ({
+            value: value as View["tab"],
+            label,
+          }))}
+        />
 
-      {!model ? (
-        <p className="text-fg-muted text-sm">
-          No models are registered. Run <code>npm run ml:train</code>.
-        </p>
-      ) : view.tab === "models" ? (
-        <ModelsTab models={models} view={view} setView={setView} />
-      ) : (
-        <>
-          <Controls>
-            <Field label="Model">
-              <Select
-                value={model.kind}
-                onValueChange={(m) => setView({ model: m })}
-                className="w-56"
-                options={models
-                  .filter((m) => m.kind !== "baseline")
-                  .map((m) => ({ value: m.kind, label: m.name }))}
-              />
-            </Field>
-            <Field label="Find facility (name or ID)">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-56"
-                placeholder="e.g. Ghent or 1356"
-              />
-            </Field>
-            <Field label="Year">
-              <Select
-                value={view.year}
-                onValueChange={(y) => setView({ year: y })}
-                options={toOptions(YEARS)}
-                className="w-24"
-              />
-            </Field>
-            <Field label="Baseline unit-year">
-              <Select
-                value={current}
-                onValueChange={(v) => {
-                  const [fid, uid] = v.split("|");
-                  setView({ fid, uid });
-                }}
-                options={unitOptions}
-                className="w-96 max-w-full"
-              />
-            </Field>
-          </Controls>
-          {baseline.data ? (
-            <BaselineSummary baseline={baseline.data} />
-          ) : (
-            !baseline.isLoading && (
-              <p className="text-fg-muted text-sm">
-                This unit has no record for {view.year}; pick another unit-year.
-              </p>
-            )
-          )}
-          {baseline.data &&
-            (view.tab === "sensitivity" ? (
-              <SensitivityTab
-                view={view}
-                setView={setView}
-                models={models}
-                model={model}
-                baseline={baseline.data}
-              />
+        {!model ? (
+          <p className="text-fg-muted text-sm">
+            No models are registered. Run <code>npm run ml:train</code>.
+          </p>
+        ) : view.tab === "models" ? (
+          <ModelsTab models={models} view={view} setView={setView} />
+        ) : (
+          <>
+            <Controls>
+              <Field label="Model">
+                <Select
+                  value={model.kind}
+                  onValueChange={(m) => setView({ model: m })}
+                  className="w-56"
+                  options={models
+                    .filter((m) => m.kind !== "baseline")
+                    .map((m) => ({ value: m.kind, label: m.name }))}
+                />
+              </Field>
+              <Field label="Find facility (name or ID)">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-9 w-56"
+                  placeholder="e.g. Ghent or 1356"
+                />
+              </Field>
+              <Field label="Year">
+                <Select
+                  value={view.year}
+                  onValueChange={(y) => setView({ year: y })}
+                  options={toOptions(YEARS)}
+                  className="w-24"
+                />
+              </Field>
+              <Field label="Baseline unit-year">
+                <Select
+                  value={current}
+                  onValueChange={(v) => {
+                    const [fid, uid] = v.split("|");
+                    setView({ fid, uid });
+                  }}
+                  options={unitOptions}
+                  className="w-96 max-w-full"
+                />
+              </Field>
+            </Controls>
+            {baseline.data ? (
+              <BaselineSummary baseline={baseline.data} />
             ) : (
-              <ScenariosTab
-                view={view}
-                setView={setView}
-                models={models}
-                model={model}
-                baseline={baseline.data}
-              />
-            ))}
-        </>
-      )}
-    </div>
+              !baseline.isLoading && (
+                <p className="text-fg-muted text-sm">
+                  This unit has no record for {view.year}; pick another
+                  unit-year.
+                </p>
+              )
+            )}
+            {baseline.data &&
+              (view.tab === "sensitivity" ? (
+                <SensitivityTab
+                  view={view}
+                  setView={setView}
+                  models={models}
+                  model={model}
+                  baseline={baseline.data}
+                />
+              ) : (
+                <ScenariosTab
+                  view={view}
+                  setView={setView}
+                  models={models}
+                  model={model}
+                  baseline={baseline.data}
+                />
+              ))}
+          </>
+        )}
+      </div>
+    </ExportContext>
   );
 }
 
