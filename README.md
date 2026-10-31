@@ -12,14 +12,14 @@ group comparisons with statistical tests, EPA TRACI 2.2 impact indicators, a NOâ
 model compared with a baseline, sensitivity and scenario analysis, and exports with
 reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 
-| Document                                                   | Contents                                                                     |
-| :--------------------------------------------------------- | :--------------------------------------------------------------------------- |
-| This README                                                | Setup, configuration, how to reproduce the results                           |
-| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)           | Column-level schema, which view reads which table, ingestion flow            |
-| [samples/README.md](./samples/README.md)                   | The sample upload file, row by row, with the expected validation report      |
-| [report/README.md](./report/README.md)                     | Map of the report folder: which file is which phase                          |
-| [report/phase2/](./report/phase2/)                         | Phase 2 report source and PDF (build with `npm run report`)                  |
-| [report/phase1/](./report/phase1/)                         | Phase 1 report, slides, and demo script (submitted, frozen)                  |
+| Document                                         | Contents                                                                |
+| :----------------------------------------------- | :---------------------------------------------------------------------- |
+| This README                                      | Setup, configuration, how to reproduce the results                      |
+| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md) | Column-level schema, which view reads which table, ingestion flow       |
+| [samples/README.md](./samples/README.md)         | The sample upload file, row by row, with the expected validation report |
+| [report/README.md](./report/README.md)           | Map of the report folder: which file is which phase                     |
+| [report/phase2/](./report/phase2/)               | Phase 2 report source and PDF (build with `npm run report`)             |
+| [report/phase1/](./report/phase1/)               | Phase 1 report, slides, and demo script (submitted, frozen)             |
 
 ---
 
@@ -201,7 +201,7 @@ environment at `epaDataVENV/bin/python3`).
 
 - Node.js 20.9 or newer, with npm
 - Python 3.9 or newer (reads uploaded files; Phase 2 model training uses pandas and scikit-learn,
-  tested with Python 3.13)
+  trained with Python 3.13; `npm run test:py` also passes on Python 3.15)
 - Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
   for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
   without it.
@@ -486,7 +486,7 @@ Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide
 | `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `sync_campd`) and `parse_import.py`                                                                                   |
 | `drizzle/`                                                                      | SQL migrations                                                                                                                                                                 |
 | `samples/`                                                                      | Sample upload files and their expected results                                                                                                                                 |
-| `report/`                                                                       | Reports and slides, one folder per phase (`phase1/`, `phase2/`), plus `shared/` LaTeX preamble and bibliography and `spec/`; see `report/README.md` |
+| `report/`                                                                       | Reports and slides, one folder per phase (`phase1/`, `phase2/`), plus `shared/` LaTeX preamble and bibliography and `spec/`; see `report/README.md`                            |
 | `uploads/`                                                                      | Archived original upload files (not committed)                                                                                                                                 |
 
 ## Data and credits

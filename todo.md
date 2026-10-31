@@ -9,67 +9,41 @@ fix before submission · **P2** should fix (costs points if missed) · **P3** po
 
 ---
 
-## Audit 10/31 — grade
+## Status (10/31)
 
-Checked every spec section (§1–§12) against the code, the database, and `phase2-report.tex` compiled
-with tectonic (29 pages). Numbers spot-checked against `db.sqlite` and `ml/models/metrics.json`:
-46,988 unit-years, the Ghent 2024 worked example, the SCR counts and all model metrics match.
+Report P1 pass done: [`report/phase2/phase2-report.pdf`](report/phase2/phase2-report.pdf) builds
+clean (32 pages, no overfull boxes or undefined refs). Every number in it was re-checked against
+`db.sqlite`, `ml/models/metrics.json`, direct model calls, or hand-written SQL.
 
-| Area                                    | Grade  | Why                                                                                                                                                                    |
-| :-------------------------------------- | :----- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code vs spec §3–§7                      | **A**  | Every required function is built; only optional items left (saved analyses, custom scenario, TRACI of predicted NOₓ, residual plot).                                  |
-| Repo hygiene §12.3                      | **A−** | Tests, migrations, env template fine; local Python venv is broken, so `test:py` and one `npm test` fail on this machine.                                              |
-| Report content                          | **B+** | Methods, results, and honesty are strong. Missing two sections Phase 1 had, a few contradictions and number mismatches, thin traceability for §6.4/§7/§8/§12.5.         |
-| Report as a deliverable                 | **C**  | Phase 2 has never been built into a committed PDF (the old `main.pdf` was the **Phase 1** report); two screenshots overflow their pages (one loses its caption).              |
-| Presentation and demo §12.5             | **F**  | Not started.                                                                                                    |
+| Area                        | Grade  | Notes                                                                                                             |
+| :-------------------------- | :----- | :---------------------------------------------------------------------------------------------------------------- |
+| Code vs spec §3–§7          | **A**  | Only optional items left (P3).                                                                                    |
+| Repo hygiene §12.3          | **A**  | `npm run validate` green; `npm test` 61 (60 pass, 1 skipped: needs uncommitted `dataImports/`); `test:py` 6 pass. |
+| Report                      | **A−** | Phase 1 structure complete; contradictions fixed. Left: proofread, one more charts figure.                        |
+| Presentation and demo §12.5 | —      | Not started; waits for the go-ahead (last section).                                                               |
 
 ---
 
-## P1 — must fix before submission
+## P1 — report pass (done 10/31)
 
-### Report build and deliverable
-
-- [ ] Build and commit `report/phase2/phase2-report.pdf` (`npm run report`); that is the file we submit.
 - [x] Report folder reorganized into `phase1/`, `phase2/`, `shared/`, `spec/` (see `report/README.md`).
-- [ ] **Figure 8 (`p2-impacts.jpg`) overflows the page by ~588 pt** (`phase2-report.tex:620`): the caption falls off page 20. Crop to the four charts or split into charts + table.
-- [ ] **Figure 1 (`p2-dataset.jpg`) is a full-page screenshot** (overfull by 78 pt, `phase2.tex:128`); text is unreadable at print size. Crop to the tiles + the first rows of the variable table.
-- [ ] TRACI equation runs 88 pt into the margin (`phase2-report.tex:462–466`): put the three formulas on separate lines (`align`).
-- [ ] Model table is 25 pt too wide (`phase2-report.tex:640`): shorten model names or use `\small`/`tabularx`.
-
-### Report content — sections Phase 1 had and Phase 2 lacks (§12.4 "refer to phase 1")
-
-- [ ] **Technical details** section (Phase 1 §4): languages, database, frameworks/libraries with versions (Plotly.js, fflate, pandas, NumPy, scikit-learn, joblib, SciPy, pytest), external services (Plotly CDN for state outlines), scripts and configuration (`ml:train`, `traci:import`, `test:py`, `report`, Python venv).
-- [ ] **Highlighted features** section (Phase 1 §5): 2–4 deep dives with code/SQL excerpts, e.g. pooled rates over a variable catalogue, TS↔sklearn parity with float32 thresholds, exact TRACI mapping (NOₓ vs NO₂), reproducible ZIP export + `metadata.json` excerpt.
-- [ ] **Representative test cases** table (Phase 1 §6.3): input → expected → observed. Include a hand-written-SQL count check (e.g. KY 2023–2024 = 177 unit-years), the Ghent TRACI example, the SCR comparison, an out-of-range scenario, an export round-trip.
-- [ ] **Performance** subsection (Phase 1 §6.4): table of load times (1.3 s cold selection, ~0.1 s per view, cache hit < 1 ms, Plotly lazy-load, training time).
-- [ ] **Known issues** subsection (Phase 1 §6.5): state map needs internet, sampling on big charts, fuel/type not versioned, anything still open at submission.
-
-### Report content — contradictions and wrong numbers
-
-- [ ] **Objectives vs Scope contradict:** §1.4 Objectives says Phase 2 addresses O9 (multi-criteria evaluation); §1.5 Scope says multi-criteria scoring was not built. Drop O9 or explain. Also check the O-numbers against Phase 1 (`phase1-report.tex` lists O1–O7, O11, O12, so the deferred ones are O8–O10; confirm their wording).
-- [ ] **Test counts disagree:** text says 60 TS tests / 1 skipped (`phase2-report.tex:710`), traceability says "57 + 6" (`:266`). Actual run: 61 tests, 2 skipped. Re-count after the venv fix and use one number everywhere.
-- [ ] **SCR counts disagree** (`:572–579`): 1,547 vs 1,564 SCR unit-years and 479 vs 571 uncontrolled. Both are right (rate defined vs all records), but say so, or use one basis.
-- [ ] "The two models **agree** on heat input (−5 %: Ridge −3.2 %, tree −9.1 %)" (`:677`): a 3× difference isn't agreement; reword to "same direction".
-- [ ] Sensitivity paragraph: Ridge's baseline (2,972 t) under-predicts Ghent 2's actual 4,146 t by 28 %. Say so and give the tree's baseline too; otherwise a grader will notice.
-- [ ] Q1: coal and gas cross in 2023 **and back** in 2025; say "crossed twice" explicitly to match the figure.
-
-### Local environment 🧪
-
-- [ ] `epaDataVENV/` has no `bin/` (broken venv). Recreate it: `python3 -m venv epaDataVENV && epaDataVENV/bin/pip install -r requirements.txt`. Until then `npm run test:py` fails and the `samples/` upload test fails (`openpyxl` missing).
-- [ ] Then `npm run validate` and `npm run test:py` green; record the final counts in the report.
-
-### Presentation and demo (§12.5)
-
-- [ ] Slides (new deck; put it in `report/phase2/slides/`; Phase 1 deck is in `report/phase1/slides/`): question → architecture → features → model comparison vs baseline → sensitivity/scenario → limitations → contributions.
-- [ ] Demo script (steps, inputs, expected numbers, timings), covering each §12.5 item:
-  - [ ] Explain the analytical question (Q1–Q4).
-  - [ ] Build a dataset, show stats.
-  - [ ] Interpret ≥ 2 visualizations: CO₂ trend by fuel (crossings 2023/2025); NOₓ-rate box plot by fuel; backup: Pearson vs Spearman correlation outlier.
-  - [ ] TRACI impacts for Ghent 2024 (matches the worked example).
-  - [ ] Models vs baseline (Models tab).
-  - [ ] Sensitivity curve + scenario chart with an out-of-range warning (Ghent unit 2).
-  - [ ] Limitations.
-- [ ] Split speaking roles; two timed rehearsals; pre-demo checklist (`git restore db.sqlite`, prod build, warm pages, check `cdn.plot.ly` on the demo network).
+- [x] Layout: Impacts and Dataset screenshots cropped; TRACI equations split (`align`); model table fits; long URL breaks; listings no longer split across pages; figures float (`[!htbp]`, float pages top-aligned) so tall screenshots no longer leave half-empty pages.
+- [x] New sections in the Phase 1 structure: Technical details (§4), Highlighted features (§7, four listings incl. a real `metadata.json`), Representative test cases (13 rows, SQL-checked), Performance (measured), Known issues.
+- [x] Added "Data flow and reproducibility" (§3.4).
+- [x] Objectives: O8–O10 listed with Phase 1 wording; O9 marked not built (not in the spec); O11 now met (deployed at cs396-project.vercel.app).
+- [x] Test counts: 61 TS (17 new in three files) + 6 pytest, the same everywhere.
+- [x] SCR counts: one sentence explains 1,564/571 records vs 1,547/479 with a defined rate.
+- [x] Scenarios: "same direction", not "agree"; fuel switch and high-efficiency numbers re-checked.
+- [x] Sensitivity: both models under-predict Ghent unit 2 (Ridge 2,972 t, tree 2,738 t vs 4,146 t) because its NOₓ rate rose from 0.227 to 0.314 lb/MMBtu; now stated.
+- [x] Q1: coal and gas lines cross twice (2023, 2025).
+- [x] Performance claim fixed: views are 11–220 ms, but the Spearman heat map takes ~1.9 s (now in Known issues).
+- [x] Traceability: rows added for §1 goal 5, §4.4 maps, §6.2 step, §6.4 (impact response marked not met, optional), each §7 export, §8 steps 5/10.
+- [x] Plan vs delivered: custom scenarios, impacts of predicted NOₓ, residual plot, O9 added.
+- [x] Assessment table covers the nine spec goals and O8–O12.
+- [x] Local venv rebuilt (`epaDataVENV`, Python 3.15); `npm test` and `npm run test:py` green.
+- [x] Local `node_modules` was out of sync with the lockfile (zod 4 installed, `^3.24` declared → 2 lint errors); `npm ci` fixed it. Stale `.next/` types from that install cleared. `npm run validate` green.
+- [x] README: Prettier fix for the report-table edit; Python line now says trained on 3.13, `test:py` passes on 3.15.
+- [x] Report no longer claims the pipeline runs on Python 3.9 (floors allow it; not re-run).
 
 ---
 
@@ -77,28 +51,26 @@ with tectonic (29 pages). Numbers spot-checked against `db.sqlite` and `ml/model
 
 ### Report
 
-- [ ] Traceability table gaps: add rows for §1 goal 5 (unusual observations), §4.4 facility-location map (Phase 1 Map page), §6.2 step size, §6.4 "same filters/units, image or data export", §7 each export type separately (dataset, stats, comparison, model results **and predictions**, sensitivity, scenarios, charts), §8 steps 5 and 10 (pandas at request time → TS; marked Changed), §12.5.
-- [ ] Plan-vs-delivered table: add fully custom scenarios (only two % values editable), TRACI of predicted NOₓ (optional §6.4 "impact indicators"), residual plot, saved analyses.
-- [ ] Assessment against objectives: also list the course objectives (O8–O12) Phase 2 claims, not only the spec goals.
 - [ ] Charts coverage: only trend, box, and correlation are shown. Add one composite figure of histogram / scatter / rankings / state map so §4.4 is visibly met.
-- [ ] Exports: show a trimmed `metadata.json` and the ZIP contents (Phase 1 had `download.jpg`); name the field that serves as §7's "dataset identifier".
-- [ ] Data flow / reproducibility subsection (Phase 1 §3.4 equivalent): CAMPD → DB → TRACI import → analysis → export → re-open URL.
-- [ ] Contributions: both check that the RB/AB split matches who did the work, including the report and slides. 🧪
-- [ ] Proofread on paper once figures are fixed; check page breaks.
+- [ ] Proofread on paper (wording and figure order; page breaks are clean as of 10/31).
+- [ ] Contributions: both confirm the RB/AB split before submission. 🧪
+- [ ] Commit `report/phase2/phase2-report.pdf` with the final version.
 
 ### Code / tests
 
 - [ ] Export metadata test (`export-bundle.ts`): required §7 fields present.
 - [ ] Move OVAT / % change logic out of the tab components into `src/lib/model.ts` and unit-test it.
-- [ ] Record one count against hand-written SQL (feeds the test-case table above).
+- [ ] Spearman heat map: rank each column once when it has no missing values (1.9 s → well under 1 s); update the report's Performance table and Known issues if done.
 
 ### Local checks 🧪
 
+- [ ] Python 3.9 venv (the README's documented setup): `pip install -r requirements.txt`, then `npm run test:py`. If it passes, say so in the report's §4.2 and README.
 - [ ] Retrain with `npm run ml:train`, then `npm test` (parity must still pass); update the report/README tables if metrics move.
-- [ ] Vercel read-only build: Analyze and Predict load, charts render, ZIP downloads work.
+- [ ] Hosted build: charts render and ZIP downloads work (Predict and Upload pages checked 10/31).
 - [ ] ZIP downloads in Safari and Chrome (PNG, CSV, `metadata.json`).
 - [ ] Every tab in dark mode.
 - [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`).
+- [ ] If lint or types fail on a machine where they passed before: `npm ci` (installs exactly the lockfile), then delete `.next/`.
 
 ---
 
@@ -127,19 +99,19 @@ All spec functions are built, tested, and on `dev`; see git history for detail.
 - **F8 sensitivity/scenarios (§6):** OVAT curve with baseline marks and shaded out-of-range, five named scenarios for both models, range warnings, non-causal captions.
 - **F9 exports (§7):** ZIP (CSV + PNG + `metadata.json`) on every chart/table, `/api/export?type=analysis`.
 - **F10 hygiene (§12.3):** `npm run validate` green (in the cloud env), knip clean, no deprecations, README + `DATABASE_BREAKDOWN.md` updated.
-- **F11 report draft:** all Phase 1-style sections except those listed under P1.
+- **F11 report:** all Phase 1-style sections, checked numbers, clean build.
 
 ---
 
 ## Locked decisions
 
-| Decision          | Choice                                                                                                                                          | Why                                                                                                 |
-| :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- |
-| Compute stack     | Hybrid: stats, indicators, TRACI in TS on the server; models trained offline in Python, exported as JSON, evaluated in TS.                      | Keeps pandas/sklearn, works on the read-only Vercel deploy, instant interactions.                   |
-| Prediction target | Annual NOₓ mass (short tons) per unit-year, regression.                                                                                         | Every spec scenario (+10 % load, −5 % heat input, control change) changes it.                       |
-| Charts            | Plotly.js (`plotly.js-dist-min`) behind `<Chart>`, lazy-loaded.                                                                                 | Spec recommendation; zoom, tooltips, box plots, heat maps, PNG export built in.                     |
-| Web stack         | Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                                                                         | Spec allows it ("React is optional").                                                               |
-| Modeling years    | 2015–2025. Train 2016–2021, validate 2022–2023, test 2024–2025.                                                                                 | §5.4 chronological split; 2016 is the first year with a prior-year feature.                         |
+| Decision          | Choice                                                                                                                     | Why                                                                               |
+| :---------------- | :------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| Compute stack     | Hybrid: stats, indicators, TRACI in TS on the server; models trained offline in Python, exported as JSON, evaluated in TS. | Keeps pandas/sklearn, works on the read-only Vercel deploy, instant interactions. |
+| Prediction target | Annual NOₓ mass (short tons) per unit-year, regression.                                                                    | Every spec scenario (+10 % load, −5 % heat input, control change) changes it.     |
+| Charts            | Plotly.js (`plotly.js-dist-min`) behind `<Chart>`, lazy-loaded.                                                            | Spec recommendation; zoom, tooltips, box plots, heat maps, PNG export built in.   |
+| Web stack         | Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                                                    | Spec allows it ("React is optional").                                             |
+| Modeling years    | 2015–2025. Train 2016–2021, validate 2022–2023, test 2024–2025.                                                            | §5.4 chronological split; 2016 is the first year with a prior-year feature.       |
 
 ## Risks and open questions
 
@@ -147,3 +119,20 @@ All spec functions are built, tested, and on `dev`; see git history for detail.
 - **Model disagreement on SCR:** tree barely responds; Ridge cuts Ghent 2 by ~59 %. Feature it in the talk, don't hide it.
 - **State map needs `cdn.plot.ly`** at runtime; skip that chart if the demo network blocks it.
 - **Time:** 4 weeks left with Thanksgiving; P1 first, P3 only if everything above is done.
+
+---
+
+## Final — presentation and demo (§12.5) · start only when asked
+
+Don't start this until the team asks for it.
+
+- [ ] Slides in `report/phase2/slides/` (Phase 1 deck is in `report/phase1/slides/`): question → architecture → features → model comparison vs baseline → sensitivity/scenario → limitations → contributions.
+- [ ] `report/phase2/slides/slides-outline.md`: demo script (steps, inputs, expected numbers, timings), covering each §12.5 item:
+  - [ ] Explain the analytical question (Q1–Q4).
+  - [ ] Build a dataset, show stats.
+  - [ ] Interpret ≥ 2 visualizations: CO₂ trend by fuel (crossings 2023/2025); NOₓ-rate box plot by fuel; backup: Pearson vs Spearman correlation outlier.
+  - [ ] TRACI impacts for Ghent 2024 (matches the worked example).
+  - [ ] Models vs baseline (Models tab).
+  - [ ] Sensitivity curve + scenario chart with an out-of-range warning (Ghent unit 2).
+  - [ ] Limitations.
+- [ ] Split speaking roles; two timed rehearsals; pre-demo checklist (`git restore db.sqlite`, prod build, warm pages, check `cdn.plot.ly` on the demo network).
