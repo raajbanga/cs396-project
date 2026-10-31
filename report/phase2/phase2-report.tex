@@ -5,6 +5,10 @@
 \input{../shared/preamble}
 
 \newcommand{\PMtwofive}{PM\textsubscript{2.5}}
+% Let long URLs (the TRACI page) break at hyphens too.
+\expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks\do\-}
+% Figures alone on a page sit at the top rather than centered.
+\makeatletter\setlength{\@fptop}{0pt}\makeatother
 
 \title{%
   \vspace*{-1em}
@@ -19,20 +23,19 @@
 \begin{abstract}
 \noindent
 Phase~1 of epaData built a database of the annual operating and emissions data that U.S.\
-power-plant units report to the EPA Clean Air Markets Program (CAMPD), with retrieval, upload,
-validation, search, and export. Phase~2 turns that database into a decision-support tool. An
-\emph{Analyze} page lets a user select unit-years with the Phase~1 filters and then summarize
-them with descriptive statistics, derive normalized indicators such as emission intensities,
-heat rate, capacity factor, and year-over-year change, explore them in interactive charts,
-compare groups with confidence intervals and hypothesis tests, and convert \COtwo{}, \SOtwo{},
-and \NOx{} emissions into EPA TRACI~2.2 potential-impact indicators. A \emph{Predict} page
-compares a baseline with Ridge regression and a decision tree that predict a unit's annual
-\NOx{} emissions; on the held-out reporting years 2024--2025 the tree reaches $R^2 = 0.951$
-against $0.489$ for the baseline. The same models drive one-variable sensitivity curves and
-named what-if scenarios, with warnings when an input leaves the training data. Every result can
-be exported with metadata that records how it was produced. This report documents the
-analytical questions, the methods and their assumptions, the design, the results, and the
-limitations of the system.
+power-plant units report to the EPA Clean Air Markets Program Data service (CAMPD), with
+retrieval, upload, validation, search, and export. Phase~2 adds analysis on top of that
+database. An \emph{Analyze} page selects unit-years with the Phase~1 filters and then reports
+descriptive statistics, derived indicators (emission intensities, heat rate, capacity factor,
+year-over-year change), interactive charts, group comparisons with confidence intervals and
+hypothesis tests, and EPA TRACI~2.2 potential-impact indicators for \COtwo{}, \SOtwo{}, and
+\NOx{}. A \emph{Predict} page compares a baseline, Ridge regression, and a decision tree that
+predict a unit's annual \NOx{} emissions. On the held-out years 2024--2025 the tree reaches
+$R^2 = 0.951$, against $0.827$ for Ridge and $0.489$ for the baseline. The same models drive
+one-variable sensitivity curves and named scenarios, with a warning when an input leaves the
+range of the training data. Every result can be exported with the metadata needed to reproduce
+it. This report describes the analytical questions, the design, the methods and their
+assumptions, the results, the testing, and the limitations.
 \end{abstract}
 
 \tableofcontents
@@ -44,117 +47,121 @@ limitations of the system.
 
 \subsection{Problem}
 
-Phase~1 made CAMPD data easy to find and trust: a user can ask which Kentucky coal units emitted
-more than 500{,}000 tons of \COtwo{} in 2025 and see where every number came from. It could not
-answer the questions that follow. Is the sector's \COtwo{} falling because plants are getting
-cleaner or because generation is moving between fuels? Do units with selective catalytic
-reduction (SCR) really emit less \NOx{} per unit of fuel, and by how much? Which states
-contribute most to acidification, and does the ranking change once the result is divided by
-the electricity produced? How much \NOx{} would a particular unit emit if it burned 5\,\% less
-fuel or added a control?
+Phase~1 made CAMPD data easy to find and to trace to its source: a user can list the Kentucky
+coal units that emitted more than 500{,}000 tons of \COtwo{} in 2025 and see which retrieval or
+upload supplied each value. It could not answer the questions that usually follow. Is the
+sector's \COtwo{} falling because plants are cleaner or because generation is moving from coal
+to gas? Do units with selective catalytic reduction (SCR) emit less \NOx{} per unit of fuel, and
+by how much? Which states contribute most to acidification, and does the ranking change once
+the result is divided by the electricity produced? How much \NOx{} would a given unit emit if it
+burned 5\,\% less fuel or added a control?
 
-Answering such questions requires statistics over many unit-years with a correct treatment of
-missing values, indicators that are comparable across plants of different size, a defensible
-link between emitted mass and environmental impact, and a model whose predictions are evaluated
-honestly before they are used for what-if analysis.
+Answering these questions needs four things: statistics over many unit-years with a consistent
+rule for missing values, indicators that are comparable across plants of different size, a
+documented link from emitted mass to potential impact, and a prediction model that is evaluated
+on data it has not seen before it is used for what-if analysis.
 
 \subsection{Analytical questions}
 
-Phase~2 is organized around four questions, each answered with a function of the application
-(Section~\ref{sec:results}):
+Phase~2 is organized around four questions. Section~\ref{sec:results} answers each one with the
+application.
 \begin{enumerate}[label=Q\arabic*.]
   \item How have emissions and emission intensity changed between 2015 and 2025, and how much of
         the change is a shift from coal to gas?
   \item How large is the difference in \NOx{} emission rate between units with and without
-        post-combustion \NOx{} control, and is it statistically distinguishable from chance?
-  \item Which states and facilities contribute most to each TRACI impact category, in total and
-        per MWh?
+        post-combustion \NOx{} control, and is it larger than chance would explain?
+  \item Which states contribute most to each TRACI impact category, in total and per MWh?
   \item How well can a unit's annual \NOx{} emissions be predicted from its operating data,
-        attributes, controls, and history, and how do predictions respond to changed inputs?
+        attributes, controls, and history, and how do the predictions respond to changed inputs?
 \end{enumerate}
 
 \subsection{Intended users}
 
-The specification names environmental researchers, power-sector analysts, regulators, facility
-managers, students, and the interested public. Phase~2 assumes these users know their domain
-but not statistics software: every statistic is labeled with its unit and definition, every
-test is accompanied by a plain-language reading, and every model result is labeled as a model
-response rather than a measured effect.
+The specification lists environmental researchers, power-sector analysts, regulators, facility
+managers, students, and the interested public. Phase~2 assumes these users know the subject but
+not statistical software. Every statistic is shown with its unit and definition, every test
+with a plain-language reading, and every model result with a note that it describes the model,
+not a measured effect.
 
 \subsection{Objectives}
 
-Phase~2 addresses the course objectives deferred from Phase~1, O8 (environmental indicators),
-O9 (multi-criteria evaluation), and O10 (interactive charts of evaluation results), through the
-nine goals of the Phase~2 specification: explore the data with descriptive statistics; compare
-facilities, units, fuels, states, and periods; visualize emissions and operating data; estimate
-potential impacts with TRACI factors; identify trends, relationships, and unusual observations;
-build and evaluate prediction models; perform sensitivity and scenario analysis; save and export
-results; and explain methods, assumptions, results, and limitations. Section~\ref{sec:testing}
-assesses each goal.
+The course defines twelve objectives for the two-phase project. Phase~1 covered O1--O7, O11,
+and O12. Three were left for Phase~2:
+\begin{enumerate}[label=O\arabic*., start=8]
+  \item Calculate environmental indicators.
+  \item Score alternatives on several indicators (multi-indicator scoring).
+  \item Present evaluation results in interactive charts.
+\end{enumerate}
+The Phase~2 specification itself sets nine goals: descriptive statistics; comparisons of
+facilities, units, fuels, states, and periods; interactive visualization; TRACI impact
+indicators; trends, relationships, and unusual observations; prediction models; sensitivity and
+scenario analysis; saving and exporting results; and clear explanation of methods, assumptions,
+results, and limitations. The specification does not ask for multi-indicator scoring, so O9 was
+not built (Section~\ref{sec:changes}). Phase~2 also completes O11 (test and deploy), which
+Phase~1 met only partly: the application is now hosted at
+\url{https://cs396-project.vercel.app}. Section~\ref{sec:assessment} assesses every goal and
+objective.
 
 \subsection{Scope}
 
-Phase~2 uses the CAMPD records of the Phase~1 database and the TRACI~2.2 characterization
-factors for the three pollutants CAMPD reports (\COtwo{}, \SOtwo{}, and \NOx{} emitted to air).
-Analyses default to the complete reporting years 2015--2025 retrieved from the CAMPD API; the
-older uploaded years (1996--1998 and 2006--2008) and the partial year 2026 remain selectable but
-are excluded from model training. The prediction target is annual \NOx{} mass per unit-year
-(Section~\ref{sec:prediction}). Multi-criteria weighted scoring, listed among the course
-objectives, is not part of the Phase~2 specification and was not built.
+Phase~2 uses the CAMPD records already in the Phase~1 database and the TRACI~2.2
+characterization factors for the three pollutants CAMPD reports (\COtwo{}, \SOtwo{}, and \NOx{}
+emitted to air). Analyses default to the complete reporting years 2015--2025 retrieved from the
+CAMPD API. The older uploaded years (1996--1998 and 2006--2008) and the partial year 2026 can
+still be selected but are excluded from model training. The prediction target is annual \NOx{}
+mass per unit-year (Section~\ref{sec:prediction}).
 
 % ------------------------------------------------------------------------
 \section{Functions implemented}
 \label{sec:functions}
 
-Two pages were added between \emph{Map} and \emph{Retrieve} in the navigation bar:
-\emph{Analyze} (\code{/analyze}), with the tabs Dataset, Statistics, Charts, Compare, and
-Impacts, and \emph{Predict} (\code{/predict}), with the tabs Models, Sensitivity, and Scenarios.
-As in Phase~1, the URL holds the complete state of a page (filters, tab, and every choice on the
-tab), so any view can be reloaded, bookmarked, or shared.
+Two pages were added to the navigation bar: \emph{Analyze} (\code{/analyze}), with the tabs
+Dataset, Statistics, Charts, Compare, and Impacts, and \emph{Predict} (\code{/predict}), with
+the tabs Models, Sensitivity, and Scenarios. As in Phase~1, the URL holds the full state of a
+page (filters, tab, and every choice on the tab), so any view can be reloaded, bookmarked, or
+shared.
 
 \subsection{Analytical dataset builder}
 
-The Analyze page reuses the Explore page's filter bar without change: reporting-year range,
-state, facility, unit, primary and secondary fuel, unit type, \SOtwo{}, \NOx{}, and particulate
-controls, program, operating status, record origin, audit flags, and minimum and maximum
+The Analyze page reuses the Explore page's filter bar: reporting-year range; state, facility,
+and unit; primary and secondary fuel; unit type; \SOtwo{}, \NOx{}, and particulate controls;
+emissions program; operating status; record origin; audit flags; and minimum and maximum
 operating time, gross load, heat input, and emitted mass. The selected unit-years are the
-analytical dataset for every tab. The Dataset tab (Figure~\ref{fig:dataset}) reports how many
-unit-years, facilities, units, and years were selected, lists every variable with its kind,
-unit, definition, how groups combine it, and how many of its values are missing, and lists the
-fields the selection can be grouped by with their number of distinct values. A \emph{Download
+analytical dataset for every tab. The Dataset tab (Figure~\ref{fig:dataset}) shows how many
+unit-years, facilities, units, and years were selected; lists the fields the selection can be
+grouped by, with their number of distinct values; and lists every variable with its kind, unit,
+definition, how groups combine it, and how many of its values are missing. A \emph{Download
 dataset} button exports every selected unit-year with all variables
 (Section~\ref{sec:exports}).
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-dataset.jpg}
-  \caption{Dataset tab for 2015--2025: 46{,}988 unit-years of 1{,}590 facilities and 5{,}087
-  units. Each variable is listed with its kind, unit, how groups combine it, and its missing
-  values.}
+  \caption{Dataset tab for 2015--2025 (46{,}988 unit-years), part: grouping fields with their
+  distinct values, then measured and derived variables with their missing counts.}
   \label{fig:dataset}
 \end{figure}
 
 \subsection{Derived indicators}
 
-Twenty-nine variables are available (Table~\ref{tab:variables}): seven measured values, six
-derived rates, eight year-over-year changes, and eight TRACI indicators. The derived and TRACI
-variables are computed from the stored records whenever an analysis runs, so they always agree
-with the current data. Section~\ref{sec:methods} gives their definitions and the rules for
-missing values.
+Twenty-nine variables are available: seven measured values, six derived rates, eight
+year-over-year changes, and eight TRACI indicators (Table~\ref{tab:variables}). Derived and TRACI
+values are computed from the stored records each time an analysis runs, so they always match
+the current data. Section~\ref{sec:methods} gives the definitions and the missing-value rules.
 
 \subsection{Descriptive statistics}
 
 The Statistics tab (Figure~\ref{fig:statistics}) describes one variable over the selection:
 count, missing count, minimum, maximum, mean, median, standard deviation, first and third
-quartiles, interquartile range, and the 5th, 10th, 90th, and 95th percentiles, together with the
+quartiles, interquartile range (IQR), and the 5th, 10th, 90th, and 95th percentiles, plus the
 variable's total, mean, or pooled rate over the whole selection. With a grouping field it
-repeats these statistics for each group in a sortable table. It also lists \emph{unusual
-observations}: the unit-years beyond Tukey's far-out fences, $Q_1 - 3\,\text{IQR}$ and
-$Q_3 + 3\,\text{IQR}$, with their count on each side and the ten most extreme. The four example questions of the
-specification (average \COtwo{} by state, median \NOx{} intensity by fuel, total \SOtwo{} by
-year, and average heat rate by unit type) are offered as one-click examples.
+repeats these statistics per group in a sortable table. It also lists \emph{unusual
+observations}: unit-years beyond Tukey's far-out fences, $Q_1 - 3\,\text{IQR}$ and
+$Q_3 + 3\,\text{IQR}$, with the count on each side and the ten most extreme. The four example
+questions of the specification (average \COtwo{} by state, median \NOx{} intensity by fuel,
+total \SOtwo{} by year, and average heat rate by unit type) are one-click examples.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-statistics.jpg}
   \caption{Statistics tab: \NOx{} intensity over 2015--2025, overall and by fuel class.}
@@ -163,69 +170,72 @@ year, and average heat rate by unit type) are offered as one-click examples.
 
 \subsection{Interactive visualization}
 
-The Charts tab draws seven chart types with Plotly.js~\cite{plotly}, all over the same selection:
-a trend of any variable per year with one line per group; bars per group; histograms and box
-plots, optionally on a logarithmic scale and split by group; scatter plots of any two variables
-colored by group; a Pearson or Spearman correlation heat map of eleven variables; the highest or
-lowest twenty facilities or units; and a state choropleth. Every chart has a descriptive title,
-axis titles with units, a legend, tooltips with values and counts, zoom, PNG export, and a
-\emph{Data} button that saves its data, image, and metadata. Fuel classes keep the colors they
-have on the Phase~1 map. Distributions and scatter plots of very large selections are drawn
-from an even sample of 20{,}000 values or 4{,}000 points, which the chart states; correlations
-and statistics always use every value.
+The Charts tab draws seven chart types with Plotly.js~\cite{plotly} over the same selection: a
+trend of any variable per year, with one line per group; bars per group; histograms and box
+plots, optionally on a log scale and split by group; scatter plots of any two variables,
+colored by group; a Pearson or Spearman correlation heat map of eleven variables; the top or
+bottom twenty facilities or units; and a state choropleth. The Phase~1 Map page still shows
+facility locations. Every chart has a descriptive title, axis titles with units, a legend,
+tooltips with values and counts, zoom, PNG export, and a \emph{Data} button that downloads its
+data, image, and metadata. Fuel classes keep the colors they have on the Phase~1 map. For large
+selections, distributions use an even sample of at most 20{,}000 values and scatter plots at
+most 4{,}000 points, and the chart says so; statistics and correlations always use every value.
 
 \subsection{Comparative analysis}
 
 The Compare tab compares two to eight groups along any grouping field: states, fuels, unit
-types, \NOx{} or \SOtwo{} control classes (for example units with and without SCR), or
-reporting years (for example 2015 against 2024). For each group it shows the pooled value of the
-variable, its rank among the compared groups, its difference and percentage difference from the
-first group, the count, the mean
-with its 95\,\% confidence interval, the median, and the standard deviation; it runs Welch's
-$t$-test and the Mann--Whitney $U$ test for two groups and one-way ANOVA and the
-Kruskal--Wallis test for any number; and it states the result in plain language with its caveats
-(Figure~\ref{fig:compare}). The Phase~1 comparison of two to four individual facilities or
-units remains available from the Explore page.
+types, \NOx{} or \SOtwo{} control classes (for example units with and without SCR), or reporting
+years (for example 2015 against 2024). For each group it shows the pooled value of the variable,
+its rank among the compared groups, its absolute and percentage difference from the first
+group, the count, the mean with a 95\,\% confidence interval, the median, and the standard
+deviation. It runs Welch's $t$-test and the Mann--Whitney $U$ test for two groups, and one-way
+ANOVA and the Kruskal--Wallis test for any number, and states the result in plain language with
+its caveats (Figure~\ref{fig:compare}). The Phase~1 comparison of two to four individual
+facilities or units is still available from the Explore page.
 
 \subsection{Environmental and health impact indicators}
 
-The Impacts tab converts the selected emissions into four TRACI~2.2 impact categories, global
-warming, acidification, particulate-matter human health, and smog formation, grouped by any
-field. Each category is shown in its own equivalent unit, both as a total and per MWh of gross
-load, and is never added to another category. The tab shows the factors used, with their TRACI
-version, substance, CAS number, and unit, and the formula of each category, and it states that
-the results are potential impacts for comparison, not measured harm (Figure~\ref{fig:impacts}).
+The Impacts tab converts the selected emissions into four TRACI~2.2 impact categories (global
+warming, acidification, particulate-matter human health, and smog formation), grouped by any
+field. Each category is shown in its own equivalent unit, as a total or per MWh of gross load,
+and categories are never added together. The tab lists the factors used, with TRACI version,
+substance, CAS number, and unit, and the formula of each category. It also states that the
+results are potential impacts for comparison, not measured harm (Figure~\ref{fig:impacts}).
 
 \subsection{Prediction}
 
-The Models tab of the Predict page compares the three registered models, a baseline, Ridge
-regression, and a decision tree, on the validation and test years; plots predicted against
-actual \NOx{} for the test years; shows the tree's feature importances or the Ridge
-coefficients; and records each model's inputs, split, saved file, software versions, and
-training time (Figure~\ref{fig:models}).
+The Models tab compares the three registered models (baseline, Ridge regression, and decision
+tree) on the validation and test years; plots predicted against actual \NOx{} for the test
+years; shows the tree's feature importances or the Ridge coefficients; and shows each model's
+record: inputs, settings, split, saved file, software versions, and training date
+(Figure~\ref{fig:models}).
 
 \subsection{Sensitivity and scenario analysis}
 
 The Sensitivity and Scenarios tabs start from a baseline unit-year, chosen by facility name or
-ID, year, and unit, and a model. Sensitivity varies one input from a minimum to a maximum value, entered
-either in the input's own unit or as percentages of its baseline value, with all other inputs
-held constant, and draws the prediction as a curve with the
-baseline marked and the region outside the training data shaded (Figure~\ref{fig:sensitivity}).
-Scenarios compares the baseline with five named changes, gross load $+10\,\%$, heat input
-$-5\,\%$ (both editable), adding or removing SCR, switching the primary fuel, and a combined
-high-efficiency case, for both trained models side by side (Figure~\ref{fig:scenarios}).
+ID, year, and unit, and from a trained model. Sensitivity varies one input from a minimum to a
+maximum with a chosen step, given in the input's own unit or as a percentage of its baseline
+value, and holds all other inputs fixed. It tabulates each input value with its prediction and
+the absolute and percentage change, and draws the prediction as a curve with the baseline
+marked and the region outside the training data shaded (Figure~\ref{fig:sensitivity}).
+Scenarios compares the baseline with five named changes for both trained models side by side:
+gross load $+10\,\%$ and heat input $-5\,\%$ (both percentages editable), adding or removing SCR,
+switching the primary fuel, and a combined high-efficiency case (Figure~\ref{fig:scenarios}).
 
 \subsection{Saving and exporting results}
 \label{sec:exports}
 
-Every chart's \emph{Data} button and every statistics and impact table downloads a ZIP file
-containing the data as CSV, the chart as PNG when there is one, and a \code{metadata.json} file.
-The metadata records the export time and URL; the software version and Git commit; a snapshot of
-the database (unit-years, datasets, and last import); the filters and every tab choice; the
+Every chart has a \emph{Data} button, and the statistics, impact, and model-comparison tables
+have a \emph{Download} button. Both download a ZIP file with the data as CSV, the chart as PNG
+when there is one, and a \code{metadata.json} file. The comparison, sensitivity, scenario, and
+predicted-against-actual results are exported through their charts. The metadata records the export time and page URL; the
+software version and Git commit; a snapshot of the database (unit-years, datasets, and time of
+the last import), which serves as the dataset identifier; the filters and tab choices; the
 definition, unit, and aggregation of each variable shown; the TRACI factors for impact results;
-and, on the Predict page, the model's inputs, settings, split years, metrics, saved file, and
-software versions, and the baseline unit-year. The complete analytical dataset is exported by
-the server (\code{/api/export?type=analysis}) in the same format.
+and, on the Predict page, the model's inputs, settings, split years, metrics, saved file,
+software versions, and the baseline unit-year. The full analytical dataset is exported by the
+server (\code{/api/export?type=analysis}) in the same format, with the filters in place of the
+URL. Section~\ref{sec:feat-export} shows an example.
 
 \subsection{Requirement traceability}
 
@@ -233,7 +243,7 @@ Table~\ref{tab:trace} maps each requirement of the Phase~2 specification to the 
 meets it.
 
 {\small
-\begin{longtable}{@{}R{0.26\linewidth}R{0.55\linewidth}R{0.12\linewidth}@{}}
+\begin{longtable}{@{}R{0.3\linewidth}R{0.5\linewidth}R{0.13\linewidth}@{}}
 \caption{Phase~2 requirements and where they are met.}\label{tab:trace}\\
 \toprule
 \textbf{Specification} & \textbf{epaData} & \textbf{Status}\\
@@ -241,33 +251,44 @@ meets it.
 \toprule
 \textbf{Specification} & \textbf{epaData} & \textbf{Status}\\
 \midrule\endhead
+\S1 Trends, relationships, unusual observations & Trend and correlation charts; Tukey far-out fences on the Statistics tab & Met\\
 \S3 CAMPD multi-year data & 2015--2025 API years (and older uploads) in \code{annual\_records} & Met\\
 \S3 TRACI version, pollutant, category, factor, unit stored & \code{traci\_factors} table & Met\\
-\S4.1 Dataset builder: years, state, facility, unit, fuel, unit type, controls, program, minimum operating time or load & Explore filter bar on Analyze & Met\\
-\S4.1 Record, facility, unit, year counts; missing-value summary; variables & Dataset tab & Met\\
-\S4.1 Reproducible through URL or saved configuration & URL parameters; exported metadata & Met (URL)\\
+\S4.1 Filters: years, state, facility, unit, fuel, unit type, controls, program, minimum operating time or load & Explore filter bar on Analyze & Met\\
+\S4.1 Record, facility, unit, year counts; missing values; variables & Dataset tab & Met\\
+\S4.1 Reproducible through URL or saved configuration & URL parameters; filters in exported metadata & Met (URL)\\
 \S4.2 Count, missing, min, max, mean, median, SD, quartiles, IQR, percentiles; grouped & Statistics tab & Met\\
 \S4.3 \COtwo{}, \SOtwo{}, \NOx{} intensity; heat rate; year-over-year change; utilization & Derived variables; capacity factor & Met\\
-\S4.3 Division by zero and missing values stay missing & Variable rules; tests & Met\\
-\S4.4 Line, bar, histogram, box, scatter, correlation heat map, rankings, state map & Charts tab & Met\\
-\S4.4 Titles, units, legends, tooltips, filters, image and data download & \code{Chart} component & Met\\
+\S4.3 Division by zero and missing values stay missing & Variable rules; unit tests & Met\\
+\S4.4 Line, bar, histogram, box, scatter, correlation heat map, rankings & Charts tab & Met\\
+\S4.4 State or facility-location maps & State choropleth; Phase~1 Map page & Met\\
+\S4.4 Titles, units, legends, tooltips, filters, image and data download & Shared \code{Chart} component & Met\\
 \S4.5 Facilities, units, states, fuels, unit types, with and without control, periods & Compare tab; Phase~1 compare dialog & Met\\
-\S4.5 Statistics, differences, rankings, charts, normalized indicators; tests; plain language & Compare tab & Met\\
-\S4.6 Short tons to kg; exact pollutant matching; sum within category; per MWh; record factors & Impacts tab; \code{impactVariables} & Met\\
+\S4.5 Statistics, differences, rankings, charts, normalized indicators, tests, plain language & Compare tab & Met\\
+\S4.6 Short tons to kg; exact pollutant match; sum within category; per MWh; factors recorded & Impacts tab; \code{impactVariables} & Met\\
 \S5.1 One prediction target & Annual \NOx{} mass per unit-year & Met\\
-\S5.2 Features; no target leakage & Section~\ref{sec:prediction}; ablation & Met\\
+\S5.2 Candidate features; no target leakage & Section~\ref{sec:prediction}; ablation & Met\\
 \S5.3 Baseline and at least two models & Median baseline, Ridge, decision tree & Met\\
 \S5.4 Chronological split; MAE, RMSE, $R^2$, MAPE & 2016--21 / 2022--23 / 2024--25 & Met\\
-\S6.2 One variable at a time & Sensitivity tab & Met\\
-\S6.3 Scenarios with range warnings & Scenarios tab & Met\\
-\S6.4 Curve, baseline marks, scenario bars, tooltips, out-of-range shading & Sensitivity and Scenarios tabs & Met\\
-\S7 Export datasets, statistics, models, sensitivity, scenarios, charts, with metadata & ZIP exports & Met\\
-\S8.1 Flask, Jinja2, SQLAlchemy, pandas, scikit-learn, joblib, pytest & Next.js, React, Drizzle; pandas, scikit-learn, joblib, pytest offline (Section~\ref{sec:design}) & Changed\\
-\S12.3 Instructions, migrations, tests, fixtures, no keys & README, migration 0009, 57 + 6 tests & Met\\
+\S6.2 Model, baseline unit, input, minimum, maximum, step; value, prediction, changes, curve & Sensitivity tab & Met\\
+\S6.3 Named scenarios with range warnings & Scenarios tab & Met\\
+\S6.4 Curve, baseline marks, scenario bars, labels, out-of-range shading & Sensitivity and Scenarios tabs & Met\\
+\S6.4 Same units; image or data export & Shared \code{Chart} component & Met\\
+\S6.4 Response of impact indicators & Not built; predictions are \NOx{} mass only & Not met (optional)\\
+\S7 Export filtered dataset & \code{/api/export?type=analysis} & Met\\
+\S7 Export statistics and comparison results & Statistics table; comparison chart & Met\\
+\S7 Export model evaluation and predictions & Model-comparison table; predicted-against-actual chart & Met\\
+\S7 Export sensitivity and scenario results & Sensitivity and scenario charts & Met\\
+\S7 Export chart images or data & PNG and CSV in every chart's ZIP & Met\\
+\S7 Metadata for reproducibility & \code{metadata.json} in every ZIP & Met\\
+\S8 Steps 5 and 10: pandas analysis; Flask pages or JSON & Statistics in TypeScript, checked against NumPy and SciPy; tRPC procedures (Section~\ref{sec:design}) & Changed\\
+\S8.1 Flask, Jinja2, SQLAlchemy, pandas, scikit-learn, joblib, pytest & Next.js, React, Drizzle; pandas, scikit-learn, joblib, and pytest offline & Changed\\
+\S12.3 Instructions, migrations, environment template, tests, fixtures, no keys & README, migration 0009, \code{.env.example}, 61 + 6 tests, 100~KB fixture & Met\\
 \bottomrule
 \end{longtable}}
 
 \subsection{Planned functions not completed or changed}
+\label{sec:changes}
 
 Table~\ref{tab:changes} compares the Phase~2 plan with the delivered system.
 
@@ -280,12 +301,16 @@ Table~\ref{tab:changes} compares the Phase~2 plan with the delivered system.
 \toprule
 \textbf{Planned} & \textbf{Delivered} & \textbf{Reason}\\
 \midrule\endhead
-Store derived rates as columns & Computed when an analysis runs & Always consistent with the records; no backfill after imports.\\
+Store derived rates as columns & Computed when an analysis runs & Always consistent with the records; no backfill after an import.\\
 Eutrophication from \NOx{} & Not provided & The TRACI~2.2 workbook has no eutrophication column.\\
-Partial impact when a pollutant is missing & Category missing for that unit-year & A partial sum would understate the impact silently.\\
-State and capacity factor as model inputs & Left out & State is sparse for many fuel and type combinations; capacity factor duplicates gross load and nameplate capacity.\\
-Saved analysis configurations & URL parameters only & The URL already reproduces a view; saving it is a bookmark.\\
-Gradient-boosting model for comparison & Not built & Time; the tree already reaches $R^2 = 0.95$.\\
+Partial impact when a pollutant is missing & Category missing for that unit-year & A partial sum would understate the impact without saying so.\\
+State and capacity factor as model inputs & Left out & State is sparse within many fuel and unit-type combinations; capacity factor repeats gross load and nameplate capacity.\\
+Saved analysis configurations & URL parameters only & The URL already reproduces a view, so a saved configuration would be a bookmark.\\
+Fully custom scenarios & Five named scenarios; two percentages editable & Time. The Sensitivity tab covers any single input.\\
+Impacts of the predicted \NOx{} & Not built & Optional in \S6.4; the scenarios report \NOx{} mass.\\
+Residual plot & Predicted against actual only & The predicted-against-actual chart shows the same errors.\\
+Gradient-boosting model & Not built & Time; the tree already reaches $R^2 = 0.95$.\\
+O9 multi-indicator scoring & Not built & Not part of the Phase~2 specification.\\
 \bottomrule
 \end{longtable}}
 
@@ -295,18 +320,18 @@ Gradient-boosting model for comparison & Not built & Time; the tree already reac
 
 \subsection{Architecture}
 
-Phase~2 keeps the Phase~1 stack: Next.js~16 with React~19 on the web layer, tRPC procedures for
-typed calls from the browser, Drizzle ORM, and SQLite. The specification recommends Flask with
-pandas and scikit-learn; the Phase~1 report explained the mapping of Flask, Jinja, and
-SQLAlchemy to the stack used. For the analytical work we adopted a hybrid
-(Figure~\ref{fig:architecture}). Statistics, indicators, and TRACI impacts are computed in
-TypeScript on the server, close to the database. Models are trained offline in Python with
-pandas and scikit-learn~\cite{pedregosa2011sklearn}, and each trained model is stored in the
-database with its preprocessing and parameters as JSON, which a small TypeScript module replays
-exactly. Predictions, sensitivity curves, and scenarios are therefore instant, need no Python
-process at request time, and work on the read-only hosted build, where Python is unavailable.
+Phase~2 keeps the Phase~1 stack: Next.js~16 with React~19, tRPC procedures for typed calls from
+the browser, Drizzle ORM, and SQLite. The specification recommends Flask, with pandas and
+scikit-learn for the analysis; the Phase~1 report explained how Flask, Jinja, and SQLAlchemy map
+onto the stack used. For the analysis we chose a hybrid (Figure~\ref{fig:architecture}).
+Statistics, indicators, and TRACI impacts are computed in TypeScript on the server, next to the
+database. Models are trained offline in Python with pandas and
+scikit-learn~\cite{pedregosa2011sklearn}, and each trained model is stored in the database with
+its preprocessing and parameters as JSON, which a small TypeScript module replays exactly.
+Predictions, sensitivity curves, and scenarios therefore need no Python process at request time
+and also run on the hosted build, where Python is not available.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \begin{tikzpicture}[node distance=7mm and 9mm]
     \node[box, minimum width=4.4cm] (pages) {\textbf{Browser}\\Analyze, Predict pages\\Plotly charts, ZIP exports\\\code{model.ts}: sensitivity, scenarios};
@@ -330,40 +355,102 @@ process at request time, and work on the read-only hosted build, where Python is
 
 When a tab needs a result, the browser calls a tRPC procedure with the filters and the tab's
 choices. The server turns the filters into the same SQL conditions the Explore page uses (one
-shared function, \code{unitYearConditions}), and selects the matching unit-years joined with
-their unit, facility, and the same unit's previous year, which the year-over-year variables need.
-The rows are cached for 60~seconds, since one page typically asks for several views of the same
-selection; the variables are then evaluated in memory and only the result (a table, a set of
-chart points, a matrix) is returned. The complete 2015--2025 selection of 46{,}988 unit-years
-loads in about 1.3~s on a laptop, and each subsequent view over it is computed in about
-0.1~s.
+shared function, \code{unitYearConditions}) and selects the matching unit-years, joined with
+their unit, their facility, and the same unit's previous year, which the year-over-year
+variables need. The rows are cached for 60~seconds, keyed by the filters and the time of the
+latest import, because one page usually asks for several views of the same selection. The
+variables are evaluated in memory and only the result (a table, chart points, or a matrix) is
+returned. Section~\ref{sec:perf} gives the measured times.
 
 \subsection{Database additions}
 
 Migration 0009 adds two tables. \code{traci\_factors} holds one row per TRACI version,
-pollutant, medium, and impact category, with the TRACI substance name and CAS number, the factor,
-its unit, and the workbook column it was read from; a unique index prevents duplicates. It is
-loaded from a six-row extract of the EPA workbook (\code{data/traci/traci\_2\_2\_air.csv}), whose
-source, download date, and checksum are recorded beside it. \code{models} holds one row per
-trained model: its name and kind, target, inputs, tuned settings, training, validation, and test
-years, metrics, the JSON artifact used for prediction, the path of the saved scikit-learn object,
-and the software versions and Git commit that produced it. The committed database contains six
+pollutant, medium, and impact category, with the TRACI substance name, CAS number, factor, unit,
+and the workbook column it was read from; a unique index prevents duplicates. It is loaded from
+a six-row extract of the EPA workbook (\code{data/traci/traci\_2\_2\_air.csv}), whose source,
+download date, and checksum are recorded next to it. \code{models} holds one row per trained
+model: name and kind, target, inputs, tuned settings, training, validation, and test years,
+metrics, the JSON artifact used for prediction, the path of the saved scikit-learn object, and
+the software versions and Git commit that produced it. The committed database contains six
 factors and three models. Column-level documentation is in \code{DATABASE\_BREAKDOWN.md}.
 
-\subsection{Prediction without Python on the server}
+\subsection{Data flow and reproducibility}
 
-\code{ml/train.py} implements its own preprocessing rather than scikit-learn's pipeline
-objects, so that every step can be written to JSON: missing numeric inputs are replaced by the
-training median, three skewed inputs are log-transformed ($\log(1 + x)$), numeric inputs are
-standardized with the training mean and standard deviation, the fuel and unit type are one-hot
-encoded over categories seen at least 30 times, and the control flags are passed through. Ridge
-stores its coefficients and intercept; the tree stores its node arrays (children, split feature,
-threshold, and leaf value). \code{src/lib/model.ts} reimplements the same steps. scikit-learn
-compares tree features as 32-bit floats, so the TypeScript version rounds each feature to
-single precision before comparing it with a threshold; without this, values that fall between a
-threshold's single- and double-precision forms take the wrong branch. A test replays 200
-test-year unit-years exported by the training script and requires each model's TypeScript
-prediction to equal scikit-learn's within $10^{-6}$ (Section~\ref{sec:testing}).
+A Phase~2 result can be traced back through five steps. CAMPD records enter the database
+through retrieval or upload, as in Phase~1, and each record keeps the dataset that last wrote
+it. \code{npm run traci:import} loads the factor extract, whose checksum ties it to the EPA
+workbook. \code{npm run ml:train} reads the unit-years, trains and evaluates the models, and
+writes them with their metrics and software versions to the \code{models} table, together with
+the fixture used by the parity test. An analysis evaluates the variables for the selected
+unit-years. An export writes the result with the filters, variable definitions, factors or model
+record, the Git commit, and the database snapshot. Opening the recorded URL on a database with
+the same snapshot reproduces the same numbers.
+
+% ------------------------------------------------------------------------
+\section{Technical details}
+\label{sec:technical}
+
+\subsection{Languages}
+
+TypeScript implements the interface, the server, the statistics, the TRACI calculation, and
+model inference. Python implements the offline training pipeline (\code{ml/train.py}) and, as in
+Phase~1, the upload parser. SQL is mostly generated by Drizzle; the selection of unit-years with
+their previous year is a self-join written as a Drizzle query.
+
+\subsection{Frameworks and libraries}
+
+Table~\ref{tab:stack} lists what Phase~2 adds to the Phase~1 stack. The committed models were
+trained with Python~3.13, and the pipeline tests also pass on Python~3.15. The minimum versions
+in \code{requirements.txt} are chosen to allow the Python~3.9 documented in the README, but the
+pipeline has not been re-run on 3.9.
+
+\begin{table}[H]
+\centering\small
+\caption{Libraries added in Phase~2.}
+\label{tab:stack}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.3\linewidth}L@{}}
+\toprule
+\textbf{Component} & \textbf{Role in epaData}\\
+\midrule
+Plotly.js 3 (\code{plotly.js-dist-min}) & Every chart: zoom, tooltips, box plots, heat maps, choropleth, PNG export. Loaded only when a chart is first shown.\\
+fflate & Builds the ZIP exports in the browser and on the server.\\
+pandas 3.1, NumPy 2.5 & Feature extraction and preprocessing in \code{ml/train.py}.\\
+scikit-learn 1.9.1 & Ridge regression, decision tree, metrics.\\
+joblib & Saves the fitted scikit-learn objects (\code{ml/models/*.joblib}).\\
+SciPy 1.18 & Reference values for the statistics tests.\\
+pytest & Tests of the training pipeline (\code{ml/test\_pipeline.py}).\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{External services}
+
+\textbf{Vercel} hosts the application at \url{https://cs396-project.vercel.app}. The hosted build
+is read-only (\code{READ\_ONLY=true}): Upload and Retrieve show a notice to run the application
+locally, while Analyze and Predict work fully because they only read the committed database.
+The state choropleth loads the U.S.\ state outlines from Plotly's content network
+(\code{cdn.plot.ly}) at run time. Phase~2 adds no API keys; \code{.env.example} is unchanged.
+
+\subsection{Scripts and configuration}
+
+Table~\ref{tab:scripts} lists the scripts added in Phase~2. The Phase~1 scripts are unchanged.
+
+\begin{table}[H]
+\centering\small
+\caption{Scripts added in Phase~2.}
+\label{tab:scripts}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.3\linewidth}L@{}}
+\toprule
+\textbf{Command} & \textbf{Purpose}\\
+\midrule
+\code{npm run traci:import} & Loads \code{data/traci/traci\_2\_2\_air.csv} into \code{traci\_factors}.\\
+\code{npm run ml:train} & Trains, tunes, and evaluates the models; writes \code{ml/models/}, the \code{models} rows, and the parity fixture.\\
+\code{npm run test:py} & Runs the pytest tests of the training pipeline.\\
+\code{npm test} & Runs all 61 TypeScript tests, including the Phase~2 ones.\\
+\code{npm run report} & Builds this report with Tectonic.\\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 % ------------------------------------------------------------------------
 \section{Methods}
@@ -371,10 +458,10 @@ prediction to equal scikit-learn's within $10^{-6}$ (Section~\ref{sec:testing}).
 
 \subsection{Variables and missing values}
 
-Table~\ref{tab:variables} defines the derived variables. A value is \emph{missing} when CAMPD
-did not report it, or when a derived value's input is missing or its denominator is zero or
-negative. Missing values are excluded from statistics and counted separately; they are never
-treated as zero, which would bias every mean and intensity downward.
+Table~\ref{tab:variables} defines the derived variables. A value is \emph{missing} when CAMPD did
+not report it, or when an input of a derived value is missing or its denominator is zero or
+negative. Missing values are left out of statistics and counted separately. They are never
+treated as zero, which would pull every mean and intensity down.
 
 {\small
 \begin{longtable}{@{}R{0.24\linewidth}R{0.16\linewidth}R{0.52\linewidth}@{}}
@@ -398,19 +485,19 @@ TRACI impact per MWh & kg eq/MWh & impact $\div$ gross load\\
 
 \paragraph{Combining groups.} Each variable has one rule for combining unit-years into a group
 value. Masses, energy, changes in tons, and impacts are summed. Operating time and nameplate
-capacity are averaged per unit-year. Rates are \emph{pooled}: the sum of the numerators divided by
-the sum of the denominators over the unit-years where the rate is defined. A state's \COtwo{}
-intensity is therefore its total \COtwo{} divided by its total gross load, not the mean of its
-units' intensities, which would weight a peaking turbine that ran ten hours as heavily as a
-baseload coal unit.
+capacity are averaged per unit-year. Rates are \emph{pooled}: the sum of the numerators divided
+by the sum of the denominators, over the unit-years where the rate is defined. A state's
+\COtwo{} intensity is therefore its total \COtwo{} divided by its total gross load, not the mean
+of its units' intensities. The mean would give a peaking turbine that ran ten hours the same
+weight as a baseload coal unit.
 
 \subsection{Descriptive statistics and correlation}
 
 Quantiles use linear interpolation between order statistics, $Q(p) = x_{(\lfloor h\rfloor)} +
 (h - \lfloor h\rfloor)(x_{(\lfloor h\rfloor + 1)} - x_{(\lfloor h\rfloor)})$ with $h = (n-1)p$,
-which is Hyndman and Fan's type~7 definition~\cite{hyndman1996quantiles} and NumPy's default.
-The standard deviation is the sample standard deviation ($n - 1$). Pearson's $r$ and Spearman's
-$\rho$ (Pearson's $r$ of average ranks) use the unit-years where both variables are reported.
+which is Hyndman and Fan's type~7~\cite{hyndman1996quantiles} and NumPy's default. The standard
+deviation is the sample standard deviation ($n - 1$). Pearson's $r$ and Spearman's $\rho$
+(Pearson's $r$ of average ranks) use the unit-years where both variables are reported.
 
 \subsection{Comparisons and tests}
 
@@ -419,28 +506,28 @@ Two groups are compared with Welch's $t$-test~\cite{welch1947}, which does not a
 variances, and with the Mann--Whitney $U$ test~\cite{mann1947} (normal approximation with tie
 correction), which asks whether one group tends to have larger values and is robust to the
 heavy tails of emissions data. Three or more groups are compared with one-way ANOVA and the
-Kruskal--Wallis test~\cite{kruskal1952}. The distribution functions ($t$, $F$, $\chi^2$, normal)
-are computed in TypeScript from the regularized incomplete beta and gamma functions and checked
-against SciPy~\cite{virtanen2020scipy}.
+Kruskal--Wallis test~\cite{kruskal1952}. The $t$, $F$, $\chi^2$, and normal distribution
+functions are computed in TypeScript from the regularized incomplete beta and gamma functions
+and checked against SciPy~\cite{virtanen2020scipy}.
 
-Two assumptions limit these tests and are stated on the page. Groups differ in more than the
-attribute compared (size, age, fuel, hours run), so a difference is an association, not a
-causal effect of that attribute. And the tests treat every unit-year as independent, whereas
-the same unit appears in several years, so the $p$-values are optimistic.
+Two assumptions limit these tests, and the page states both. First, the groups differ in more
+than the attribute compared (size, age, fuel, hours run), so a difference is an association, not
+an effect of that attribute. Second, the tests treat every unit-year as independent, but the
+same unit appears in several years, so the $p$-values are smaller than they should be.
 
 \subsection{TRACI impact assessment}
 \label{sec:traci}
 
-CAMPD supplies the inventory, the mass of each pollutant a unit emitted in a year, and TRACI
-supplies characterization factors~\cite{bare2011traci,epa2022traci22}, the potential
-contribution of one kilogram of a substance emitted to air to an impact category. The two are
-joined by an explicit mapping from CAMPD pollutant to TRACI substance; names are never matched
-approximately. CAMPD's \COtwo{} maps to \emph{CARBON DIOXIDE} (CAS 124-38-9), \SOtwo{} to
-\emph{SULFUR DIOXIDE} (CAS 7446-09-5), and \NOx{} to \emph{NITROGEN OXIDES}, for which TRACI
-lists no CAS number. TRACI also lists \emph{NITROGEN DIOXIDE}, with a smog factor of
-16.85~kg~O\textsubscript{3}~eq/kg against 24.79 for nitrogen oxides; CAMPD reports \NOx{}, so the
-nitrogen-oxides row is the correct one. Table~\ref{tab:factors} lists every non-empty air factor
-of the three substances in the TRACI~2.2 workbook.
+CAMPD supplies the inventory, the mass of each pollutant a unit emitted in a year. TRACI supplies
+characterization factors~\cite{bare2011traci,epa2022traci22}: the potential contribution of one
+kilogram of a substance emitted to air to an impact category. The two are joined by a fixed
+mapping from CAMPD pollutant to TRACI substance, never by approximate name matching. CAMPD's
+\COtwo{} maps to \emph{CARBON DIOXIDE} (CAS 124-38-9), \SOtwo{} to \emph{SULFUR DIOXIDE} (CAS
+7446-09-5), and \NOx{} to \emph{NITROGEN OXIDES}, which has no CAS number in TRACI. TRACI also
+lists \emph{NITROGEN DIOXIDE}, with a smog factor of 16.85~kg~O\textsubscript{3}~eq/kg against
+24.79 for nitrogen oxides. CAMPD reports \NOx{}, so the nitrogen-oxides row is the right one.
+Table~\ref{tab:factors} lists every non-empty air factor of the three substances in the TRACI~2.2
+workbook.
 
 \begin{table}[H]
   \centering\small
@@ -459,19 +546,19 @@ of the three substances in the TRACI~2.2 workbook.
 
 For each unit-year, CAMPD masses are converted from short tons to kilograms and multiplied by
 their factors, summing only within a category:
-\begin{equation}
-  \text{Mass}_{i,\text{kg}} = \text{Mass}_{i,\text{short ton}} \times 907.18474, \qquad
-  \text{Impact}_c = \sum_i \text{Mass}_{i,\text{kg}} \times \text{CF}_{i,c}, \qquad
-  \text{Impact intensity}_c = \frac{\text{Impact}_c}{\text{Gross load}_{\text{MWh}}}.
-\end{equation}
+\begin{align}
+  \text{Mass}_{i,\text{kg}} &= \text{Mass}_{i,\text{short ton}} \times 907.18474,\\
+  \text{Impact}_c &= \sum_i \text{Mass}_{i,\text{kg}} \times \text{CF}_{i,c},\\
+  \text{Impact intensity}_c &= \text{Impact}_c \,/\, \text{Gross load}_{\text{MWh}}.
+\end{align}
 Categories keep their own units and are never added together. If a pollutant that contributes
 to a category was not reported, that category is missing for the unit-year, while categories
 that do not need the pollutant are still computed: a unit-year without \SOtwo{} has no
-acidification result but has a smog result. Group results are sums of unit-year results, and
-group intensities are pooled as above.
+acidification result but does have a smog result. Group results are sums of unit-year results,
+and group intensities are pooled as above.
 
 \paragraph{Worked example.} In 2024 the four units of Ghent (facility 1356, Kentucky) reported
-11{,}399{,}877.916 short tons of \COtwo{}, 9{,}157.169 tons of \SOtwo{}, and 6{,}987.671 tons of
+11{,}399{,}877.916 short tons of \COtwo{}, 9{,}157.169 tons of \SOtwo{}, 6{,}987.671 tons of
 \NOx{}, and a gross load of 11{,}580{,}029.2~MWh. Acidification is $(9{,}157.169 \times 1 +
 6{,}987.671 \times 0.7) \times 907.18474 = 14{,}048.539 \times 907.18474 = 12{,}744{,}620$~kg
 \SOtwo{}~eq, or 1.1006~kg \SOtwo{}~eq per MWh. Global warming is $11{,}399{,}877.916 \times
@@ -482,11 +569,11 @@ The Impacts tab, grouped by facility for 2024, shows the same values.
 \subsection{Prediction}
 \label{sec:prediction}
 
-\paragraph{Target.} The model predicts a unit's annual \NOx{} mass in short tons. \NOx{} was
-chosen over \COtwo{} because \COtwo{} is almost a fixed multiple of heat input for a given fuel,
-so a \COtwo{} model would mostly recover that multiple; \NOx{} depends on combustion conditions
-and controls, so the controls carry information and every scenario of the specification
-(changed load, changed heat input, changed control) affects the prediction.
+\paragraph{Target.} The models predict a unit's annual \NOx{} mass in short tons. We chose \NOx{}
+over \COtwo{} because \COtwo{} is close to a fixed multiple of heat input for a given fuel, so a
+\COtwo{} model would mostly learn that multiple. \NOx{} depends on combustion conditions and
+controls, so the controls carry information, and every scenario in the specification (changed
+load, changed heat input, changed control) affects the prediction.
 
 \paragraph{Inputs.} Heat input, gross load, and operating time of the same year; nameplate
 capacity; unit age (reporting year minus the year of commercial operation); the unit's \NOx{}
@@ -494,22 +581,22 @@ rate (lb/MMBtu) and operating time in the previous year; primary fuel and unit t
 \NOx{} control flags (SCR, SNCR, low-\NOx{} burners, water, steam, or ammonia injection, and
 overfire air), read from the controls reported that year.
 
-\paragraph{Leakage.} No input is the target or computed from it: same-year \NOx{} mass, \NOx{}
-rate, and \NOx{} intensity are excluded. The previous year's \NOx{} rate is allowed because it is
-known before the year begins. Same-year heat input, gross load, and operating time are not known
-in advance, but they are the quantities the scenarios change, so they are kept; to show how much
-of the accuracy they provide, every model is also fitted without them (the ablation in
+\paragraph{Leakage.} No input is the target or is computed from it: same-year \NOx{} mass,
+\NOx{} rate, and \NOx{} intensity are excluded. The previous year's \NOx{} rate is allowed because
+it is known before the year starts. Same-year heat input, gross load, and operating time are not
+known in advance, but they are what the scenarios change, so they are kept. To show how much
+accuracy they provide, every model is also fitted without them (the ablation column of
 Table~\ref{tab:models}).
 
 \paragraph{Split.} Unit-years from 2016 (the first year with a previous year) to 2025 with a
 reported \NOx{} mass are split by year: 25{,}116 training unit-years (2016--2021), 7{,}970
 validation unit-years (2022--2023), and 7{,}755 test unit-years (2024--2025). Settings are chosen
 on the validation years; the chosen models are then refit on 2016--2023 and evaluated once on
-2024--2025. No random split is used, since a random split would let a model learn a unit's 2024
+2024--2025. A random split was not used because it would let a model learn a unit's 2024
 emissions from its 2025 record.
 
 \paragraph{Models.} The baseline predicts the median \NOx{} of training unit-years with the same
-primary fuel and unit type (the overall median for unseen combinations). Ridge
+primary fuel and unit type, or the overall median for unseen combinations. Ridge
 regression~\cite{hoerl1970ridge} is fitted to $\log(1 + \text{NO}_x)$, because \NOx{} spans six
 orders of magnitude, with the penalty $\alpha$ chosen from $\{0.01, 0.1, 1, 10, 100\}$; its
 predictions are transformed back and floored at zero. The decision tree~\cite{breiman1984cart}
@@ -517,39 +604,39 @@ is fitted to tons, with the maximum depth chosen from $\{4, 6, 8, 10, 12, 16\}$ 
 leaf size from $\{5, 20, 50\}$. Validation selected $\alpha = 10$ and a tree of depth 16 with at
 least 20 unit-years per leaf.
 
-\paragraph{Metrics.} Mean absolute error (MAE), root mean squared error (RMSE), the coefficient of
+\paragraph{Metrics.} Mean absolute error (MAE), root mean squared error (RMSE), coefficient of
 determination ($R^2$), and mean absolute percentage error (MAPE). MAPE is computed only over
-unit-years of at least one ton, because peaking turbines that emit a fraction of a ton make
-percentage errors meaningless.
+unit-years of at least one ton, because for peaking turbines that emit a fraction of a ton a
+percentage error has no useful meaning.
 
 \paragraph{Sensitivity and scenarios.} A sensitivity curve changes one input of the baseline
-unit-year by a percentage at each step, holds every other input fixed, and records the
-prediction, its absolute change, and its percentage change, $(\hat{y}_{\text{scenario}} -
-\hat{y}_{\text{baseline}}) / \hat{y}_{\text{baseline}} \times 100$. An input is \emph{outside the
-training data} when it lies below the minimum or above the maximum of that input in the training
-years, or when a fuel or unit type was not seen in training. These checks are per input; a
-combination of individually ordinary values can still be unlike any training unit-year.
+unit-year at each step, holds every other input fixed, and records the prediction, its absolute
+change, and its percentage change, $(\hat{y}_{\text{scenario}} - \hat{y}_{\text{baseline}}) /
+\hat{y}_{\text{baseline}} \times 100$. An input is \emph{outside the training data} when it is
+below the minimum or above the maximum of that input in the training years, or when its fuel or
+unit type was not seen in training. The check is per input, so a combination of individually
+ordinary values can still be unlike any training unit-year.
 
 % ------------------------------------------------------------------------
 \section{Results}
 \label{sec:results}
 
-All results are for the reporting years 2015--2025 of the committed database unless stated
+All results use the reporting years 2015--2025 of the committed database unless stated
 otherwise.
 
 \subsection{Q1: emissions trends and the shift from coal to gas}
 
 Total \COtwo{} from the selected units fell from 2{,}098 million short tons in 2015 to 1{,}635
 million in 2025 (22\,\%), and the pooled \COtwo{} intensity fell from 1{,}557 to 1{,}279 lb/MWh
-(18\,\%). Figure~\ref{fig:trend} shows where the decline came from: coal units emitted 1{,}393
-million tons in 2015 and 739 million in 2024, while gas units rose from 688 to 824 million, and
-the two lines crossed in 2023, the first year in the data in which gas units emitted more
-\COtwo{} than coal units. Coal rose again in 2025 (825 against 799 million). Meanwhile the intensity of each fuel
-barely moved: coal units averaged 2{,}041 lb/MWh in 2015 and 2{,}036 in 2025, gas units 1{,}051
-and 926. The sector's falling intensity is therefore mainly a change in the mix of generation,
-not cleaner coal plants.
+(18\,\%). Figure~\ref{fig:trend} shows where the decline came from. Coal units emitted 1{,}393
+million tons in 2015 and 739 million in 2024, while gas units rose from 688 to 824 million. The
+two lines crossed twice: in 2023 gas units emitted more \COtwo{} than coal units for the first
+time in the data, and in 2025 coal was ahead again (825 against 799 million). The intensity of
+each fuel changed little: coal units averaged 2{,}041 lb/MWh in 2015 and 2{,}036 in 2025, gas
+units 1{,}051 and 926. The sector's falling intensity is therefore mainly a change in the
+generation mix, not cleaner coal plants.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-trend.jpg}
   \caption{Trend chart: total \COtwo{} per year from coal and natural-gas units, 2015--2025.}
@@ -558,28 +645,29 @@ not cleaner coal plants.
 
 \subsection{Q2: \NOx{} rate and post-combustion control}
 
-Figure~\ref{fig:box} shows the \NOx{} emission rate by fuel class on a logarithmic scale. Gas
-units have a median of 0.034~lb/MMBtu (interquartile range 0.013--0.096), coal units 0.136
-(0.082--0.219), and oil units 0.574 (0.188--1.20), with wide overlap within each fuel.
+Figure~\ref{fig:box} shows the \NOx{} emission rate by fuel class on a log scale. Gas units have
+a median of 0.034~lb/MMBtu (IQR 0.013--0.096), coal units 0.136 (0.082--0.219), and oil units
+0.574 (0.188--1.20), with wide overlap within each fuel.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-box.jpg}
   \caption{Box plot of the \NOx{} emission rate by fuel class (log scale).}
   \label{fig:box}
 \end{figure}
 
-For 2024, units whose \NOx{} controls include SCR had a pooled rate of 0.037~lb/MMBtu
-(1{,}547 unit-years) and units with no reported \NOx{} control 0.159~lb/MMBtu (479 unit-years),
-330\,\% higher; the medians were 0.012 and 0.305 (Figure~\ref{fig:compare}). Both Welch's test
-($t = -22.3$, $p < 0.001$) and the Mann--Whitney test ($z = -29.8$, $p < 0.001$) reject equal
-groups. The difference is real but cannot all be attributed to SCR, because the two groups are
-different fleets: 881 of the 1{,}564 SCR unit-years of 2024 are gas combined-cycle units, while
-the 571 uncontrolled unit-years are mostly gas combustion turbines and oil units (326 gas and 212
-oil). Comparing within one fuel and unit type, which the Compare tab supports by adding those
-filters, is the fairer reading.
+In 2024, 1{,}564 unit-years list SCR among their \NOx{} controls and 571 list no \NOx{} control.
+The rate is defined (\NOx{} mass reported and heat input above zero) for 1{,}547 and 479 of them.
+Their pooled rates are 0.037 and 0.159~lb/MMBtu, so units without control emit at a 330\,\%
+higher rate; the medians are 0.012 and 0.305 (Figure~\ref{fig:compare}). Welch's test
+($t = -22.3$, $p < 0.001$) and the Mann--Whitney test ($z = -29.8$, $p < 0.001$) both reject
+equal groups. The difference is real, but not all of it is due to SCR, because the two groups
+are different fleets: 881 of the 1{,}564 SCR unit-years are gas combined-cycle units, while the
+571 uncontrolled unit-years are mostly gas combustion turbines and oil units (326 gas and 212
+oil). A fairer comparison holds fuel and unit type fixed, which the Compare tab supports by
+adding those filters.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-compare.jpg}
   \caption{Compare tab: \NOx{} emission rate of units with SCR and with no \NOx{} control, 2024.}
@@ -588,18 +676,18 @@ filters, is the fairer reading.
 
 \paragraph{Unusual observations.} Over 2015--2025, 3{,}582 unit-years lie above the far-out fence
 for \NOx{} intensity (6.1~lb/MWh, against a median of 0.58). Of these, 3{,}491 are combustion
-turbines, with a median operating time of 44~hours a year: peaking units whose start-ups produce
-\NOx{} with almost no generation. They are real reports rather than errors, but they are why the
-pooled rate (0.70~lb/MWh) is the honest summary and the mean (2.46) is not.
+turbines with a median operating time of 44~hours a year: peaking units whose start-ups emit
+\NOx{} with almost no generation. They are real reports, not errors, and they are why the pooled
+rate (0.70~lb/MWh) is a better summary than the mean (2.46).
 
 \paragraph{A misleading correlation.} The Pearson correlation between \COtwo{} intensity and heat
 rate over the 37{,}718 unit-years reporting both is 0.9998, while Spearman's rank correlation is
-0.765 (Figure~\ref{fig:correlation}). A few unit-years with tiny gross loads have intensities and
-heat rates thousands of times the norm; they dominate Pearson's $r$ and nearly nothing else. The
-rank correlation is the honest summary for these heavy-tailed variables, which is why the chart
-offers both.
+0.765 (Figure~\ref{fig:correlation}). A few unit-years with tiny gross loads have intensities
+and heat rates thousands of times the norm. They dominate Pearson's $r$ and barely affect the
+ranks, so Spearman's $\rho$ is the better summary for these heavy-tailed variables. This is why
+the chart offers both.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=0.85\linewidth]{p2-correlation.jpg}
   \caption{Spearman correlation heat map of eleven variables, 2015--2025.}
@@ -611,46 +699,49 @@ offers both.
 In 2024 Texas contributed the most to every category: $1.91 \times 10^{11}$~kg \COtwo{}~eq of
 global warming and $1.34 \times 10^{8}$~kg \SOtwo{}~eq of acidification, followed for
 acidification by Missouri ($7.93 \times 10^{7}$) and Kentucky ($5.65 \times 10^{7}$)
-(Figure~\ref{fig:impacts}). Per MWh the ranking changes: Nebraska (2.32~kg \SOtwo{}~eq/MWh),
-North Dakota (1.83), and Missouri (1.57) lead. Coal units produced 93\,\% of the reported gross
-load of Nebraska and North Dakota and 83\,\% of Missouri's, against 20\,\% in Texas, whose
-pooled \SOtwo{} intensity was 0.51~lb/MWh against Nebraska's 3.95. Totals answer where
-impacts occur; intensities answer how clean a state's generation is.
+(Figure~\ref{fig:impacts}). Per MWh the order changes: Nebraska (2.32~kg \SOtwo{}~eq/MWh), North
+Dakota (1.83), and Missouri (1.57) lead. Coal units produced 93\,\% of the reported gross load
+of Nebraska and North Dakota and 83\,\% of Missouri's, against 20\,\% in Texas, whose pooled
+\SOtwo{} intensity was 0.51~lb/MWh against Nebraska's 3.95. Totals show where impacts occur;
+intensities show how clean a state's generation is.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-impacts.jpg}
-  \caption{Impacts tab: TRACI categories by state for 2024, each in its own unit.}
+  \caption{Impacts tab: TRACI categories by state for 2024, each in its own unit (the 15
+  largest states per category).}
   \label{fig:impacts}
 \end{figure}
 
 \subsection{Q4: prediction}
 
 Table~\ref{tab:models} compares the models. Both trained models beat the baseline by a wide
-margin on the test years: Ridge reduces the MAE by 47\,\% and the tree by 76\,\%. The tree's
-validation and test results are close, and so are its training results ($R^2 = 0.956$), so it
-does not overfit noticeably despite its depth. Without same-year heat input, gross load, and
-operating time, validation $R^2$ falls from 0.853 to 0.704 for Ridge and from 0.967 to 0.837 for
-the tree: most of the remaining accuracy comes from the previous year's \NOx{} rate, which
-encodes the unit's combustion technology and controls.
+margin on the test years: Ridge lowers the MAE by 47\,\% and the tree by 76\,\%. The tree's
+training ($R^2 = 0.956$), validation, and test results are close, so it does not noticeably
+overfit despite its depth. Without same-year heat input, gross load, and operating time,
+validation $R^2$ falls from 0.853 to 0.704 for Ridge and from 0.967 to 0.837 for the tree. Most
+of the remaining accuracy comes from the previous year's \NOx{} rate, which reflects the unit's
+combustion technology and controls.
 
 \begin{table}[H]
   \centering\small
-  \caption{\NOx{} models: validation (2022--2023) and test (2024--2025) results.}\label{tab:models}
+  \setlength{\tabcolsep}{4.5pt}
+  \caption{\NOx{} models: validation (2022--2023) and test (2024--2025) results. Ablation:
+  validation $R^2$ without same-year heat input, gross load, and operating time.}\label{tab:models}
   \begin{tabular}{@{}lrrrrrrr@{}}
     \toprule
     & \multicolumn{2}{c}{\textbf{Validation}} & \multicolumn{4}{c}{\textbf{Test}} & \textbf{Ablation}\\
     \cmidrule(lr){2-3}\cmidrule(lr){4-7}\cmidrule(l){8-8}
-    \textbf{Model} & MAE (t) & $R^2$ & MAE (t) & RMSE (t) & $R^2$ & MAPE & val.\ $R^2$\\
+    \textbf{Model} & MAE (t) & $R^2$ & MAE (t) & RMSE (t) & $R^2$ & MAPE & $R^2$\\
     \midrule
-    Baseline (median by fuel and type) & 114.2 & 0.474 & 109.4 & 366.9 & 0.489 & 143.6\,\% & 0.474\\
-    Ridge ($\alpha = 10$, log target) & 57.9 & 0.853 & 58.5 & 213.5 & 0.827 & 49.3\,\% & 0.704\\
-    Decision tree (depth 16, leaf 20) & 26.5 & 0.967 & 26.3 & 113.9 & 0.951 & 20.9\,\% & 0.837\\
+    Baseline (median) & 114.2 & 0.474 & 109.4 & 366.9 & 0.489 & 143.6\,\% & 0.474\\
+    Ridge ($\alpha = 10$) & 57.9 & 0.853 & 58.5 & 213.5 & 0.827 & 49.3\,\% & 0.704\\
+    Tree (depth 16, leaf 20) & 26.5 & 0.967 & 26.3 & 113.9 & 0.951 & 20.9\,\% & 0.837\\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-models.jpg}
   \caption{Models tab: comparison with the baseline, predicted against actual \NOx{} for the
@@ -659,13 +750,15 @@ encodes the unit's combustion technology and controls.
 \end{figure}
 
 \paragraph{Sensitivity.} Figure~\ref{fig:sensitivity} varies the heat input of Ghent unit~2 in
-2024, a 556~MW tangentially fired coal unit with low-\NOx{} burners and overfire air but no SCR,
-which emitted 4{,}146 tons of \NOx{}. Ridge predicts 2{,}972 tons at the baseline; a 50\,\%
-increase in heat input raises the prediction to 3{,}827 tons (29\,\%), an elasticity of about
+2024, a 556~MW tangentially fired coal unit with low-\NOx{} burners and overfire air but no SCR.
+It emitted 4{,}146 tons of \NOx{}. Both models under-predict this unit-year: Ridge predicts
+2{,}972 tons and the tree 2{,}738. The reason is in the inputs: the unit's \NOx{} rate rose from
+0.227~lb/MMBtu in 2023 to 0.314 in 2024, and the models rely on the previous year's rate. Raising
+heat input by 50\,\% raises Ridge's prediction to 3{,}827 tons (29\,\%), an elasticity of about
 0.6. Beyond 85.8 million MMBtu, the largest heat input in the training years, the curve enters
 the shaded region and its points turn amber.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-sensitivity.jpg}
   \caption{Sensitivity of Ridge's \NOx{} prediction to heat input for Ghent unit~2, 2024, from
@@ -674,16 +767,16 @@ the shaded region and its points turn amber.
 \end{figure}
 
 \paragraph{Scenarios.} Figure~\ref{fig:scenarios} applies the named scenarios to the same unit.
-The two models agree on heat input ($-5\,\%$: Ridge $-3.2\,\%$, tree $-9.1\,\%$) and on gross load
-(nearly no effect once heat input is fixed), but disagree on controls and fuel. Ridge predicts
-that adding SCR would cut \NOx{} by 59\,\% and a switch to pipeline gas by 69\,\%; the tree
-predicts no change for either. The tree splits mostly on heat input and the previous year's
-\NOx{} rate, which still describes the unit as it was, so a changed control flag rarely changes
-its path; Ridge applies one average SCR coefficient to every unit. Neither number is a causal
-estimate: where two reasonable models disagree, the data do not settle the effect, and the page
-says so.
+The models move in the same direction when heat input falls by 5\,\% (Ridge $-3.2\,\%$, tree
+$-9.1\,\%$), and neither responds to a 10\,\% rise in gross load once heat input is held fixed.
+They disagree on controls and fuel. Ridge predicts that adding SCR would cut \NOx{} by 59\,\% and
+switching to pipeline gas by 69\,\%; the tree predicts no change for either. The tree splits
+mostly on heat input and the previous year's \NOx{} rate, which still describes the unit as it
+was, so a changed control flag rarely changes its path. Ridge applies one average SCR
+coefficient to every unit. Neither number is a causal estimate. When two reasonable models
+disagree this much, the data do not determine the effect, and the page says so.
 
-\begin{figure}[H]
+\begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-scenarios.jpg}
   \caption{Scenarios for Ghent unit~2, 2024, under Ridge and the decision tree; labels give the
@@ -692,85 +785,315 @@ says so.
 \end{figure}
 
 % ------------------------------------------------------------------------
+\section{Highlighted features}
+\label{sec:features}
+
+This section describes four implementation choices in more detail, with the code behind them.
+
+\subsection{One variable catalogue for every analysis}
+\label{sec:feat-variables}
+
+Every measured value, derived rate, year-over-year change, and TRACI category is an object with
+a key, unit, definition, aggregation rule, and a function that computes its value for one
+unit-year (\code{buildVariables} in \code{src/lib/analysis.ts}). Statistics, charts,
+comparisons, impacts, exports, and the Dataset tab all read this one list, so each is written
+once and works for all 29 variables. Rates are built by one helper that also stores the
+numerator and denominator, which is what makes pooling possible (Listing~\ref{lst:ratio}).
+
+\par\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=TypeScript, caption={Rates and pooling (\code{src/lib/analysis.ts}, abridged).}, label=lst:ratio]
+/** A rate: null when either input is missing or the denominator is 0 (or negative). */
+function ratio(base, num: Value, den: Value, scale = 1): Variable {
+  return {
+    ...base,
+    aggregation: "ratio",
+    ratio: { num, den, scale },
+    value: (r) => {
+      const n = num(r);
+      const d = den(r);
+      return n === null || d === null || d <= 0 ? null : (n / d) * scale;
+    },
+  };
+}
+
+/** A variable's value over a group, by its aggregation; null when no row defines it. */
+export function aggregate(v: Variable, rows: readonly AnalysisRow[]) {
+  let n = 0, sum = 0, num = 0, den = 0;
+  for (const r of rows) {
+    const x = v.value(r);
+    if (x === null) continue;           // missing: skipped, never counted as 0
+    n++;
+    sum += x;
+    if (v.ratio) {
+      num += v.ratio.num(r)!;
+      den += v.ratio.den(r)!;
+    }
+  }
+  if (!n) return null;
+  if (v.ratio) return den > 0 ? (num / den) * v.ratio.scale : null;
+  return v.aggregation === "mean" ? sum / n : sum;
+}
+\end{lstlisting}
+\end{minipage}
+
+\subsection{TRACI impacts as ordinary variables}
+
+Each TRACI category becomes two variables built from the rows of \code{traci\_factors}: the total
+and the per-MWh rate. Because the factors come from the database, the formula shown in the
+interface and written to export metadata is generated from the same rows used in the
+calculation (Listing~\ref{lst:traci}).
+
+\par\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=TypeScript, caption={Impact of one category for one unit-year (\code{impactVariables}, abridged).}, label=lst:traci]
+const terms = factors.filter((f) => f.impactCategory === category);
+const impact: Value = (r) => {
+  let total = 0;
+  for (const { p, factor } of parts) {   // one term per matched pollutant
+    const tons = r[p.mass];
+    if (tons === null) return null;     // a missing pollutant makes the category missing
+    total += tons * SHORT_TON_KG * factor;   // SHORT_TON_KG = 907.18474
+  }
+  return total;
+};
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Prediction without Python on the server}
+
+\code{ml/train.py} implements its own preprocessing instead of scikit-learn's pipeline objects,
+so that every step can be written to JSON. Missing numeric inputs are replaced by the training
+median, three skewed inputs are log-transformed ($\log(1 + x)$), numeric inputs are standardized
+with the training mean and standard deviation, fuel and unit type are one-hot encoded over
+categories seen at least 30 times, and the control flags are passed through. Ridge stores its
+coefficients and intercept; the tree stores its node arrays (children, split feature,
+threshold, and leaf value). \code{src/lib/model.ts} repeats the same steps.
+
+One detail mattered. scikit-learn compares tree features as 32-bit floats, so the TypeScript
+version rounds each feature to single precision before comparing it with a threshold
+(Listing~\ref{lst:tree}). Without this, a value that falls between a threshold's single- and
+double-precision forms takes the wrong branch. A parity test replays 200 test-year unit-years
+exported by the training script and requires each model's TypeScript prediction to equal
+scikit-learn's within $10^{-6}$.
+
+\par\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language=TypeScript, caption={Tree inference (\code{predict} in \code{src/lib/model.ts}).}, label=lst:tree]
+// scikit-learn trees compare float32 features against their thresholds.
+const t = model.tree!;
+let node = 0;
+while (t.left[node] !== -1) {
+  node =
+    Math.fround(x[t.feature[node]!]!) <= t.threshold[node]!
+      ? t.left[node]!
+      : t.right[node]!;
+}
+return t.value[node]!;
+\end{lstlisting}
+\end{minipage}
+
+\subsection{Exports that can be reproduced}
+\label{sec:feat-export}
+
+Exporting Kentucky, 2024 from the Dataset tab gives a ZIP with a CSV of 90 unit-years (one
+column per variable) and the \code{metadata.json} shown, shortened, in
+Listing~\ref{lst:meta}. The database snapshot and commit identify the data and code; the filters
+and variable definitions say what was selected and how each column was computed; the factor
+list makes every impact value checkable by hand.
+
+\par\noindent\begin{minipage}{\linewidth}
+\begin{lstlisting}[language={}, caption={\code{metadata.json} of an analytical-dataset export (shortened).}, label=lst:meta, numbers=none]
+{
+  "title": "Analytical dataset",
+  "exportedAt": "2026-10-31T18:00:52.610Z",
+  "software": { "name": "epaData", "version": "0.1.0", "commit": "df120e8" },
+  "database": { "unitYears": 57414, "datasets": 153,
+                "lastImport": "2026-10-11T04:38:52.000Z" },
+  "filters": { "stateCode": "KY", "yearMin": "2024", "yearMax": "2024" },
+  "unitYears": 90,
+  "variables": [ { "key": "co2Intensity", "unit": "lb/MWh",
+      "definition": "CO2 mass x 2,000 / gross load. Missing when ...",
+      "aggregation": "ratio" }, ... ],
+  "traciFactors": [ { "traciVersion": "2.2", "pollutant": "nox",
+      "substance": "NITROGEN OXIDES", "impactCategory": "Smog formation",
+      "factor": 24.793589743589738, "factorUnit": "kg O3 eq" }, ... ],
+  "missingValues": "Blank cells are missing: not reported, or undefined ..."
+}
+\end{lstlisting}
+\end{minipage}
+
+% ------------------------------------------------------------------------
 \section{Testing and results}
 \label{sec:testing}
 
 \subsection{Approach}
 
 Each calculation was tested against an independent reference: statistics against NumPy and
-SciPy, TRACI results against hand calculation, and TypeScript predictions against scikit-learn.
-Every page and chart was then exercised in a headless browser (Playwright with Chromium) on the
-development and production builds, at desktop and phone widths, checking for console errors and
-reading each screenshot; downloaded ZIP files were unpacked and their CSV and metadata checked.
+SciPy, TRACI results against hand calculation, TypeScript predictions against scikit-learn, and
+counts against hand-written SQL. Every page and chart was then used in a headless browser
+(Playwright with Chromium) on the development and production builds, at desktop and phone
+widths, checking for console errors and reading each screenshot. Downloaded ZIP files were
+unpacked and their CSV and metadata checked. On the hosted build we checked that Analyze and
+Predict load with the same numbers and that Upload refuses to write.
 \code{npm run validate} (formatting, linting, type checking, unit tests, and a production build)
 passes.
 
 \subsection{Unit tests}
 
-\code{npm test} runs 60 TypeScript tests (one Phase~1 test is skipped), of which these are new:
+\code{npm test} runs 61 TypeScript tests in eight files: 60 pass and one is skipped because it
+needs a folder of raw CAMPD files that is not committed. Seventeen tests in three new files
+cover Phase~2:
 \begin{itemize}
-  \item \code{stats.test.ts}: quantiles and standard deviation against NumPy; Pearson and Spearman
-        correlation, Welch's $t$, Mann--Whitney $U$, the confidence interval, ANOVA,
-        Kruskal--Wallis, and the $\chi^2$ tail against SciPy, to $10^{-9}$ for statistics and
-        $10^{-6}$ for $p$-values; pairwise-complete correlation; constant inputs.
-  \item \code{analysis.test.ts}: each derived rate, and its missing value when an input is
-        missing or a denominator is zero; capacity factor in leap and ordinary years;
+  \item \code{stats.test.ts} (4 tests): quantiles and standard deviation against NumPy; Pearson
+        and Spearman correlation, Welch's $t$, Mann--Whitney $U$, the confidence interval,
+        ANOVA, Kruskal--Wallis, and the $\chi^2$ tail against SciPy, to $10^{-9}$ for statistics
+        and $10^{-6}$ for $p$-values; pairwise-complete correlation; constant inputs.
+  \item \code{analysis.test.ts} (8 tests): each derived rate, and its missing value when an input
+        is missing or a denominator is zero; capacity factor in leap and ordinary years;
         year-over-year changes with a missing or zero previous year; pooled rates as a ratio of
         sums; TRACI impacts against hand calculation, with categories kept apart and a missing
-        pollutant propagating only to its categories; the factor extract (six factors, nitrogen
-        oxides rather than nitrogen dioxide); the control classes.
-  \item \code{model.test.ts}: the parity test (all three models on 200 test unit-years, within
-        $10^{-6}$); input derivation (unit age, control flags, a previous rate that is missing
-        when the previous heat input is zero); out-of-range detection; the direction of the
-        response to heat input; readable feature names.
-  \item The URL state: the default year range applies whenever no filter is in the URL; signed
-        percentage formatting.
+        pollutant affecting only its own categories; the factor extract (six factors, nitrogen
+        oxides rather than nitrogen dioxide); the control classes; the default year range in
+        the URL state.
+  \item \code{model.test.ts} (5 tests): the parity test (all three models on 200 test
+        unit-years, within $10^{-6}$); input derivation (unit age, control flags, and a previous
+        rate that is missing when the previous heat input is zero); out-of-range detection; the
+        direction of the response to heat input; readable feature names.
 \end{itemize}
 \code{npm run test:py} runs six pytest tests of the training pipeline: the three periods do not
 overlap; no input is the target or derived from it; the input rules; the preprocessing
-specification produces the same matrix after a round trip through JSON; the baseline is the
-group median; and MAPE ignores targets below one ton.
+specification gives the same matrix after a round trip through JSON; the baseline is the group
+median; and MAPE ignores targets below one ton.
+
+\subsection{Representative test cases}
+
+Table~\ref{tab:cases} lists end-to-end cases. Each expected value comes from an independent
+source, usually a hand-written SQL query against the committed database.
+
+{\small
+\begin{longtable}{@{}R{0.33\linewidth}R{0.34\linewidth}R{0.19\linewidth}c@{}}
+\caption{Representative test cases.}\label{tab:cases}\\
+\toprule
+\textbf{Input} & \textbf{Expected (source)} & \textbf{Actual} & \textbf{Pass}\\
+\midrule\endfirsthead
+\toprule
+\textbf{Input} & \textbf{Expected (source)} & \textbf{Actual} & \textbf{Pass}\\
+\midrule\endhead
+Analyze with default filters (2015--2025) & 46{,}988 unit-years, 1{,}590 facilities, 5{,}087 units (SQL) & Same & \checkmark\\
+Analyze: KY, 2023--2024 & 177 unit-years (SQL) & 177 & \checkmark\\
+Program CSNOX, 2015--2025 & 24{,}676 whole-code matches; a substring match would give 25{,}882 (SQL) & 24{,}676 & \checkmark\\
+\code{/analyze?tab=charts} with no filter & Default range 2015--2025 applied & Applied & \checkmark\\
+\COtwo{} intensity with gross load 0 & Missing, not 0 (1{,}506 unit-years with \COtwo{} but no positive load) & Missing & \checkmark\\
+Impacts, Ghent, 2024 & 12{,}744{,}620~kg \SOtwo{}~eq; 1.1006 per MWh (hand calculation) & Same & \checkmark\\
+Compare 2024 \NOx{} rate, SCR vs no control & Pooled 0.037 and 0.159~lb/MMBtu over 1{,}547 and 479 unit-years (SQL) & Same & \checkmark\\
+Models tab, test years & MAE 109.4, 58.5, 26.3~t (\code{metrics.json}) & Same, locally and hosted & \checkmark\\
+TypeScript vs scikit-learn, 200 unit-years & Equal within $10^{-6}$ (parity fixture) & Equal & \checkmark\\
+Ghent unit~2, 2024, heat input $+250\,\%$ & Outside training range (max 85.8 million MMBtu) & Warned, shaded & \checkmark\\
+Scenarios, Ghent unit~2, add SCR & Ridge $-58.9\,\%$, tree $0.0\,\%$ (direct model call) & Same & \checkmark\\
+Export dataset, KY, 2024 & 90 rows; metadata with filters, 29 variables, 6 factors & Same & \checkmark\\
+Upload or retrieve on the hosted build & Refused with a ``run locally'' notice & Refused & \checkmark\\
+\bottomrule
+\end{longtable}}
+
+\subsection{Performance}
+\label{sec:perf}
+
+Table~\ref{tab:perf} gives server-side times on an Apple-silicon laptop (Node.js~26) over the
+2015--2025 selection of 46{,}988 unit-years, as the median of three runs. They exclude the
+network and chart drawing.
+
+\begin{table}[H]
+\centering\small
+\caption{Measured computation times for the 2015--2025 selection.}
+\label{tab:perf}
+\begin{tabularx}{\linewidth}{@{}Lr@{}}
+\toprule
+\textbf{Operation} & \textbf{Time}\\
+\midrule
+Load the selection (first request, SQL query and join) & 0.5\,s\\
+Load the same selection again (cache) & $<$\,1\,ms\\
+Dataset tab summary (missing counts of 29 variables) & 219\,ms\\
+Statistics of \NOx{} intensity by fuel class & 62\,ms\\
+Trend of \COtwo{} by year and fuel class & 23\,ms\\
+Comparison of two groups with all tests & 11\,ms\\
+Correlation heat map, 11 variables, Pearson & 182\,ms\\
+Correlation heat map, 11 variables, Spearman & 1.9\,s\\
+Sensitivity curve, 61 tree predictions (browser code) & 0.1\,ms\\
+Analytical-dataset export, 2015--2025 (ZIP) & 0.7\,s\\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Most views take well under a second. The Spearman heat map is the exception: it ranks the
+values again for each of the 55 pairs of variables, because the pairwise-complete subset differs
+from pair to pair (Section~\ref{sec:known}).
 
 \subsection{Defects found and corrected}
 
-Testing found several defects, all corrected. The 60-second row cache returned a Drizzle query
-object rather than its result; Drizzle queries are lazy and re-run on every \code{await}, so the
-``cached'' selection was queried again for every view (1.5~s each); the loader now returns a
-settled promise and a cached view takes under a millisecond. The server export imported the
-module that defined the browser-side export context, which Next.js rejects in server code, so
-the dataset export failed; the context moved to the client component that uses it. The
-year-range chip, shared with the Explore page, displayed ``2,015--2,025'' (a Phase~1 defect);
-years are now shown without separators. A chart's loading placeholder rendered its spinner and
-text side by side; the Predict page overflowed a phone screen by ten pixels; both were fixed.
-The Python requirements had been pinned to versions that need Python~3.11 or later, while the
-documented setup uses Python~3.9; they are now minimum versions that support both.
+Testing found several defects, all corrected. The 60-second row cache stored a Drizzle query
+instead of its result. Drizzle queries are lazy and run again on every \code{await}, so the
+``cached'' selection was queried again for every view (1.5~s each); the loader now stores a
+settled promise. The server export imported a module that defined a browser-side context, which
+Next.js rejects in server code, so the dataset export failed; the context moved to the client
+component that uses it. The year-range chip shared with the Explore page displayed
+``2,015--2,025'' (a Phase~1 defect). A chart's loading placeholder and the Predict page's layout
+at phone width were also fixed. The Python requirements had been pinned to versions that need
+Python~3.11 or later, while the README documents Python~3.9; they are now minimum versions that
+support both.
 
-A final audit against the specification found five more. The emissions-program filter that
-\S4.1 lists had never been built, although the filter bar offered controls; it now matches a
-whole program code, since CAMPD stores lists such as ``ARP, CSNOX, CSOSG2'' and a substring match
-would let ``CSNOX'' catch ``CSNOXOS''. The default 2015--2025 range applied only to a URL with no
-parameters at all, so a link to a tab (\code{/analyze?tab=charts}) silently analysed every year
-including the partial 2026; it now applies whenever the URL sets no filter. The row cache did not
-notice an import for up to a minute; its key now includes the time of the latest import. A
-caption wrapped around a segmented control as an HTML \code{label} forwarded a click on the
-caption to the first button, flipping the choice; such captions are now plain groups. Finally,
-sorting groups whose value was missing used an inconsistent comparison.
+A final audit against the specification found five more. The emissions-program filter listed in
+\S4.1 had never been built; it now matches a whole program code, because CAMPD stores lists such
+as ``ARP, CSNOX, CSOSG2'' and a substring match would let ``CSNOX'' match ``CSNOXOS''. The
+default 2015--2025 range applied only to a URL with no parameters at all, so a link to a tab
+(\code{/analyze?tab=charts}) analysed every year, including the partial 2026; it now applies
+whenever the URL sets no filter. The row cache could miss an import for up to a minute; its key
+now includes the time of the latest import. A caption wrapped around a segmented control as an
+HTML \code{label} passed a click on the caption to the first button, which changed the choice;
+such captions are now plain groups. Sorting groups whose value was missing used an inconsistent
+comparison.
 
-\subsection{Assessment against the objectives}
+\subsection{Known issues}
+\label{sec:known}
 
 \begin{itemize}
-  \item \emph{Descriptive statistics, trends, relationships, unusual observations:} met by the
-        Statistics and Charts tabs (Q1, the correlation outlier).
-  \item \emph{Comparisons:} met by the Compare tab with tests and plain-language readings (Q2).
-  \item \emph{Interactive visualization:} met; seven chart types with export.
-  \item \emph{TRACI impacts:} met for the four categories TRACI~2.2 defines for these pollutants
-        (Q3).
-  \item \emph{Prediction:} met; two models beat the baseline on held-out years (Q4).
-  \item \emph{Sensitivity and scenarios:} met, with range warnings.
-  \item \emph{Saving and exporting:} met; every result exports with metadata.
-  \item \emph{Explaining methods and limitations:} met in the interface (definitions, captions,
-        caveats) and in this report.
+  \item The Spearman correlation heat map takes about two seconds on the full selection.
+        Ranking each variable once when it has no missing values would remove most of the cost.
+  \item The state choropleth needs internet access to load the U.S.\ outlines from
+        \code{cdn.plot.ly}.
+  \item Histograms, box plots, and scatter plots of very large selections draw a sample, as the
+        chart states. Statistics are always computed on every value.
+  \item Fuel and unit type are stored once per unit (Section~\ref{sec:limitations}).
 \end{itemize}
+
+\subsection{Assessment against the goals and objectives}
+\label{sec:assessment}
+
+Table~\ref{tab:objectives} assesses the nine goals of the Phase~2 specification and the course
+objectives that Phase~2 addresses.
+
+\begin{table}[H]
+\centering\small
+\caption{Assessment of the Phase~2 goals and course objectives.}
+\label{tab:objectives}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.3\linewidth}p{1.5cm}L@{}}
+\toprule
+\textbf{Goal or objective} & \textbf{Verdict} & \textbf{Evidence}\\
+\midrule
+G1 Descriptive statistics & Met & Statistics tab; checked against NumPy and SciPy.\\
+G2 Comparisons & Met & Compare tab with tests and plain-language readings (Q2).\\
+G3 Interactive visualization & Met & Seven chart types with export.\\
+G4 TRACI impacts & Met & Four categories TRACI~2.2 defines for these pollutants (Q3).\\
+G5 Trends, relationships, unusual observations & Met & Q1, the correlation outlier, far-out fences.\\
+G6 Prediction models & Met & Two models beat the baseline on held-out years (Q4).\\
+G7 Sensitivity and scenarios & Met & With range warnings.\\
+G8 Saving and exporting & Met & Every result exports with metadata.\\
+G9 Explaining methods and limitations & Met & Definitions, captions, and caveats in the interface; this report.\\
+O8 Environmental indicators & Met & Derived indicators and TRACI categories.\\
+O9 Multi-indicator scoring & Not met & Not in the Phase~2 specification; not built.\\
+O10 Interactive charts of results & Met & Charts, Compare, Impacts, Models, Sensitivity, Scenarios.\\
+O11 Test and deploy & Met & 61 + 6 automated tests; hosted at \url{https://cs396-project.vercel.app}.\\
+O12 Document sources, assumptions, equations, units, limitations & Met & README, \code{DATABASE\_BREAKDOWN.md}, this report.\\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 % ------------------------------------------------------------------------
 \section{Discussion}
@@ -778,48 +1101,46 @@ sorting groups whose value was missing used an inconsistent comparison.
 
 \subsection{Effectiveness of techniques and tools}
 
-Treating every derived indicator and TRACI category as an ordinary variable, one definition
-with its unit, aggregation rule, and missing-value rule, was the most effective decision of the
+Treating every derived indicator and TRACI category as an ordinary variable, with one
+definition, unit, aggregation rule, and missing-value rule, was the most useful decision of the
 phase. Statistics, charts, comparisons, impacts, and exports are each written once and work for
-all 29 variables; adding a variable means adding its definition. Reusing the Phase~1 filters
-for the analytical dataset meant that the dataset builder came with every filter, its URL
-encoding, and its tests already in place.
+all 29 variables; adding a variable means adding its definition. Reusing the Phase~1 filters for
+the analytical dataset meant the dataset builder came with every filter, its URL encoding, and
+its tests already in place.
 
-The offline-training design kept the strengths of both languages: pandas and scikit-learn for
-fitting and tuning, and TypeScript for interactive use. Its cost is that preprocessing is
-written twice, in \code{train.py} and \code{model.ts}; the parity test is what makes that safe,
-and it would catch any change to one that is not made to the other.
+Offline training kept pandas and scikit-learn for fitting and tuning and TypeScript for
+interactive use. The cost is that preprocessing is written twice, in \code{train.py} and
+\code{model.ts}. The parity test makes this safe: it fails if one is changed without the other.
 
 \subsection{Technical choices and alternatives}
 
 \paragraph{Flask and pandas at request time.} The specification recommends computing analyses
-with pandas behind Flask routes. Rewriting the Phase~1 application in Flask was out of the
-question, and calling Python from each request (as Phase~1 does for uploads) would have added
-a process start to every chart and would not run on the hosted build. The statistics needed are
-few and well defined, so implementing them in TypeScript and checking them against SciPy was
-the smaller and safer path.
+with pandas behind Flask routes. Rewriting the Phase~1 application in Flask was not realistic,
+and calling Python on each request (as Phase~1 does for uploads) would add a process start to
+every chart and would not run on the hosted build. The statistics needed are few and well
+defined, so implementing them in TypeScript and checking them against SciPy was the smaller and
+safer option.
 
 \paragraph{Plotly.js.} Plotly provides every chart type the specification lists, including box
-plots, heat maps, and state maps, together with tooltips, zoom, and PNG export, so a single
-component wraps it for all charts. Its bundle is large, so it is loaded only when a chart is
-first shown.
+plots, heat maps, and state maps, with tooltips, zoom, and PNG export, so one component wraps it
+for all charts. Its bundle is large, so it is loaded only when a chart is first shown.
 
-\paragraph{Ridge and a decision tree.} The two models were chosen to differ: Ridge is smooth and
-gives every input a single global effect, which makes sensitivity curves easy to read; the tree
-captures interactions and thresholds, and is far more accurate, but its response to a single
+\paragraph{Ridge and a decision tree.} The two models were chosen to behave differently. Ridge
+is smooth and gives each input one global effect, which makes sensitivity curves easy to read.
+The tree captures interactions and thresholds and is much more accurate, but its response to one
 input is a step function and it may ignore an input entirely. The scenario disagreement in
-Section~\ref{sec:results} is a direct consequence, and showing both models makes the
-uncertainty visible instead of hiding it behind the more accurate one.
+Section~\ref{sec:results} follows directly from this, and showing both models makes the
+uncertainty visible.
 
 \subsection{Challenges and lessons learned}
 
 The TRACI workbook needed care: it lists both nitrogen oxides and nitrogen dioxide with
-different smog factors, and it has no eutrophication column, although the plan expected one.
-Reading the source rather than relying on a summary avoided both errors. A similar lesson came
-from the parity test: a TypeScript reimplementation of a scikit-learn tree that looks correct
-still differs in rare cases unless it reproduces the library's 32-bit comparison. Finally, the
-correlation outlier showed why statistics over raw emissions data must be robust by default:
-a handful of unit-years with almost no generation can produce a near-perfect Pearson correlation
+different smog factors, and it has no eutrophication column, although our plan assumed one.
+Reading the workbook itself, not a summary of it, avoided both errors. The parity test taught a
+similar lesson: a TypeScript copy of a scikit-learn tree that looks correct still differs in
+rare cases unless it reproduces the library's 32-bit comparison. Finally, the correlation
+outlier showed that statistics over raw emissions data should be robust by default, since a
+handful of unit-years with almost no generation can produce a near-perfect Pearson correlation
 that describes nothing.
 
 % ------------------------------------------------------------------------
@@ -829,66 +1150,65 @@ that describes nothing.
 \subsection{Current limitations}
 
 \paragraph{Potential, not actual, impacts.} TRACI factors express potential contributions for
-comparison. They do not account for stack height, local population, weather, or background
+comparison. They ignore stack height, local population, weather, and background
 concentrations, and they say nothing about actual illness or damage. Only the three pollutants
 CAMPD reports are covered; particulate matter, mercury, and other emissions are not, and TRACI
-2.2 provides no eutrophication factor for these substances.
+2.2 has no eutrophication factor for these substances.
 
 \paragraph{Missing pollutants remove categories.} A category is missing for a unit-year when one
 of its pollutants is not reported. About 13.7\,\% of 2015--2025 unit-years lack \SOtwo{}, so
-their acidification and particulate results are missing and group totals cover only the
-unit-years that report every contributing pollutant; the Dataset tab shows these counts.
+their acidification and particulate results are missing, and group totals cover only the
+unit-years that report every contributing pollutant. The Dataset tab shows these counts.
 
-\paragraph{Fuel and unit type are not versioned by year.} As in Phase~1, fuel and unit type are
+\paragraph{Fuel and unit type are not stored per year.} As in Phase~1, fuel and unit type are
 stored once per unit, so a unit that switched from coal to gas is treated as a gas unit in every
 year, both in grouped statistics and as a model input.
 
 \paragraph{Statistical independence.} Unit-years of the same unit are correlated, but the tests
-treat them as independent, which overstates their significance. A mixed model or tests on
-one value per unit would be more rigorous.
+treat them as independent, which overstates significance. A mixed model, or tests on one value
+per unit, would be more rigorous.
 
 \paragraph{Model responses are not causal.} Both models learn associations in observational data.
-A scenario shows how a model responds to a changed input with everything else fixed, which may
-be physically impossible (for example more gross load with the same heat input). The previous
-year's \NOx{} rate, the most useful history input, also describes the unit's existing controls,
-which weakens the models' response to a changed control. Range warnings check each input
-separately, not the combination.
+A scenario shows how a model responds when one input changes and everything else is fixed, which
+may be physically impossible (for example more gross load with the same heat input). The
+previous year's \NOx{} rate, the most useful history input, also encodes the unit's existing
+controls, which weakens the models' response to a changed control and makes them slow to follow
+a unit whose rate changes, as Ghent unit~2 shows. Range warnings check each input separately,
+not the combination.
 
-\paragraph{Other limitations.} The state map loads the U.S.\ outlines from Plotly's content
-network, so it needs internet access. Analysis configurations are saved only as URLs. The
-year-over-year variables compare consecutive years only, so a unit with a missing year has no
-change for the following year.
+\paragraph{Other limitations.} Analysis configurations are saved only as URLs. The year-over-year
+variables compare consecutive years only, so a unit with a missing year has no change for the
+following year.
 
 \subsection{Future improvements}
 
 Storing fuel and unit type per year, as Phase~1 already proposed, would correct both the grouped
 statistics and the model inputs. Tests clustered by unit would give honest $p$-values.
-Gradient-boosted trees with monotonic constraints, and models fitted separately for coal and gas,
-would likely improve accuracy and make the response to controls more plausible. Joint
-out-of-distribution checks (for example a nearest-neighbor distance to the training data) would
-make range warnings stricter. Finally, adding the TRACI factors for particulate matter and
-mercury would become worthwhile once CAMPD's mercury data are imported.
+Gradient-boosted trees with monotonic constraints, or separate models for coal and gas, would
+likely improve accuracy and give a more plausible response to controls. A joint
+out-of-distribution check (for example the distance to the nearest training unit-year) would
+make range warnings stricter. Adding the TRACI factors for particulate matter and mercury would
+become worthwhile once CAMPD's mercury data are imported.
 
 % ------------------------------------------------------------------------
 \section{Individual contributions}
 \label{sec:contributions}
 
-The Phase~2 work kept the roles of Phase~1, a back-end and a front-end lead, with testing,
+Phase~2 kept the roles of Phase~1, a back-end lead and a front-end lead, with testing,
 documentation, the report, and the presentation shared.
 
-\paragraph{Raaj Banga (back-end lead).} Responsible for the analytical data layer and the models:
-the variable catalogue of derived indicators and year-over-year changes with their
-missing-value rules; the statistics and hypothesis tests and their checks against SciPy; the
-TRACI~2.2 extract, the \code{traci\_factors} and \code{models} tables, and the impact
-calculation; the analysis and prediction procedures and the analytical-dataset export; the
-training pipeline in \code{ml/train.py}, the TypeScript inference module, and the parity and
-pipeline tests; and the README, \code{DATABASE\_BREAKDOWN.md}, and this report.
+\paragraph{Raaj Banga (back-end lead).} The analytical data layer and the models: the variable
+catalogue of derived indicators and year-over-year changes with their missing-value rules; the
+statistics and hypothesis tests and their checks against SciPy; the TRACI~2.2 extract, the
+\code{traci\_factors} and \code{models} tables, and the impact calculation; the analysis and
+prediction procedures and the dataset export; the training pipeline in \code{ml/train.py}, the
+TypeScript inference module, and the parity and pipeline tests; and the README,
+\code{DATABASE\_BREAKDOWN.md}, and this report.
 
-\paragraph{Arnav Bawankule (front-end lead).} Responsible for the user interface of Phase~2: the
-Analyze page and its Dataset, Statistics, Charts, Compare, and Impacts tabs; the Predict page and
-its Models, Sensitivity, and Scenarios tabs; the shared Plotly chart component, its theming,
-and the export controls that save each chart and table with its metadata; and the presentation
-slides.
+\paragraph{Arnav Bawankule (front-end lead).} The Phase~2 user interface: the Analyze page and
+its Dataset, Statistics, Charts, Compare, and Impacts tabs; the Predict page and its Models,
+Sensitivity, and Scenarios tabs; the shared Plotly chart component, its theming, and the export
+controls that save each chart and table with its metadata; and the presentation slides.
 
 % ------------------------------------------------------------------------
 \section{References and acknowledgments}
@@ -906,21 +1226,21 @@ redistributed, in \code{data/traci/}.
 \subsection{Reused code and assets}
 
 Phase~2 builds on the Phase~1 code base and its libraries. It adds Plotly.js~\cite{plotly} for
-charts, fflate for ZIP files, and, in the offline pipeline, pandas, NumPy, scikit-learn,
-joblib, SciPy, and pytest, all used under their open-source licences. No external example code
-was copied.
+charts, fflate for ZIP files, and, in the offline pipeline, pandas, NumPy, scikit-learn, joblib,
+SciPy, and pytest, all used under their open-source licences. No external example code was
+copied.
 
 \subsection{Generative AI disclosure}
 
-In accordance with the course policy, we disclose that generative AI was used throughout this
-phase. We used Anthropic's Claude, through the Claude Code tool, to help plan the phase, write
-and review application, pipeline, and test code, investigate defects, capture screenshots, and
-draft the README, the database documentation, and this report. The team defined the analytical
+In line with the course policy, we disclose that generative AI was used throughout this phase.
+We used Anthropic's Claude, through the Claude Code tool, to help plan the phase, write and
+review application, pipeline, and test code, investigate defects, capture screenshots, and draft
+the README, the database documentation, and this report. The team defined the analytical
 questions, the prediction target, and the design decisions, reviewed all generated code and
-text, and accepted changes only after verifying them with the type checker, linter, unit tests,
+text, and accepted changes only after checking them with the type checker, linter, unit tests,
 reference values from NumPy and SciPy, and manual use of the application. Every number in this
 report was produced by running the application or the training pipeline against the committed
-database. The team takes responsibility for the content of the code and of this report.
+database. The team is responsible for the content of the code and of this report.
 
 \renewcommand{\refname}{Bibliography}
 \bibliographystyle{plain}
