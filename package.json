@@ -23,7 +23,8 @@
     "traci:import": "tsx --env-file=.env scripts/import_traci.ts",
     "ml:train": "epaDataVENV/bin/python ml/train.py",
     "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle",
-    "report": "tectonic -X compile report/main.tex && tectonic -X compile report/phase2.tex"
+    "report": "tectonic -X compile report/phase2/phase2-report.tex",
+    "report:phase1": "tectonic -X compile report/phase1/phase1-report.tex"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
