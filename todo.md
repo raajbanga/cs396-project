@@ -32,7 +32,7 @@ Arnav's own commits (below).
 Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20; not
 re-graded since):
 
-- **2 Presentation (6 pts):** not started (#15, Final section).
+- **1 Presentation (6 pts):** not started (#15, Final section).
 - **2 Prediction (9) / report Evaluation (4):** only a weak median baseline (#6); no uncertainty
   on model metrics.
 - **3 Results (5):** the report's charts figure covers 3 of 7 chart types (#12); the PDF needs a
