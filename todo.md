@@ -43,43 +43,43 @@ record ≈ 4.25/8; not re-graded since):
   curve. Left: rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
   11/11 and there is no local cache) and check the figure placement. Demo script tab names
   are in the Final section.
-- [ ] **Commit history and participation (rubric 1.2, 5 pts).** Don't rewrite history again. Both
-      members commit weekly under their own git identity (credit AI with a `Co-Authored-By`
-      trailer, not as author), and Arnav owns a visible share of the remaining work (e.g. the P2
-      code items, slides). Open GitHub issues for the open items below and close them from
-      commits (`Fixes #n`).
+- [~] **Commit history and participation (rubric 1.2, 5 pts).** (11/11: issues #6–#15 opened, labeled P2, unassigned; split them and close them from commits.) Don't rewrite history again. Both
+  members commit weekly under their own git identity (credit AI with a `Co-Authored-By`
+  trailer, not as author), and Arnav owns a visible share of the remaining work (e.g. the P2
+  code items, slides). Open GitHub issues for the open items below and close them from
+  commits (`Fixes #n`).
 
 ## P2 — should fix
 
 ### Code
 
-- [ ] Add a persistence baseline (last year's NOₓ, or prior-year rate × this year's heat input)
+- [ ] (#6) Add a persistence baseline (last year's NOₓ, or prior-year rate × this year's heat input)
       next to the median baseline. The median baseline is easy to beat, and graders will ask how
       much the models add over "same as last year". Report the result honestly in Q4.
-- [ ] Tree tuning picked depth 16, the top of the grid. Extend the grid (20, 24, unlimited) and
+- [ ] (#7) Tree tuning picked depth 16, the top of the grid. Extend the grid (20, 24, unlimited) and
       say so in the report.
-- [ ] Sensitivity: show an inline message for min > max or a zero step instead of silently
+- [ ] (#8) Sensitivity: show an inline message for min > max or a zero step instead of silently
       fixing them. (The 401-point cap now warns.)
-- [ ] Spearman heat map takes 1.8 s (measured 11/02). Rank each column once when it has no
+- [ ] (#9) Spearman heat map takes 1.8 s (measured 11/02). Rank each column once when it has no
       missing values; update the report's Performance table and Known issues.
-- [ ] `downloadBundle` revokes the object URL right after `a.click()`, which can cancel downloads
+- [ ] (#10) `downloadBundle` revokes the object URL right after `a.click()`, which can cancel downloads
       in Safari. Revoke in a `setTimeout`.
-- [ ] Tests: export metadata has every §7 field; OVAT and % change logic moved from the What-if
+- [ ] (#11) Tests: export metadata has every §7 field; OVAT and % change logic moved from the What-if
       components into `src/lib/model.ts` and unit-tested; `findVariable` rejects unknown keys.
 
 ### Report and docs
 
 - [ ] Re-verify every "passes / green" claim (§Testing: `npm run validate`).
-- [ ] Fix drifts: row cache is 5 minutes in code, "60 seconds" in the report (pick one); parity
+- [ ] (#12) Fix drifts: row cache is 5 minutes in code, "60 seconds" in the report (pick one); parity
       fixture is 124 KB, not 100 KB.
-- [ ] Charts coverage: add one composite figure (histogram, scatter, ranking, state map) so all of
+- [ ] (#12) Charts coverage: add one composite figure (histogram, scatter, ranking, state map) so all of
       §4.4 is visible.
-- [ ] Integration: one sentence and one slide on why Next.js instead of Flask (the rubric says
+- [ ] (#13) Integration: one sentence and one slide on why Next.js instead of Flask (the rubric says
       "existing Flask application"; the spec allows React).
 - [ ] Proofread on paper; both confirm the contributions section. 🧪
-- [ ] Update `pipeline_version` `5d5e7d0` → a current commit in `ml/models/metrics.json` and the
+- [ ] (#14) Update `pipeline_version` `5d5e7d0` → a current commit in `ml/models/metrics.json` and the
       `models` table (the next `ml:train` writes a new one).
-- [ ] Commit the final `report/phase2/phase2-report.pdf`.
+- [ ] (#13) Commit the final `report/phase2/phase2-report.pdf`.
 
 ### Local checks 🧪
 
@@ -171,7 +171,7 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
 
 ## Final — presentation and demo (§12.5) · start only when asked
 
-- [ ] Slides in `report/phase2/slides/`: question → architecture → features → models vs
+- [ ] (#15) Slides in `report/phase2/slides/`: question → architecture → features → models vs
       baseline → sensitivity/scenario → limitations → contributions.
 - [ ] `report/phase2/slides/slides-outline.md`: demo script with steps, inputs, expected numbers,
       timings, covering each §12.5 item:
