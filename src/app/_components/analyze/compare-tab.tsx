@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { Chart } from "~/components/ui/chart";
+import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ReportTable, Section } from "~/components/ui/report";
 import { TryExamples } from "~/components/ui/try-examples";
 import { formatPct, formatStat } from "~/lib/analysis";
 import { cn, formatNumber } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { FacilitySearch } from "../facility-search";
+import { BarsChart } from "./charts";
 import {
   asDimension,
   bind,
@@ -147,6 +149,8 @@ export function CompareTab(props: TabProps) {
         }))}
       />
 
+      <BarsChart {...props} by={by} />
+
       <Section
         title={`${dimensionLabel(catalog, by)} groups`}
         note={`Pick two to eight; the first one picked is the baseline for differences.${searchable ? (by === "facility" ? " Search to add any facility; the list shows the first 80 by name." : unitsOf ? ` Units of ${unitsOf.name}.` : " Search for a facility to list its units; the list shows the first 80 by name.") : ""}`}
@@ -172,6 +176,15 @@ export function CompareTab(props: TabProps) {
                 ? "Find a facility to list its units"
                 : "Add a facility: name, operator, county, or ID"
             }
+          />
+        )}
+        {options.isLoading && (
+          <p className="text-fg-muted text-sm">Loading groups…</p>
+        )}
+        {options.error && (
+          <QueryError
+            error={options.error}
+            onRetry={() => void options.refetch()}
           />
         )}
         <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
@@ -217,6 +230,13 @@ export function CompareTab(props: TabProps) {
         <p className="text-fg-muted text-sm">
           Pick at least two groups to compare.
         </p>
+      ) : result.error ? (
+        <QueryError
+          error={result.error}
+          onRetry={() => void result.refetch()}
+        />
+      ) : !result.data || !info ? (
+        <InlineLoading title="Comparing groups…" />
       ) : (
         result.data &&
         info && (

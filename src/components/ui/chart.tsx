@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import type { Config, Data, Layout } from "plotly.js";
 import { DataPanel } from "~/components/ui/data-panel";
-import { InlineLoading } from "~/components/ui/empty-state";
+import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
 import type { ExportMetadata, ExportTable } from "~/lib/export-bundle";
 
@@ -90,6 +90,9 @@ export function Chart({
   meta,
   filename,
   isLoading,
+  error,
+  onRetry,
+  note,
   height = 380,
   actions,
 }: {
@@ -102,6 +105,11 @@ export function Chart({
   meta?: ExportMetadata;
   filename: string;
   isLoading?: boolean;
+  /** A failed query: shown in place of the chart, with a retry. */
+  error?: { message: string } | null;
+  onRetry?: () => void;
+  /** Method, definitions, and caveats, under "About this chart", so the subtitle stays one line. */
+  note?: ReactNode;
   height?: number;
   actions?: ReactNode;
 }) {
@@ -110,7 +118,7 @@ export function Chart({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || isLoading) return;
+    if (!el || isLoading || error) return;
     let cancelled = false;
     void import("plotly.js-dist-min").then(({ default: Plotly }) => {
       if (cancelled) return;
@@ -133,7 +141,7 @@ export function Chart({
     return () => {
       cancelled = true;
     };
-  }, [data, layout, resolvedTheme, height, filename, isLoading]);
+  }, [data, layout, resolvedTheme, height, filename, isLoading, error]);
 
   useEffect(() => {
     const el = ref.current;
@@ -182,10 +190,20 @@ export function Chart({
           )}
         </div>
       </div>
-      {isLoading ? (
+      {error ? (
+        <QueryError error={error} onRetry={onRetry} />
+      ) : isLoading ? (
         <InlineLoading title="Loading…" />
       ) : (
         <div ref={ref} style={{ minHeight: height }} />
+      )}
+      {note && (
+        <details className="text-fg-muted mt-2 text-xs">
+          <summary className="hover:text-fg-2 w-fit cursor-pointer">
+            About this chart
+          </summary>
+          <div className="mt-1 max-w-[90ch] space-y-1 text-pretty">{note}</div>
+        </details>
       )}
     </DataPanel>
   );
