@@ -12,15 +12,14 @@ group comparisons with statistical tests, EPA TRACI 2.2 impact indicators, a NO�
 model compared with a baseline, sensitivity and scenario analysis, and exports with
 reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 
-| Document                                                   | Contents                                                                     |
-| :--------------------------------------------------------- | :--------------------------------------------------------------------------- |
-| This README                                                | Setup, configuration, how to reproduce the results                           |
-| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md)           | Column-level schema, which view reads which table, ingestion flow            |
-| [samples/README.md](./samples/README.md)                   | The sample upload file, row by row, with the expected validation report      |
-| [report/epaData-slides.pptx](./report/epaData-slides.pptx) | Presentation slides (speaker notes in each slide)                            |
-| [report/slides-outline.md](./report/slides-outline.md)     | Speaker notes and live-demo script: steps, inputs, expected results, timings |
-| [report/main.pdf](./report/main.pdf)                       | Project report (LaTeX sources in `report/`, build with `npm run report`)     |
-| [report/phase2.tex](./report/phase2.tex)                   | Phase 2 report source (build with `npm run report`)                          |
+| Document                                         | Contents                                                                |
+| :----------------------------------------------- | :---------------------------------------------------------------------- |
+| This README                                      | Setup, configuration, how to reproduce the results                      |
+| [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md) | Column-level schema, which view reads which table, ingestion flow       |
+| [samples/README.md](./samples/README.md)         | The sample upload file, row by row, with the expected validation report |
+| [report/README.md](./report/README.md)           | Map of the report folder: which file is which phase                     |
+| [report/phase2/](./report/phase2/)               | Phase 2 report source and PDF (build with `npm run report`)             |
+| [report/phase1/](./report/phase1/)               | Phase 1 report and slides (submitted, frozen)                           |
 
 ---
 
@@ -33,7 +32,7 @@ reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 | `facilities`      |  1,777 | 50 states, DC, and Puerto Rico                                                                                                                                                      |
 | `units`           |  6,031 | 1,108.2 GW nameplate capacity                                                                                                                                                       |
 | `annual_records`  | 57,414 | One row per facility-unit-year: 6,467 from uploads (1996–98, 2006–08) and 50,947 from the CAMPD API (2015–2026; 2026 is partial). 176 API records replaced uploaded 2023–25 records |
-| `datasets`        |    151 | 12 CAMPD API syncs, 13 facility-file uploads, and 126 daily-emissions uploads (14 superseded by the API sync)                                                                       |
+| `datasets`        |    153 | 14 CAMPD API syncs, 13 facility-file uploads, and 126 daily-emissions uploads (14 uploads superseded by the API sync)                                                               |
 | `data_audit_logs` |  7,603 | Physical-sanity flags on 7,056 records: 6,516 CO₂ not reported, 963 extreme heat rates (WARN), 124 zero emissions with high heat input (ERROR)                                      |
 | `import_issues`   |      0 | Filled by uploads and retrievals that reject or skip rows                                                                                                                           |
 | `traci_factors`   |      6 | Phase 2: TRACI 2.2 factors for CO₂, SO₂, and NOₓ to air (`npm run traci:import`)                                                                                                    |
@@ -44,7 +43,7 @@ reproducibility metadata (see [Phase 2](#phase-2-analysis-and-prediction)).
 ## Features
 
 The specification's pages are real routes, ordered by workflow in the navigation bar: **Home**,
-**Explore**, **Map**, then **Retrieve**, **Upload**, **Download**. Facility, unit, and
+**Explore**, **Map**, **Analyze**, **Predict**, then **Retrieve**, **Upload**, **Download**. Facility, unit, and
 comparison details open in one dialog over any page; the open item is kept in the URL
 (`?facility=3`, `?unit=…`), so it survives a reload and can be shared.
 
@@ -174,16 +173,16 @@ flowchart LR
     UI -. "describe search" .-> LLM
 ```
 
-| View                                                          | Source                                                     |
-| :------------------------------------------------------------ | :--------------------------------------------------------- |
-| Home coverage strip and tiles, Facilities, Units, Map, Audits | Local database                                             |
-| Facility and unit detail, Compare                             | Local database                                             |
-| Granular time series: Yearly                                  | Local database (`annual_records`)                          |
-| Granular time series: Hourly, Daily, Weekly, Monthly          | EPA API, live; not stored                                  |
-| Retrieve: "Already in the database" panel                     | Local database                                             |
-| Retrieve: preview                                             | EPA API, live; nothing is written until **Approve & save** |
-| Upload: validation report                                     | The uploaded file, compared with the local database        |
-| Download (all six types)                                      | Local database                                             |
+| View                                                          | Source                                                       |
+| :------------------------------------------------------------ | :----------------------------------------------------------- |
+| Home coverage strip and tiles, Facilities, Units, Map, Audits | Local database                                               |
+| Facility and unit detail, Compare                             | Local database                                               |
+| Granular time series: Yearly                                  | Local database (`annual_records`)                            |
+| Granular time series: Hourly, Daily, Weekly, Monthly          | EPA API, live; not stored                                    |
+| Retrieve: "Already in the database" panel                     | Local database                                               |
+| Retrieve: preview                                             | EPA API, live; nothing is written until **Approve and save** |
+| Upload: validation report                                     | The uploaded file, compared with the local database          |
+| Download (all six types)                                      | Local database                                               |
 
 Each panel carries a label saying which source it shows ("Local database · last import …"
 or "Live EPA CAMPD API"). Every unit-year also records the dataset that last wrote it, shown
@@ -194,7 +193,7 @@ exports.
 
 ## Setup
 
-Tested on macOS with Node.js 26 and Python 3.9. Linux works the same way. On Windows, use WSL,
+Tested on macOS with Node.js 26 and Python 3.15. Linux works the same way. On Windows, use WSL,
 or install `openpyxl` into the `python3` on your PATH (the server only looks for a virtual
 environment at `epaDataVENV/bin/python3`).
 
@@ -202,7 +201,7 @@ environment at `epaDataVENV/bin/python3`).
 
 - Node.js 20.9 or newer, with npm
 - Python 3.9 or newer (reads uploaded files; Phase 2 model training uses pandas and scikit-learn,
-  tested with Python 3.13)
+  trained with Python 3.13; `npm run test:py` also passes on Python 3.15)
 - Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
   for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
   without it.
@@ -232,8 +231,8 @@ npm run db:migrate
 npm run dev
 ```
 
-Open <http://localhost:3000>. The home page should show 1,619 facilities and coverage for
-2015–2026.
+Open <http://localhost:3000>. The home page should show 1,777 facilities and coverage for
+1996–98, 2006–08, and 2015–2026.
 
 To check the installation: `npm run validate` runs the format check, ESLint, the TypeScript
 compiler, the unit tests, and a production build. All five should pass.
@@ -267,8 +266,8 @@ hand-written SQL.
 | Same search, facility level                                         | [`/explore?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000`](http://localhost:3000/explore?stateCode=KY&primaryFuel=Coal&year=2025&co2MassTonsMin=500000)                             | 8 facilities                                                                               |
 | Group-and-rank: top CO₂ facility in each state, 2024                | [`/explore?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc`](http://localhost:3000/explore?year=2024&topN=1&rankGroup=state&sort=co2&dir=desc)                                                   | 51 facilities, one per state with 2024 data                                                |
 | Historical: one unit, 2015–2025                                     | [`/explore?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc`](http://localhost:3000/explore?tab=units&facilityId=3&unitId=1&yearMin=2015&yearMax=2025&sort=year&dir=asc) | 11 rows (Barry unit 1)                                                                     |
-| Description search                                                  | Explore → type "coal units in Kentucky with high CO2" → **Search** (or click it under **Try**)                                                                                                      | KY · Coal · CO₂ ≥ 2,720,000 (top 25 %), sorted by CO₂, 97 unit-years                       |
-| Retired units                                                       | [`/explore?tab=units&operatingStatus=Retired`](http://localhost:3000/explore?tab=units&operatingStatus=Retired)                                                                                     | 31 unit-years                                                                              |
+| Description search                                                  | Explore → type "coal units in Kentucky with high CO2" → **Search** (or click it under **Try**)                                                                                                      | KY · Coal · CO₂ ≥ 2,730,000 (top 25 %), sorted by CO₂, 148 unit-years                      |
+| Retired units                                                       | [`/explore?tab=units&operatingStatus=Retired`](http://localhost:3000/explore?tab=units&operatingStatus=Retired)                                                                                     | 761 unit-years (any status containing "Retired", such as `Operating (Retired 06/30/2015)`) |
 | Sample upload                                                       | **Upload** → `samples/annual-emissions-sample.csv`                                                                                                                                                  | 25 rows: 21 valid (19 new, 1 changed, 1 unchanged), 3 rejected, 1 duplicate, 1 sanity flag |
 
 The **Download CSV** button next to the results downloads exactly the rows the table shows (all pages).
@@ -304,16 +303,18 @@ apply it with `npm run db:migrate`.
 
 ## Database
 
-Six tables in SQLite, defined with Drizzle ORM in `src/server/db/schema.ts`, migrations in
+Eight tables in SQLite (six from Phase 1, plus `traci_factors` and `models`), defined with Drizzle ORM in `src/server/db/schema.ts`, migrations in
 `drizzle/`. Facility, unit, and unit-year uniqueness is enforced by the primary key on
 `facilities.id` and unique indexes on `units(facility_id, unit_id)` and
-`annual_records(unit_internal_id, year)`. Foreign keys cascade on delete. Column-by-column
+`annual_records(unit_internal_id, year)`. Foreign keys cascade on delete, except `annual_records.superseded_upload_id`, which is set to
+null. Column-by-column
 details: [DATABASE_BREAKDOWN.md](./DATABASE_BREAKDOWN.md).
 
 Secondary indexes cover the common searches: facilities by state, name, county, NERC region,
 and source category; units by facility, primary fuel, and operating status;
 `annual_records(year, co2_mass_tons)` for year filters and CO₂ ranking;
-`annual_records(facility_id, year)` for per-facility totals within a year; and the foreign
+`annual_records(facility_id, year)` for per-facility totals within a year;
+`annual_records` by dataset and by superseded upload; and the foreign
 keys of `data_audit_logs` and `import_issues`. The `(facility_id, year)` index matters: with
 only a `facility_id` index, SQLite answered "per-facility CO₂ in 2024" by scanning all of 2024
 once per facility, and the top-facility-per-state query took 9.5 s instead of 22 ms.
@@ -326,6 +327,7 @@ erDiagram
     DATASETS ||--o{ ANNUAL_RECORDS : "last wrote"
     ANNUAL_RECORDS ||--o{ DATA_AUDIT_LOGS : "flags"
     DATASETS ||--o{ IMPORT_ISSUES : "rejects"
+    DATASETS ||--o{ ANNUAL_RECORDS : "superseded upload"
 
     FACILITIES {
         integer id PK "EPA facility ID (ORISPL)"
@@ -381,6 +383,7 @@ erDiagram
     ANNUAL_RECORDS {
         text id PK "unit_internal_id + year"
         text dataset_id FK
+        text superseded_upload_id FK "upload an API sync replaced"
         integer facility_id FK
         text unit_internal_id FK "unique with year"
         integer year
@@ -417,6 +420,36 @@ erDiagram
         text details
         integer created_at
     }
+
+    TRACI_FACTORS {
+        integer id PK
+        text traci_version
+        text pollutant "co2 | so2 | nox"
+        text substance
+        text cas
+        text medium "air"
+        text impact_category
+        real factor
+        text factor_unit
+        text source
+    }
+
+    MODELS {
+        text id PK "nox-baseline | nox-ridge | nox-tree"
+        text name
+        text kind "baseline | ridge | tree"
+        text target
+        text features "JSON"
+        text params "JSON"
+        text train_years
+        text validation_years
+        text test_years
+        text metrics "JSON"
+        text artifact "JSON"
+        text artifact_path
+        text pipeline_version
+        integer trained_at
+    }
 ```
 
 Design assumptions to be aware of:
@@ -428,7 +461,8 @@ Design assumptions to be aware of:
   percentile thresholds skip them; CSV exports leave them blank.
 - **`annual_records.dataset_id` is the dataset that last wrote the record.** Re-importing a
   year moves its records to the new dataset; the older dataset stays in the history as
-  "superseded". Values are overwritten, not versioned.
+  "superseded". Values are overwritten, not versioned. An API sync that replaces an uploaded
+  record remembers that upload in `superseded_upload_id`.
 - **Origin is known per unit-year only.** Facility and unit rows have no dataset link.
 
 ---
@@ -458,37 +492,44 @@ Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide
 
 ## Scripts
 
-| Command                       | What it does                                                                                                   |
-| :---------------------------- | :------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                 | Development server on port 3000                                                                                |
-| `npm run build` / `npm start` | Production build and server                                                                                    |
-| `npm run validate`            | Format check, lint, typecheck, tests, build                                                                    |
-| `npm test`                    | Unit tests in `src/lib/*.test.ts` (description parser, CSV writer, upload report, record diff, domain helpers) |
-| `npm run check`               | ESLint and `tsc --noEmit`                                                                                      |
-| `npm run db:migrate`          | Apply migrations in `drizzle/` to `DATABASE_URL`                                                               |
-| `npm run db:generate`         | Create a migration after a schema change                                                                       |
-| `npm run db:seed`             | Load facilities and units from CAMPD facility CSV files                                                        |
-| `npm run sync:campd`          | Fetch annual emissions from the EPA API and store them                                                         |
-| `npm run report`              | Build the project report with Tectonic (`report/main.tex` → `report/main.pdf`)                                 |
+| Command                       | What it does                                                                                                                                                 |
+| :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                 | Development server on port 3000                                                                                                                              |
+| `npm run build` / `npm start` | Production build and server                                                                                                                                  |
+| `npm run validate`            | Format check, lint, typecheck, tests, build                                                                                                                  |
+| `npm test`                    | Unit tests in `src/lib/*.test.ts` (description parser, CSV writer, upload report, record diff, domain helpers, statistics, analysis variables, model parity) |
+| `npm run test:py`             | pytest for the training pipeline                                                                                                                             |
+| `npm run check`               | ESLint and `tsc --noEmit`                                                                                                                                    |
+| `npm run db:migrate`          | Apply migrations in `drizzle/` to `DATABASE_URL`                                                                                                             |
+| `npm run db:generate`         | Create a migration after a schema change                                                                                                                     |
+| `npm run db:seed`             | Load facilities and units from CAMPD facility CSV files                                                                                                      |
+| `npm run db:rebuild`          | Rebuild the database from facility CSVs and daily-emissions files                                                                                            |
+| `npm run sync:campd`          | Fetch annual emissions from the EPA API and store them                                                                                                       |
+| `npm run traci:import`        | Reload the TRACI factors from `data/traci`                                                                                                                   |
+| `npm run ml:train`            | Retrain and re-register the prediction models (needs the Python venv)                                                                                        |
+| `npm run report`              | Build the Phase 2 report with Tectonic (`report/phase2/phase2-report.pdf`); `report:phase1` for Phase 1                                                      |
 
 ## Repository layout
 
-| Path                                                                            | Contents                                                                                                                                                                       |
-| :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/app/*/page.tsx`, `src/app/_components/`                                    | The six pages (`/`, `/explore`, `/map`, `/retrieve`, `/upload`, `/download`) and their views; `app-shell.tsx` holds the navigation, the detail dialog, and the comparison dock |
-| `src/app/api/`                                                                  | Route handlers: tRPC endpoint, `upload` (preview and commit), `export` (CSV downloads)                                                                                         |
-| `src/components/ui/`                                                            | Shared UI primitives (page layout, buttons, dialog, tables, badges, report sections)                                                                                           |
-| `src/server/api/routers/facilities.ts`                                          | All tRPC queries and the retrieval mutation                                                                                                                                    |
-| `src/server/db/`                                                                | Drizzle schema and database client                                                                                                                                             |
-| `src/server/campd/client.ts`                                                    | EPA API client: retrieval, preview, granular time series                                                                                                                       |
-| `src/server/ingest.ts`                                                          | Shared write path: diff against stored records, upserts, sanity audits                                                                                                         |
-| `src/server/data-import.ts`, `src/server/export.ts`, `src/server/llm-search.ts` | Upload, CSV export, optional OpenRouter fallback                                                                                                                               |
-| `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer                                                                      |
-| `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `sync_campd`) and `parse_import.py`                                                                                   |
-| `drizzle/`                                                                      | SQL migrations                                                                                                                                                                 |
-| `samples/`                                                                      | Sample upload files and their expected results                                                                                                                                 |
-| `report/`                                                                       | Project report (LaTeX sources, figures, bibliography, PDF), presentation slides, speaker notes and demo script                                                                 |
-| `uploads/`                                                                      | Archived original upload files (not committed)                                                                                                                                 |
+| Path                                                                            | Contents                                                                                                                                                                                                                                                     |
+| :------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/app/*/page.tsx`, `src/app/_components/`                                    | The eight pages (`/`, `/explore`, `/map`, `/analyze`, `/predict`, `/retrieve`, `/upload`, `/download`) and their views, with the Phase 2 tabs in `analyze/` and `predict/`; `app-shell.tsx` holds the navigation, the detail dialog, and the comparison dock |
+| `src/app/api/`                                                                  | Route handlers: tRPC endpoint, `upload` (preview and commit), `export` (CSV downloads)                                                                                                                                                                       |
+| `src/components/ui/`                                                            | Shared UI primitives (page layout, buttons, dialog, tables, badges, report sections)                                                                                                                                                                         |
+| `src/server/api/routers/`                                                       | tRPC routers: `facilities` (search, details, retrieval mutation), `analysis`, `prediction`                                                                                                                                                                   |
+| `src/server/db/`                                                                | Drizzle schema and database client                                                                                                                                                                                                                           |
+| `src/server/campd/client.ts`                                                    | EPA API client: retrieval, preview, granular time series                                                                                                                                                                                                     |
+| `src/server/ingest.ts`                                                          | Shared write path: diff against stored records, upserts, sanity audits                                                                                                                                                                                       |
+| `src/server/data-import.ts`, `src/server/export.ts`, `src/server/llm-search.ts` | Upload, CSV export, optional OpenRouter fallback                                                                                                                                                                                                             |
+| `src/server/analysis.ts`, `src/server/prediction.ts`                            | Phase 2 analysis queries, registered models, predictions                                                                                                                                                                                                     |
+| `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer, statistics, analysis variables and TRACI, model inference                                                                                         |
+| `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `rebuild-db`, `sync_campd`, `import_traci`) and the Python helpers `parse_import.py` and `daily_to_annual.py`                                                                                       |
+| `ml/`                                                                           | Offline training (`train.py`), its tests, the saved models and metrics, and the parity fixture                                                                                                                                                               |
+| `data/traci/`                                                                   | The TRACI 2.2 factor extract and its source                                                                                                                                                                                                                  |
+| `drizzle/`                                                                      | SQL migrations                                                                                                                                                                                                                                               |
+| `samples/`                                                                      | Sample upload files and their expected results                                                                                                                                                                                                               |
+| `report/`                                                                       | Reports and slides, one folder per phase (`phase1/`, `phase2/`), plus `shared/` LaTeX preamble and bibliography and `spec/`; see `report/README.md`                                                                                                          |
+| `uploads/`                                                                      | Archived original upload files (not committed)                                                                                                                                                                                                               |
 
 ## Data and credits
 
