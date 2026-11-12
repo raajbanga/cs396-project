@@ -199,3 +199,12 @@ void test("old Predict tab links open What-if", () => {
   assert.equal(parsePredictParams({ tab: "scenarios" }).tab, "whatif");
   assert.equal(parsePredictParams({ tab: "nope" }).tab, "models");
 });
+
+void test("changing Compare's field without groups drops the default groups", () => {
+  assert.equal(parseAnalysisParams({ compareBy: "facility" }).view.groups, "");
+  assert.equal(parseAnalysisParams({}).view.groups, "SCR|None");
+  assert.equal(
+    parseAnalysisParams({ compareBy: "state", groups: "KY|WV" }).view.groups,
+    "KY|WV",
+  );
+});
