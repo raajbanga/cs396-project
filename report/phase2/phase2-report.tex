@@ -31,7 +31,9 @@ year-over-year change), interactive charts, group comparisons with confidence in
 hypothesis tests, and EPA TRACI~2.2 potential-impact indicators for \COtwo{}, \SOtwo{}, and
 \NOx{}. A \emph{Predict} page compares a baseline, Ridge regression, and a decision tree that
 predict a unit's annual \NOx{} emissions. On the held-out years 2024--2025 the tree reaches
-$R^2 = 0.951$, against $0.827$ for Ridge and $0.489$ for the baseline. The same models drive
+$R^2 = 0.951$ (95\,\% interval 0.937--0.963), against $0.827$ for Ridge and $0.489$ for the
+baseline. A simpler rule, last year's \NOx{} rate times this year's heat input, is more accurate
+than both models; the report shows why and what the models add. The same models drive
 one-variable sensitivity curves and named scenarios, with a warning when an input leaves the
 range of the training data. Every result can be exported with the metadata needed to reproduce
 it. This report describes the analytical questions, the design, the methods and their
@@ -197,6 +199,26 @@ image, and metadata. A chart whose query fails says so and offers to try again. 
 keep the colors they have on the Phase~1 map, and the models have colors of their own. For large
 selections, distributions use an even sample of at most 20{,}000 values and scatter plots at
 most 4{,}000 points, and the chart says so; statistics and correlations always use every value.
+Figure~\ref{fig:charts} shows the two chart types not shown elsewhere in this report, a
+histogram and a scatter plot; the trend, state map, and ranking are in
+Figure~\ref{fig:overview}, the box plot in Figure~\ref{fig:box}, group bars in
+Figure~\ref{fig:compare}, and the correlation heat map in Figure~\ref{fig:correlation}.
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{minipage}[t]{0.49\linewidth}
+    \includegraphics[width=\linewidth]{p2-histogram.jpg}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.49\linewidth}
+    \includegraphics[width=\linewidth]{p2-scatter.jpg}
+  \end{minipage}
+  \caption{Left: histogram of the \NOx{} emission rate, 2015--2025, on a log scale (Distribution
+  tab); the rate spans more than three orders of magnitude, with several peaks. Right: \NOx{}
+  mass against heat input on log scales, colored by fuel class (Relationships tab). Since mass is
+  rate times heat input, each fuel forms a band of slope about one, set higher or lower by its
+  emission rate.}
+  \label{fig:charts}
+\end{figure}
 
 \subsection{Comparative analysis}
 
@@ -228,7 +250,8 @@ results are potential impacts for comparison, not measured harm (Figure~\ref{fig
 \subsection{Prediction}
 
 The Models tab opens on the test error of the three registered models (baseline, Ridge
-regression, and decision tree), then compares them on the validation and test years; plots
+regression, and decision tree) with 95\,\% bootstrap intervals, then compares them on the
+validation and test years; plots
 predicted against actual \NOx{} for the test years; and shows the tree's feature importances or
 the Ridge coefficients (Figure~\ref{fig:models}). A collapsed section gives the leakage rules
 and each model's record: inputs, settings, the years it was fit and tuned on, saved file,
@@ -294,8 +317,8 @@ meets it.
 \S4.6 Short tons to kg; exact pollutant match; sum within category; per MWh; factors recorded & TRACI impacts tab; \code{impactVariables} & Met\\
 \S5.1 One prediction target & Annual \NOx{} mass per unit-year & Met\\
 \S5.2 Candidate features; no target leakage & Section~\ref{sec:prediction}; ablation & Met\\
-\S5.3 Baseline and at least two models & Median baseline, Ridge, decision tree & Met\\
-\S5.4 Chronological split; MAE, RMSE, $R^2$, MAPE & 2016--21 / 2022--23 / 2024--25 & Met\\
+\S5.3 Baseline and at least two models & Median baseline, Ridge, decision tree; persistence as a reference (Q4) & Met\\
+\S5.4 Chronological split; MAE, RMSE, $R^2$, MAPE & 2016--21 / 2022--23 / 2024--25; 95\,\% bootstrap intervals on test metrics & Met\\
 \S6.2 Model, baseline unit, input, minimum, maximum, step; value, prediction, changes, curve & What-if tab & Met\\
 \S6.3 Named scenarios with range warnings & What-if tab & Met\\
 \S6.4 Curve, baseline marks, scenario bars, labels, out-of-range shading & What-if tab & Met\\
@@ -306,10 +329,10 @@ meets it.
 \S7 Export model evaluation and predictions & Model-comparison table; predicted-against-actual chart & Met\\
 \S7 Export sensitivity and scenario results & Sensitivity and scenario charts & Met\\
 \S7 Export chart images or data & PNG and CSV in every chart's ZIP & Met\\
-\S7 Metadata for reproducibility & \code{metadata.json} in every ZIP & Met\\
+\S7 Metadata for reproducibility & \code{metadata.json} in every ZIP; a unit test checks each of the six items & Met\\
 \S8 Steps 5 and 10: pandas analysis; Flask pages or JSON & Statistics in TypeScript, checked against NumPy and SciPy; tRPC procedures (Section~\ref{sec:design}) & Changed\\
 \S8.1 Flask, Jinja2, SQLAlchemy, pandas, scikit-learn, joblib, pytest & Next.js, React, Drizzle; pandas, scikit-learn, joblib, and pytest offline & Changed\\
-\S12.3 Instructions, migrations, environment template, tests, fixtures, no keys & README, migration 0009, \code{.env.example}, 61 + 6 tests, 100~KB fixture & Met\\
+\S12.3 Instructions, migrations, environment template, tests, fixtures, no keys & README, migration 0009, \code{.env.example}, 81 + 10 tests, 100~KB fixture & Met\\
 \bottomrule
 \end{longtable}}
 
@@ -335,7 +358,7 @@ Saved analysis configurations & URL parameters only & The URL already reproduces
 Fully custom scenarios & Five named scenarios; two percentages editable & Time. The sensitivity analysis covers any single input.\\
 Impacts of the predicted \NOx{} & Not built & Optional in \S6.4; the scenarios report \NOx{} mass.\\
 Residual plot & Predicted against actual only & The predicted-against-actual chart shows the same errors.\\
-Gradient-boosting model & Not built & Time; the tree already reaches $R^2 = 0.95$.\\
+Gradient-boosting model & Not built & Time. The reformulations in Q4 suggest the inputs, more than the model class, limit accuracy.\\
 O9 multi-indicator scoring & Not built & Not part of the Phase~2 specification.\\
 \bottomrule
 \end{longtable}}
@@ -349,7 +372,12 @@ O9 multi-indicator scoring & Not built & Not part of the Phase~2 specification.\
 Phase~2 keeps the Phase~1 stack: Next.js~16 with React~19, tRPC procedures for typed calls from
 the browser, Drizzle ORM, and SQLite. The specification recommends Flask, with pandas and
 scikit-learn for the analysis; the Phase~1 report explained how Flask, Jinja, and SQLAlchemy map
-onto the stack used. For the analysis we chose a hybrid (Figure~\ref{fig:architecture}).
+onto the stack used. We extended the Phase~1 application instead of porting it to Flask: a port
+would have spent the phase re-implementing retrieval, upload, validation, and search rather than
+building the analysis, and the specification allows React for dashboards with extensive
+client-side state, which the Analyze and What-if pages are. Python still does what the
+specification assigns to it, training and evaluating the models with pandas and scikit-learn.
+For the analysis we chose a hybrid (Figure~\ref{fig:architecture}).
 Statistics, indicators, and TRACI impacts are computed in TypeScript on the server, next to the
 database. Models are trained offline in Python with pandas and
 scikit-learn~\cite{pedregosa2011sklearn}, and each trained model is stored in the database with
@@ -383,7 +411,7 @@ When a tab needs a result, the browser calls a tRPC procedure with the filters a
 choices. The server turns the filters into the same SQL conditions the Explore page uses (one
 shared function, \code{unitYearConditions}) and selects the matching unit-years, joined with
 their unit, their facility, and the same unit's previous year, which the year-over-year
-variables need. The rows are cached for 60~seconds, keyed by the filters and the time of the
+variables need. The rows are cached for five minutes, keyed by the filters and the time of the
 latest import, because one page usually asks for several views of the same selection. The
 variables are evaluated in memory and only the result (a table, chart points, or a matrix) is
 returned. Section~\ref{sec:perf} gives the measured times.
@@ -626,14 +654,29 @@ primary fuel and unit type, or the overall median for unseen combinations. Ridge
 regression~\cite{hoerl1970ridge} is fitted to $\log(1 + \text{NO}_x)$, because \NOx{} spans six
 orders of magnitude, with the penalty $\alpha$ chosen from $\{0.01, 0.1, 1, 10, 100\}$; its
 predictions are transformed back and floored at zero. The decision tree~\cite{breiman1984cart}
-is fitted to tons, with the maximum depth chosen from $\{4, 6, 8, 10, 12, 16\}$ and the minimum
-leaf size from $\{5, 20, 50\}$. Validation selected $\alpha = 10$ and a tree of depth 16 with at
-least 20 unit-years per leaf.
+is fitted to tons, with the maximum depth chosen from $\{4, 6, 8, 10, 12, 16, 20, 24\}$ or
+unlimited and the minimum leaf size from $\{5, 20, 50\}$. Validation selected $\alpha = 10$ and a
+maximum depth of 20 with at least 20 unit-years per leaf. An earlier grid stopped at depth 16 and
+chose its top value, so it was extended. The extension changes nothing: with 20 unit-years per
+leaf the tree stops growing at depth 18 by itself, so limits of 20, 24, and none give the same
+tree, and its validation MAE differs from the depth-16 tree's by 0.001 tons.
+
+\paragraph{Persistence reference.} A model can only be judged against a fair alternative. Besides
+the required median baseline, \code{train.py} computes a \emph{persistence} reference: the unit's
+previous-year \NOx{} rate times this year's heat input, divided by 2{,}000, or the median
+baseline when either is missing (1.4\,\% of test unit-years). It uses only inputs the models
+also see. In the ablation, where same-year heat input is unknown, it predicts last year's tons.
+It is reported with the metrics (\code{ml/models/metrics.json}) but not registered as a model
+or shown in the application.
 
 \paragraph{Metrics.} Mean absolute error (MAE), root mean squared error (RMSE), coefficient of
 determination ($R^2$), and mean absolute percentage error (MAPE). MAPE is computed only over
 unit-years of at least one ton, because for peaking turbines that emit a fraction of a ton a
-percentage error has no useful meaning.
+percentage error has no useful meaning. Each test metric has a 95\,\% percentile interval from
+1{,}000 bootstrap samples. Because the test years hold up to two unit-years of each unit, which
+are not independent, each sample draws units with replacement and keeps all of a drawn unit's
+years (a cluster bootstrap). The same samples give an interval for the difference between a
+model's MAE and the persistence reference's.
 
 \paragraph{Sensitivity and scenarios.} A sensitivity curve changes one input of the baseline
 unit-year at each step, holds every other input fixed, and records the prediction, its absolute
@@ -741,19 +784,44 @@ intensities show how clean a state's generation is.
 
 \subsection{Q4: prediction}
 
-Table~\ref{tab:models} compares the models. Both trained models beat the baseline by a wide
-margin on the test years: Ridge lowers the MAE by 47\,\% and the tree by 76\,\%. The tree's
-training ($R^2 = 0.956$), validation, and test results are close, so it does not noticeably
-overfit despite its depth. Without same-year heat input, gross load, and operating time,
-validation $R^2$ falls from 0.853 to 0.704 for Ridge and from 0.967 to 0.837 for the tree. Most
-of the remaining accuracy comes from the previous year's \NOx{} rate, which reflects the unit's
-combustion technology and controls.
+Table~\ref{tab:models} compares the models. Both trained models beat the median baseline by a
+wide margin on the test years: Ridge lowers the MAE by 47\,\% and the tree by 76\,\%, and the
+intervals do not overlap. The tree's training ($R^2 = 0.956$), validation, and test results are
+close, so it does not noticeably overfit despite its depth. Without same-year heat input, gross
+load, and operating time, validation $R^2$ falls from 0.853 to 0.704 for Ridge and from 0.967 to
+0.837 for the tree. Most of the remaining accuracy comes from the previous year's \NOx{} rate,
+which reflects the unit's combustion technology and controls.
+
+The persistence reference is more accurate than both models. Its test MAE is 18.5~tons
+(16.1--21.2), against 26.3 for the tree; the tree's MAE is 7.8~tons higher (6.3--9.4), and
+Ridge's 40.0~tons higher (35.8--44.8). Persistence also wins without same-year activity, where
+last year's tons reach a validation $R^2$ of 0.884 against the tree's 0.837. The reason is
+physical: \NOx{} mass is the emission rate times heat input, and a unit's rate changes little from
+one year to the next. A tree can approximate that product only in steps, and Ridge on the log
+scale gives the previous rate a linear rather than a logarithmic effect.
+
+We tried three reformulations that build the product into the model, each tuned on the
+validation years and scored once on the test years (\code{ml/reformulations.py}): the
+persistence estimate as an extra input (test MAE: tree 21.3, Ridge 25.0~tons); predicting this
+year's rate and multiplying by heat input (tree 20.2, Ridge 44.8); and predicting a correction
+to the persistence estimate (tree 19.7, Ridge 22.4). None beats persistence: the inputs carry
+little information about \emph{changes} in a unit's rate. One likely cause of such changes, a
+control installed or retired, is invisible to the models, which see this year's controls but not
+last year's, so they cannot tell a new control from one the previous rate already reflects.
+
+The models are therefore not the best point forecast of next year's \NOx{}. What they add is a
+response to inputs that persistence ignores: persistence scales only with heat input, while the
+models also respond to load, controls, fuel, and unit type, which is what the What-if scenarios
+need. Those responses are associations learned across units, not measured effects, as the
+scenarios below show.
 
 \begin{table}[H]
   \centering\small
   \setlength{\tabcolsep}{4.5pt}
-  \caption{\NOx{} models: validation (2022--2023) and test (2024--2025) results. Ablation:
-  validation $R^2$ without same-year heat input, gross load, and operating time.}\label{tab:models}
+  \caption{\NOx{} models: validation (2022--2023) and test (2024--2025) results, with 95\,\%
+  cluster-bootstrap intervals for test MAE and $R^2$. Ablation: validation $R^2$ without
+  same-year heat input, gross load, and operating time. Persistence is a reference, not a
+  registered model.}\label{tab:models}
   \begin{tabular}{@{}lrrrrrrr@{}}
     \toprule
     & \multicolumn{2}{c}{\textbf{Validation}} & \multicolumn{4}{c}{\textbf{Test}} & \textbf{Ablation}\\
@@ -761,8 +829,14 @@ combustion technology and controls.
     \textbf{Model} & MAE (t) & $R^2$ & MAE (t) & RMSE (t) & $R^2$ & MAPE & $R^2$\\
     \midrule
     Baseline (median) & 114.2 & 0.474 & 109.4 & 366.9 & 0.489 & 143.6\,\% & 0.474\\
+    & & & \scriptsize 99.3--121.0 & & \scriptsize 0.443--0.538 & & \\
     Ridge ($\alpha = 10$) & 57.9 & 0.853 & 58.5 & 213.5 & 0.827 & 49.3\,\% & 0.704\\
-    Tree (depth 16, leaf 20) & 26.5 & 0.967 & 26.3 & 113.9 & 0.951 & 20.9\,\% & 0.837\\
+    & & & \scriptsize 52.7--64.9 & & \scriptsize 0.784--0.870 & & \\
+    Tree (depth $\le 20$, leaf 20) & 26.5 & 0.967 & 26.3 & 113.9 & 0.951 & 20.9\,\% & 0.837\\
+    & & & \scriptsize 23.4--29.7 & & \scriptsize 0.937--0.963 & & \\
+    \midrule
+    Persistence (reference) & 18.7 & 0.965 & 18.5 & 92.8 & 0.967 & 15.3\,\% & 0.884\\
+    & & & \scriptsize 16.1--21.2 & & \scriptsize 0.953--0.979 & & \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -770,7 +844,7 @@ combustion technology and controls.
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{p2-models.jpg}
-  \caption{Models tab: test error and all metrics against the baseline, predicted against actual \NOx{} for the
+  \caption{Models tab: test error with 95\,\% intervals and all metrics against the baseline, predicted against actual \NOx{} for the
   test years, and the Ridge coefficients.}
   \label{fig:models}
 \end{figure}
@@ -967,30 +1041,45 @@ passes.
 
 \subsection{Unit tests}
 
-\code{npm test} runs 61 TypeScript tests in eight files: 60 pass and one is skipped because it
-needs a folder of raw CAMPD files that is not committed. Seventeen tests in three new files
+\code{npm test} runs 81 TypeScript tests in nine files: 80 pass and one is skipped because it
+needs a folder of raw CAMPD files that is not committed. Thirty-seven tests in four new files
 cover Phase~2:
 \begin{itemize}
   \item \code{stats.test.ts} (4 tests): quantiles and standard deviation against NumPy; Pearson
         and Spearman correlation, Welch's $t$, Mann--Whitney $U$, the confidence interval,
         ANOVA, Kruskal--Wallis, and the $\chi^2$ tail against SciPy, to $10^{-9}$ for statistics
         and $10^{-6}$ for $p$-values; pairwise-complete correlation; constant inputs.
-  \item \code{analysis.test.ts} (8 tests): each derived rate, and its missing value when an input
+  \item \code{analysis.test.ts} (13 tests): each derived rate, and its missing value when an input
         is missing or a denominator is zero; capacity factor in leap and ordinary years;
         year-over-year changes with a missing or zero previous year; pooled rates as a ratio of
         sums; TRACI impacts against hand calculation, with categories kept apart and a missing
         pollutant affecting only its own categories; the factor extract (six factors, nitrogen
-        oxides rather than nitrogen dioxide); the control classes; the default year range in
-        the URL state.
-  \item \code{model.test.ts} (5 tests): the parity test (all three models on 200 test
+        oxides rather than nitrogen dioxide); the control classes; percentage formatting; the URL
+        state (default year range, old tab links, unknown fields); and \code{findVariable}, which
+        rejects an unknown variable key so that the server answers with an error (HTTP 400)
+        instead of an empty result.
+  \item \code{model.test.ts} (14 tests): the parity test (all three models on 200 test
         unit-years, within $10^{-6}$); input derivation (unit age, control flags, and a previous
         rate that is missing when the previous heat input is zero); out-of-range detection; the
-        direction of the response to heat input; readable feature names.
+        direction of the response to heat input; readable feature names; and the What-if
+        calculations: percentage change (undefined from zero), the sensitivity grid (baseline
+        included once, a reversed range, a zero step, the point limit), the curve (only the
+        varied input changes; absolute and percentage changes from the baseline prediction;
+        values past the training maximum flagged), and the scenarios (each changes only what it
+        names; coal and gas units get the opposite fuel and control changes; an unseen fuel is
+        flagged).
+  \item \code{export-bundle.test.ts} (6 tests): a ZIP reads back as the CSV, \code{metadata.json},
+        and PNG that went in; and the metadata of every kind of export (Analyze charts, the
+        analytical dataset, and Predict) contains each of the six reproducibility items of
+        \S7, while metadata missing any one of them is reported with that item's name.
 \end{itemize}
-\code{npm run test:py} runs six pytest tests of the training pipeline: the three periods do not
+\code{npm run test:py} runs ten pytest tests of the training pipeline: the three periods do not
 overlap; no input is the target or derived from it; the input rules; the preprocessing
 specification gives the same matrix after a round trip through JSON; the baseline is the group
-median; and MAPE ignores targets below one ton.
+median; MAPE ignores targets below one ton; persistence is the previous rate times heat input,
+with the baseline as fallback and last year's tons in the ablation; the bootstrap intervals
+contain the point estimates and detect a clearly better model; and the tree grid extends past
+its earlier limit.
 
 \subsection{Representative test cases}
 
@@ -1013,11 +1102,13 @@ Program CSNOX, 2015--2025 & 24{,}676 whole-code matches; a substring match would
 \COtwo{} intensity with gross load 0 & Missing, not 0 (1{,}506 unit-years with \COtwo{} but no positive load) & Missing & \checkmark\\
 Impacts, Ghent, 2024 & 12{,}744{,}620~kg \SOtwo{}~eq; 1.1006 per MWh (hand calculation) & Same & \checkmark\\
 Compare 2024 \NOx{} rate, SCR vs no control & Pooled 0.037 and 0.159~lb/MMBtu over 1{,}547 and 479 unit-years (SQL) & Same & \checkmark\\
-Models tab, test years & MAE 109.4, 58.5, 26.3~t (\code{metrics.json}) & Same, locally and hosted & \checkmark\\
+Models tab, test years & MAE 109.4, 58.5, 26.3~t; intervals as in Table~\ref{tab:models} (\code{metrics.json}) & Same & \checkmark\\
+Persistence, 7{,}648 test unit-years with a previous rate & MAE 18.286~t (SQL) & 18.286~t & \checkmark\\
+Analyze request with an unknown variable & HTTP 400, ``Unknown variable'' (tRPC error contract) & Same & \checkmark\\
 TypeScript vs scikit-learn, 200 unit-years & Equal within $10^{-6}$ (parity fixture) & Equal & \checkmark\\
 Ghent unit~2, 2024, heat input $+250\,\%$ & Outside training range (max 85.8 million MMBtu) & Warned, shaded & \checkmark\\
 Scenarios, Ghent unit~2, add SCR & Ridge $-58.9\,\%$, tree $0.0\,\%$ (direct model call) & Same & \checkmark\\
-Export dataset, KY, 2024 & 90 rows; metadata with filters, 29 variables, 6 factors & Same & \checkmark\\
+Export dataset, KY, 2024 & 90 rows; metadata with filters, 29 variables, 6 factors; no \S7 item missing & Same & \checkmark\\
 Upload or retrieve on the hosted build & Refused with a ``run locally'' notice & Refused & \checkmark\\
 \bottomrule
 \end{longtable}}
@@ -1057,7 +1148,7 @@ from pair to pair (Section~\ref{sec:known}).
 
 \subsection{Defects found and corrected}
 
-Testing found several defects, all corrected. The 60-second row cache stored a Drizzle query
+Testing found several defects, all corrected. The row cache stored a Drizzle query
 instead of its result. Drizzle queries are lazy and run again on every \code{await}, so the
 ``cached'' selection was queried again for every view (1.5~s each); the loader now stores a
 settled promise. The server export imported a module that defined a browser-side context, which
@@ -1073,7 +1164,7 @@ A final audit against the specification found five more. The emissions-program f
 as ``ARP, CSNOX, CSOSG2'' and a substring match would let ``CSNOX'' match ``CSNOXOS''. The
 default 2015--2025 range applied only to a URL with no parameters at all, so a link to a tab
 (\code{/analyze?tab=charts}) analysed every year, including the partial 2026; it now applies
-whenever the URL sets no filter. The row cache could miss an import for up to a minute; its key
+whenever the URL sets no filter. The row cache could miss an import for up to five minutes; its key
 now includes the time of the latest import. A caption wrapped around a segmented control as an
 HTML \code{label} passed a click on the caption to the first button, which changed the choice;
 such captions are now plain groups. Sorting groups whose value was missing used an inconsistent
@@ -1111,14 +1202,14 @@ G2 Comparisons & Met & Compare groups tab with tests and plain-language readings
 G3 Interactive visualization & Met & Seven chart types with export.\\
 G4 TRACI impacts & Met & Four categories TRACI~2.2 defines for these pollutants (Q3).\\
 G5 Trends, relationships, unusual observations & Met & Q1, the correlation outlier, far-out fences.\\
-G6 Prediction models & Met & Two models beat the baseline on held-out years (Q4).\\
+G6 Prediction models & Met & Two models beat the baseline on held-out years, with intervals; neither beats persistence, and Q4 says why.\\
 G7 Sensitivity and scenarios & Met & With range warnings.\\
 G8 Saving and exporting & Met & Every result exports with metadata.\\
 G9 Explaining methods and limitations & Met & Definitions, captions, and caveats in the interface; this report.\\
 O8 Environmental indicators & Met & Derived indicators and TRACI categories.\\
 O9 Multi-indicator scoring & Not met & Not in the Phase~2 specification; not built.\\
 O10 Interactive charts of results & Met & Every Analyze and Predict tab.\\
-O11 Test and deploy & Met & 61 + 6 automated tests; hosted at \url{https://cs396-project.vercel.app}.\\
+O11 Test and deploy & Met & 81 + 10 automated tests; hosted at \url{https://cs396-project.vercel.app}.\\
 O12 Document sources, assumptions, equations, units, limitations & Met & README, \code{DATABASE\_BREAKDOWN.md}, this report.\\
 \bottomrule
 \end{tabularx}
@@ -1159,7 +1250,9 @@ is smooth and gives each input one global effect, which makes sensitivity curves
 The tree captures interactions and thresholds and is much more accurate, but its response to one
 input is a step function and it may ignore an input entirely. The scenario disagreement in
 Section~\ref{sec:results} follows directly from this, and showing both models makes the
-uncertainty visible.
+uncertainty visible. In hindsight, the persistence reference should have been computed first:
+it sets the bar a model has to clear, and it showed that the inputs, not the choice between
+these two models, limit the accuracy.
 
 \subsection{Challenges and lessons learned}
 
@@ -1205,6 +1298,11 @@ controls, which weakens the models' response to a changed control and makes them
 a unit whose rate changes, as Ghent unit~2 shows. Range warnings check each input separately,
 not the combination.
 
+\paragraph{The models do not beat persistence.} Last year's \NOx{} rate times this year's heat
+input predicts the test years more accurately than either model (Q4), and three reformulations
+did not close the gap. The models are useful for exploring responses to inputs, not as the best
+forecast of a unit's emissions.
+
 \paragraph{Other limitations.} Analysis configurations are saved only as URLs. The year-over-year
 variables compare consecutive years only, so a unit with a missing year has no change for the
 following year.
@@ -1212,7 +1310,8 @@ following year.
 \subsection{Future improvements}
 
 Storing fuel and unit type per year, as Phase~1 already proposed, would correct both the grouped
-statistics and the model inputs. Tests clustered by unit would give honest $p$-values.
+statistics and the model inputs. Adding the previous year's controls as inputs would let a model
+see a control being installed, the change persistence cannot anticipate. Tests clustered by unit would give honest $p$-values.
 Gradient-boosted trees with monotonic constraints, or separate models for coal and gas, would
 likely improve accuracy and give a more plausible response to controls. A joint
 out-of-distribution check (for example the distance to the nearest training unit-year) would
