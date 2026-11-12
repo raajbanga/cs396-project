@@ -113,8 +113,6 @@ const BASIC_FILTER_KEYS = [
   "year",
   "primaryFuel",
   "unitType",
-  "facilityId",
-  "unitId",
 ] as const satisfies readonly (keyof FacilityFilters)[];
 
 /** Everything else (grid, controls, ranges, ranking, …), shown under "Advanced". */

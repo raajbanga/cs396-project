@@ -17,10 +17,8 @@ import { exportUrl } from "~/lib/csv";
 import {
   DEFAULT_FILTERS,
   explorerSearchParams,
-  isFilterActive,
   nextSort,
   type ExplorerState,
-  type FacilityFilters,
   type FilterChangeHandler,
   type SortDirection,
 } from "~/lib/facility-filters";
@@ -29,7 +27,7 @@ import { api } from "~/trpc/react";
 import { SelectionContext } from "./selection-context";
 import { AuditLogsTable } from "./audit-logs-table";
 import { FacilitiesTable } from "./facilities-table";
-import { FacilityFilterBar, type DescribeProps } from "./facility-filters";
+import { FacilityFilterBar, useDescribeSearch } from "./facility-filters";
 import { UnitsTable } from "./units-table";
 
 /** Text-identity sort keys start ascending (severity: ERROR first); numeric metrics and dates start descending. */
@@ -44,12 +42,6 @@ const ASC_FIRST: readonly string[] = [
 ];
 const descByDefault = (field: string) => !ASC_FIRST.includes(field);
 
-/** Whether a description set anything besides a name search. */
-const setsFilters = (filters: FacilityFilters) =>
-  (Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]).some(
-    (k) => k !== "search" && isFilterActive(filters, k),
-  );
-
 /** §9 data-explorer page: search form, filters, and the Facilities / Unit-years / Audit-flags tables. */
 export function Explorer({ initialState }: { initialState: ExplorerState }) {
   const [activeTab, setActiveTab] = useState(initialState.tab);
@@ -58,17 +50,9 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
   const [table, setTable] = useState(initialState.table);
   const [unitTable, setUnitTable] = useState(initialState.unitTable);
   const [auditTable, setAuditTable] = useState(initialState.auditTable);
-  const [searchText, setSearchText] = useState(
-    initialState.q || initialState.filters.search,
-  );
   const [describedQuery, setDescribedQuery] = useState(initialState.q);
-  const [describeResult, setDescribeResult] =
-    useState<DescribeProps["result"]>(null);
-  const [isDescribing, setIsDescribing] = useState(false);
   const { compareIds, compareUnitIds, toggleCompare, toggleUnitCompare } =
     use(SelectionContext);
-
-  const utils = api.useUtils();
 
   const explorerState: ExplorerState = {
     tab: activeTab,
@@ -94,9 +78,8 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
   };
   const resetFilters = () => {
     setFilters(DEFAULT_FILTERS);
-    setSearchText("");
+    resetDescribe();
     setDescribedQuery("");
-    setDescribeResult(null);
     resetPages();
   };
 
@@ -104,18 +87,13 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
    * Rubric §6: plain text → filters, view, and sort, applied through the same state as manual
    * filters. Text with nothing the parser recognizes (a plant name) becomes a name search instead.
    */
-  const runSearch = async () => {
-    const text = searchText.trim();
-    if (!text) return setFilter("search", "");
-    setIsDescribing(true);
-    try {
-      const r = await utils.facilities.describeSearch.fetch({ text });
-      if (!setsFilters(r.filters) && !r.filters.search && !r.sort && !r.tab) {
-        setFilter("search", text);
-        setDescribedQuery("");
-        setDescribeResult(null);
-        return;
-      }
+  const { describe, reset: resetDescribe } = useDescribeSearch({
+    initialText: initialState.q || initialState.filters.search,
+    onNameSearch: (text) => {
+      setFilter("search", text);
+      setDescribedQuery("");
+    },
+    onApply: (r, text) => {
       const tab = r.tab ?? (activeTab === "explorer" ? "explorer" : "units");
       setFilters(r.filters);
       setActiveTab(tab);
@@ -131,25 +109,9 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
         page: 1,
         ...(r.sort ? { sortBy: r.sort.by, sortDir: r.sort.dir } : {}),
       }));
-      setDescribeResult(r);
       setDescribedQuery(text);
-    } catch (err) {
-      setDescribeResult({
-        unrecognized: [],
-        via: "parser",
-        notes: [err instanceof Error ? err.message : String(err)],
-      });
-    } finally {
-      setIsDescribing(false);
-    }
-  };
-  const describe: DescribeProps = {
-    text: searchText,
-    onTextChange: setSearchText,
-    onSubmit: () => void runSearch(),
-    isLoading: isDescribing,
-    result: describeResult,
-  };
+    },
+  });
 
   const showRank = filters.topN !== "ALL";
 
