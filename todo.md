@@ -40,6 +40,11 @@ last, sensible defaults).
 
 ### Analyze: 5 tabs, one tab level, organized by question (the Charts tab goes away)
 
+**Done 11/11** (on `dev`): the 5 tabs below, old links mapped, unknown variables/fields reset to
+defaults, error + retry on every chart, Compare bars + loading states, Impacts per-category top 15
+with the table and factors collapsed, `src/app/error.tsx`, `scatter` fallback without WebGL.
+Left: compact the filter bar (Overview's trend chart still starts ~600 px down).
+
 | Tab                      | Question it answers                             | Contents (moved from)                                                                                                                                                                                                                                        | Spec             |
 | :----------------------- | :---------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
 | **Overview** _(default)_ | What's in my selection, and how did it change?  | 4 KPIs (unit-years, facilities, units, years); the trend chart as the main chart (Charts→Trend); state map + top-20 ranking side by side (Charts); collapsed **"Data quality & variables"** with the missing-value table and variable definitions (Dataset). | 4.1, 4.3, 4.4    |
@@ -91,23 +96,23 @@ report and slides keep working.
   chips and a state chip; keep the fuel chips as the legend. Move Facility ID and Unit ID
   into Advanced once search suggests them; that shortens the bar on every page. Year
   options everywhere come from `getFilterOptions`, not hard-coded lists.
-- [ ] **One page layout.** `PageTitle` with a one-sentence lead, one underline tab row, then
-      content. No second tab row.
+- [~] **One page layout.** (Analyze done 11/11; Predict left) `PageTitle` with a one-sentence lead, one underline tab row, then
+  content. No second tab row.
 - [ ] **One export label set.** Today exports are labeled "Download CSV" (Explore), "Download dataset" (Analyze),
       "Download" (sections), "Data" (charts), and "More options". Use "Download" + format through
       `ExportButton` everywhere.
 - [ ] **One color system.** Fuel colors from `getFuelTheme` (already used in Analyze). Models and
       TRACI categories get a palette that doesn't reuse Coal orange or Gas green.
-- [ ] **One number format** for large quantities (`formatQuantity`: k/M/B, Mt) in the Impacts
-      table, axes, and tiles. Also: Map fuel chips print `1139` next to `1,652`, and Scenarios
-      mixes `+0.0 %` with `0.0 %`.
-- [ ] **One loading/empty/error pattern** (`InlineLoading`, `EmptyState`) for Statistics and
-      Compare (blank today). Do this together with the P1 error-handling item.
+- [~] **One number format** (Impacts table done 11/11) for large quantities (`formatQuantity`: k/M/B, Mt) in the Impacts
+  table, axes, and tiles. Also: Map fuel chips print `1139` next to `1,652`, and Scenarios
+  mixes `+0.0 %` with `0.0 %`.
+- [~] **One loading/empty/error pattern** (Analyze done 11/11; Predict left) (`InlineLoading`, `EmptyState`) for Statistics and
+  Compare (blank today). Do this together with the P1 error-handling item.
 - [ ] **Link Phase 1 and Phase 2.** Explore's compare dock gets "Analyze in Compare"
       (`/analyze?tab=compare&compareBy=facility&groups=…`); the facility dialog gets "Analyze this
       facility"; the unit dialog gets "Predict this unit" (opens What-if with it as the baseline).
       Two "compare" features with no link between them is part of the "different site" feel.
-- [ ] `scattergl` has no fallback when WebGL is unavailable: headless Chrome shows "WebGL is not
+- [x] `scattergl` has no fallback when WebGL is unavailable: headless Chrome shows "WebGL is not
       supported" in place of predicted-vs-actual. Fall back to `scatter`, as insurance for the
       demo machine.
 
@@ -197,16 +202,15 @@ it bears on Interactive visualization (10), Integration and usability (5), and P
 - [ ] **Commit history and participation (rubric 1.2, 5 pts).** History was rewritten on 11/05
       (conventional messages, Arnav co-author trailers); don't rewrite it again. Arnav resets his
       clone to the new history. From now on: both members commit weekly under their own git
-      identity (credit AI with a `Co-Authored-By` trailer, not as author), one small branch + PR
-      into `dev` per task, and Arnav owns a visible share of the remaining work (e.g. the P1
+      identity (credit AI with a `Co-Authored-By` trailer, not as author), commits go straight to `dev` (11/11: no feature branches), and Arnav owns a visible share of the remaining work (e.g. the P1
       error-handling and P2 UI items, slides). Open GitHub issues for the items below and close
       them from PRs.
-- [ ] **Error handling (rubric: integration, 5 pts).** Phase 2 tabs never show query errors and
-      there is no `error.tsx`. `?variable=nope` throws `Unknown variable` as
-      `INTERNAL_SERVER_ERROR` and the tab stays blank. Fix: throw `TRPCError("BAD_REQUEST")` in
-      `findVariable`; fall back to defaults for unknown variable/dimension keys in
-      `parseAnalysisParams`; show an inline error with retry in each tab; add `src/app/error.tsx`.
-- [ ] **Impacts tab shows the wrong top 15 for large groupings** (`impacts-tab.tsx`). The query
+- [~] **Error handling (rubric: integration, 5 pts).** (11/11: all done except Predict's charts.) Phase 2 tabs never show query errors and
+  there is no `error.tsx`. `?variable=nope` throws `Unknown variable` as
+  `INTERNAL_SERVER_ERROR` and the tab stays blank. Fix: throw `TRPCError("BAD_REQUEST")` in
+  `findVariable`; fall back to defaults for unknown variable/dimension keys in
+  `parseAnalysisParams`; show an inline error with retry in each tab; add `src/app/error.tsx`.
+- [x] **Impacts tab shows the wrong top 15 for large groupings** (`impacts-tab.tsx`). The query
       keeps the 100 groups largest in the _first_ category, and every other chart picks its top 15
       from those. Checked: acidification per MWh by facility shows only 5 of the true top 15. The
       subtitle "the 15 largest of 1,590 groups" is then wrong. Fix: rank each category on the

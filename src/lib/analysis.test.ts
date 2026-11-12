@@ -167,5 +167,27 @@ void test("parseAnalysisParams: default years unless the URL sets a filter", () 
   const filtered = parseAnalysisParams({ stateCode: "KY" }).filters;
   assert.equal(filtered.yearMin, "");
   assert.equal(filtered.stateCode, "KY");
-  assert.equal(parseAnalysisParams({ tab: "nonsense" }).view.tab, "dataset");
+  assert.equal(parseAnalysisParams({ tab: "nonsense" }).view.tab, "overview");
+});
+
+void test("parseAnalysisParams: old tab links open the tab their content moved to", () => {
+  const tab = (params: Record<string, string>) =>
+    parseAnalysisParams(params).view.tab;
+  assert.equal(tab({ tab: "dataset" }), "overview");
+  assert.equal(tab({ tab: "statistics" }), "distribution");
+  assert.equal(tab({ tab: "charts" }), "overview");
+  assert.equal(tab({ tab: "charts", chart: "scatter" }), "relationships");
+  assert.equal(tab({ tab: "charts", chart: "bars" }), "compare");
+  assert.equal(tab({ tab: "charts", chart: "distribution" }), "distribution");
+});
+
+void test("parseAnalysisParams: unknown grouping fields fall back to defaults", () => {
+  const { view } = parseAnalysisParams({
+    by: "nope",
+    compareBy: "x",
+    series: "",
+  });
+  assert.equal(view.by, "state");
+  assert.equal(view.compareBy, "noxControl");
+  assert.equal(view.series, "");
 });

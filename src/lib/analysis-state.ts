@@ -1,3 +1,4 @@
+import { DIMENSION_KEYS } from "~/lib/analysis";
 import {
   DEFAULT_FILTERS,
   filterSearchParams,
@@ -9,30 +10,33 @@ import {
  * plus the active tab and each tab's choices, all as strings so they round-trip through the URL.
  */
 
-const ANALYSIS_TABS = [
-  "dataset",
-  "statistics",
-  "charts",
+/** One tab per question: what's selected, how one variable is spread, what moves together, how groups differ, and the TRACI impacts. */
+export const ANALYSIS_TABS = [
+  "overview",
+  "distribution",
+  "relationships",
   "compare",
   "impacts",
 ] as const;
+export type AnalysisTab = (typeof ANALYSIS_TABS)[number];
 
-export const CHART_TYPES = [
-  "trend",
-  "bars",
-  "distribution",
-  "scatter",
-  "correlation",
-  "ranking",
-  "map",
-] as const;
-export type ChartType = (typeof CHART_TYPES)[number];
+/** Where the tabs and chart types before the 11/11 regroup now live, so old links keep working. */
+const MOVED: Record<string, AnalysisTab> = {
+  dataset: "overview",
+  statistics: "distribution",
+  trend: "overview",
+  map: "overview",
+  ranking: "overview",
+  distribution: "distribution",
+  scatter: "relationships",
+  correlation: "relationships",
+  bars: "compare",
+};
 
 export const DEFAULT_VIEW = {
-  tab: "dataset" as (typeof ANALYSIS_TABS)[number],
+  tab: "overview" as AnalysisTab,
   variable: "co2MassTons",
   by: "state", // "" = no grouping
-  chart: "trend" as ChartType,
   series: "fuelClass",
   x: "heatInputMMBtu",
   y: "noxMassTons",
@@ -96,8 +100,26 @@ export function parseAnalysisParams(params: Params) {
     params,
   );
   const view = readView(DEFAULT_VIEW, params);
+  const tab: string = view.tab;
+  view.tab =
+    tab === "charts"
+      ? (MOVED[first(params, "chart") ?? "trend"] ?? "overview")
+      : (MOVED[tab] ?? view.tab);
   if (!ANALYSIS_TABS.includes(view.tab)) view.tab = DEFAULT_VIEW.tab;
-  if (!CHART_TYPES.includes(view.chart)) view.chart = DEFAULT_VIEW.chart;
+  // An unknown grouping field in a hand-edited link falls back to the default, not an error.
+  // (Unknown variables are checked against the catalog on the page.)
+  for (const key of [
+    "by",
+    "series",
+    "color",
+    "compareBy",
+    "impactBy",
+  ] as const) {
+    const optional = key === "by" || key === "series";
+    const value = view[key];
+    if (!(optional && value === "") && !DIMENSION_KEYS.includes(value as never))
+      view[key] = DEFAULT_VIEW[key];
+  }
   return { filters, view };
 }
 

@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { execSync } from "node:child_process";
 import { and, count, eq, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -118,7 +119,11 @@ export async function loadVariables() {
 
 export function findVariable(variables: Variable[], key: string) {
   const v = variables.find((x) => x.key === key);
-  if (!v) throw new Error(`Unknown variable: ${key}`);
+  if (!v)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Unknown variable: ${key}`,
+    });
   return v;
 }
 

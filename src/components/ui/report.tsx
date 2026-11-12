@@ -38,9 +38,9 @@ export function Field({
     <Tag
       className={cn("space-y-1", className)}
       role={group ? "group" : undefined}
-      aria-label={group ? label : undefined}
+      aria-label={group ? label || undefined : undefined}
     >
-      <span className={cn(FIELD_LABEL, "block")}>{label}</span>
+      {label && <span className={cn(FIELD_LABEL, "block")}>{label}</span>}
       {children}
     </Tag>
   );
