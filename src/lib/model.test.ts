@@ -115,12 +115,20 @@ void test("sensitivityGrid: values in the input's unit, with an off-grid baselin
 });
 
 void test("sensitivityGrid: a reversed range and a negative step give the same grid", () => {
-  assert.deepEqual(
-    sensitivityGrid(100, 50, -50, -25, false).values,
-    sensitivityGrid(100, -50, 50, 25, false).values,
-  );
-  // A zero step is read as a step of 1.
-  assert.equal(sensitivityGrid(100, 0, 10, 0, true).values.length, 12);
+  const fixed = sensitivityGrid(100, 50, -50, -25, false);
+  const plain = sensitivityGrid(100, -50, 50, 25, false);
+  assert.deepEqual(fixed.values, plain.values);
+  // Each correction is reported, so the page can say what it changed.
+  assert.equal(fixed.reversed, true);
+  assert.equal(fixed.step, 25);
+  assert.equal(plain.reversed, false);
+  assert.equal(plain.step, 25);
+  // A zero or missing step is read as a step of 1.
+  const zero = sensitivityGrid(100, 0, 10, 0, true);
+  assert.equal(zero.values.length, 12);
+  assert.equal(zero.step, 1);
+  assert.equal(sensitivityGrid(100, 0, 10, Number(""), true).step, 1);
+  assert.equal(sensitivityGrid(100, 0, 10, NaN, true).step, 1);
 });
 
 void test("sensitivityGrid: stops at the point limit and says so", () => {

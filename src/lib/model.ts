@@ -216,8 +216,9 @@ export const MAX_SENSITIVITY_POINTS = 401;
 /**
  * §6.2: the input values of a sensitivity curve, from `from` to `to` in steps of `step`, as values
  * in the input's own unit or (`asValues` false) as percentages of the baseline value `value0`.
- * The baseline itself is always included. A reversed range is read low to high and a negative or
- * zero step as its size (or 1); `capped` says the grid stopped at the point limit.
+ * The baseline itself is always included. A reversed range is read low to high and a negative,
+ * zero, or missing step as its size (or 1); `reversed` and `step` (the step used) let the page say
+ * so, and `capped` says the grid stopped at the point limit.
  */
 export function sensitivityGrid(
   value0: number,
@@ -228,6 +229,7 @@ export function sensitivityGrid(
   maxPoints = MAX_SENSITIVITY_POINTS,
 ) {
   const size = Math.abs(step) || 1;
+  const reversed = from > to;
   const toValue = (x: number) => (asValues ? x : value0 * (1 + x / 100));
   const grid = [value0];
   for (
@@ -240,6 +242,8 @@ export function sensitivityGrid(
   return {
     values: [...new Set(grid)].sort((a, b) => a - b),
     capped: grid.length >= maxPoints,
+    reversed,
+    step: size,
   };
 }
 
