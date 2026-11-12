@@ -19,7 +19,7 @@ import {
 } from "~/lib/facility-filters";
 import { replaceUrlQuery } from "~/lib/utils";
 import { api } from "~/trpc/react";
-import { FacilityFilterBar } from "../facility-filters";
+import { FacilityFilterBar, useDescribeSearch } from "../facility-filters";
 import { ChartsTab } from "./charts-tab";
 import { CompareTab } from "./compare-tab";
 import { DatasetTab } from "./dataset-tab";
@@ -53,6 +53,12 @@ export function AnalyzeView({
     setViewState((v) => ({ ...v, ...patch }));
   const setFilter: FilterChangeHandler = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value }));
+  // The explorer's description search; analyses use its filters (sort and view don't apply).
+  const { describe, reset: resetDescribe } = useDescribeSearch({
+    initialText: initial.filters.search,
+    onNameSearch: (text) => setFilter("search", text),
+    onApply: (r) => setFilters(r.filters),
+  });
 
   const [catalog] = api.analysis.catalog.useSuspenseQuery();
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
@@ -91,7 +97,11 @@ export function AnalyzeView({
         <FacilityFilterBar
           filters={filters}
           onFilterChange={setFilter}
-          onResetFilters={() => setFilters(DEFAULT_FILTERS)}
+          onResetFilters={() => {
+            setFilters(DEFAULT_FILTERS);
+            resetDescribe();
+          }}
+          describe={describe}
           filterOptions={filterOptions}
           itemLabel="unit-years"
           analysis

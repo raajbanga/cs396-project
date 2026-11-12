@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Input } from "~/components/ui/input";
 import { PageTitle } from "~/components/ui/page";
 import { Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { Select, toOptions } from "~/components/ui/select";
+import { FacilitySearch } from "../facility-search";
 import {
   writeView,
   DEFAULT_PREDICT_VIEW,
@@ -39,8 +39,6 @@ const TABS = {
   scenarios: "Scenarios",
 } as const;
 
-const YEARS = Array.from({ length: 10 }, (_, i) => 2025 - i);
-
 /** The warning shown when inputs leave the training data's range. */
 export const rangeWarning = (names: string[]) =>
   names.length
@@ -50,7 +48,7 @@ export const rangeWarning = (names: string[]) =>
 /** Phase 2 §5–§6: model evaluation, then how predictions respond to changed inputs. */
 export function PredictView({ initial }: { initial: View }) {
   const [view, setViewState] = useState(initial);
-  const [search, setSearch] = useState(initial.fid);
+  const [search, setSearch] = useState("");
   const query = writeView(DEFAULT_PREDICT_VIEW, view).toString();
   useEffect(() => replaceUrlQuery(query), [query]);
   const setView = (patch: Partial<View>) =>
@@ -59,23 +57,31 @@ export function PredictView({ initial }: { initial: View }) {
   const [models] = api.prediction.models.useSuspenseQuery();
   const model = models.find((m) => m.kind === view.model) ?? models[0];
   const year = Number(view.year);
-  const options = api.prediction.baselineOptions.useQuery(
-    { search, year },
-    { placeholderData: (prev) => prev, enabled: view.tab !== "models" },
+  const whatIf = view.tab !== "models";
+  const { data: filterOptions } = api.facilities.getFilterOptions.useQuery(
+    undefined,
+    { enabled: whatIf },
+  );
+  // A baseline needs the previous year as an input, so the first stored year can't be one.
+  const years = (filterOptions?.years ?? []).slice(0, -1);
+  const units = api.prediction.baselineUnits.useQuery(
+    { facilityId: Number(view.fid), year },
+    { placeholderData: (prev) => prev, enabled: whatIf },
   );
   const baseline = api.prediction.baseline.useQuery(
     { facilityId: Number(view.fid), unitId: view.uid, year },
-    { enabled: view.tab !== "models" },
+    { enabled: whatIf },
   );
   const { data: source } = api.analysis.provenance.useQuery();
-  const current = `${view.fid}|${view.uid}`;
-  const unitOptions = (options.data ?? []).map((o) => ({
-    value: `${o.facilityId}|${o.unitId}`,
-    label: `${o.label} · ${formatStat(o.noxMassTons)} t NOₓ`,
-  }));
-  if (baseline.data && !unitOptions.some((o) => o.value === current)) {
-    unitOptions.unshift({ value: current, label: baseline.data.label });
-  }
+  const unitList = units.data ?? [];
+  const facilityName = unitList[0]?.facilityName;
+  // A new facility or year keeps the unit when it exists there, else takes the largest emitter.
+  const firstUnit = unitList[0]?.unitId;
+  const hasUnit = unitList.some((u) => u.unitId === view.uid);
+  useEffect(() => {
+    if (!units.isPlaceholderData && firstUnit && !hasUnit)
+      setViewState((v) => ({ ...v, uid: firstUnit }));
+  }, [units.isPlaceholderData, firstUnit, hasUnit]);
 
   return (
     <ExportContext
@@ -133,31 +139,43 @@ export function PredictView({ initial }: { initial: View }) {
                     .map((m) => ({ value: m.kind, label: m.name }))}
                 />
               </Field>
-              <Field label="Find facility (name or ID)">
-                <Input
+              <Field label="Facility" className="w-full sm:w-80">
+                <FacilitySearch
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-9 w-56"
-                  placeholder="e.g. Ghent or 1356"
+                  onValueChange={setSearch}
+                  onPick={(f) => {
+                    setSearch("");
+                    setView({ fid: String(f.id) });
+                  }}
+                  placeholder={
+                    facilityName
+                      ? `${facilityName} (${view.fid}) · search another`
+                      : "Search plant, operator, county, or ID"
+                  }
+                  inputClassName="h-9 text-sm"
                 />
               </Field>
               <Field label="Year">
                 <Select
                   value={view.year}
                   onValueChange={(y) => setView({ year: y })}
-                  options={toOptions(YEARS)}
+                  options={toOptions(years.length ? years : [year])}
                   className="w-24"
                 />
               </Field>
-              <Field label="Baseline unit-year" className="w-full sm:w-auto">
+              <Field label="Unit">
                 <Select
-                  value={current}
-                  onValueChange={(v) => {
-                    const [fid, uid] = v.split("|");
-                    setView({ fid, uid });
-                  }}
-                  options={unitOptions}
-                  className="w-full sm:w-96"
+                  value={view.uid}
+                  onValueChange={(uid) => setView({ uid })}
+                  options={
+                    unitList.length
+                      ? unitList.map((u) => ({
+                          value: u.unitId,
+                          label: `Unit ${u.unitId} · ${u.fuel} · ${formatStat(u.noxMassTons)} t NOₓ`,
+                        }))
+                      : [{ value: view.uid, label: `Unit ${view.uid}` }]
+                  }
+                  className="w-full sm:w-72"
                 />
               </Field>
             </Controls>

@@ -21,6 +21,7 @@ import {
   readThemeColors,
   withAlpha,
   type MapFacility,
+  type MapFocus,
   type MetricMode,
 } from "~/lib/map-utils";
 import { cn } from "~/lib/utils";
@@ -97,7 +98,7 @@ function createProjection(
 function projectVisible(
   projection: Projection,
   rotation: Rotation,
-  plant: MapFacility,
+  plant: Pick<MapFacility, "latitude" | "longitude">,
 ) {
   const lonLat: [number, number] = [plant.longitude, plant.latitude];
   if (d3.geoDistance(lonLat, [-rotation[0], -rotation[1]]) > Math.PI / 2)
@@ -152,10 +153,12 @@ export function D3Globe({
   facilities,
   onInspectFacility,
   metricMode,
+  focus,
 }: {
   facilities: MapFacility[];
   onInspectFacility: (id: number) => void;
   metricMode: MetricMode;
+  focus?: MapFocus | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -177,6 +180,14 @@ export function D3Globe({
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(
     null,
   );
+
+  // A facility picked in the search box: turn the globe to it and zoom in to state level.
+  useEffect(() => {
+    if (!focus) return;
+    setAutoRotate(false);
+    setRotation([-focus.longitude, -focus.latitude, 0]);
+    setScale((s) => Math.max(s, 1800));
+  }, [focus]);
 
   const isDraggingRef = useRef(false);
   const lastPointerRef = useRef({ x: 0, y: 0 });
@@ -327,7 +338,31 @@ export function D3Globe({
         ctx.stroke();
       }
     }
-  }, [facilities, scale, rotation, geo, isDark, hoveredPlant, metricMode]);
+
+    // The searched facility: a ring that shows even if the fuel chips hide its dot.
+    const focusPoint = focus && projectVisible(projection, rotation, focus);
+    if (focusPoint) {
+      for (const [radius, width, color] of [
+        [11, 4, palette.hoverHalo],
+        [11, 2, palette.hoverRing],
+      ] as const) {
+        ctx.beginPath();
+        ctx.arc(focusPoint[0], focusPoint[1], radius, 0, Math.PI * 2);
+        ctx.lineWidth = width;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+      }
+    }
+  }, [
+    facilities,
+    scale,
+    rotation,
+    geo,
+    isDark,
+    hoveredPlant,
+    metricMode,
+    focus,
+  ]);
 
   // Size the canvas pixel buffer to its container
   useEffect(() => {

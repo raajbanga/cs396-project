@@ -11,7 +11,10 @@ export default async function Map({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const initialState = parseExplorerParams(await searchParams);
-  await api.facilities.getMapFacilities.prefetch(initialState.filters);
+  await Promise.all([
+    api.facilities.getMapFacilities.prefetch(initialState.filters),
+    api.facilities.getFilterOptions.prefetch(),
+  ]);
   return (
     <HydrateClient>
       <MapPage initialState={initialState} />
