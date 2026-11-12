@@ -19,7 +19,7 @@ export const SelectionContext = createContext({
   toggleCompare: (_id: number): void => undefined,
   toggleUnitCompare: (_id: string): void => undefined,
   clearCompare: (): void => undefined,
-  inspect: (_view: DetailView): void => undefined,
+  inspect: (_view: DetailView | null): void => undefined, // null closes the dialog
 });
 
 /** "2 facilities, 1 unit": the comparison selection (dock and Download page). */

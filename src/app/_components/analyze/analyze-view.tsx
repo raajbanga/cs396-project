@@ -7,6 +7,7 @@ import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
   analysisSearchParams,
+  DEFAULT_VIEW,
   type AnalysisView,
   type parseAnalysisParams,
 } from "~/lib/analysis-state";
@@ -20,23 +21,24 @@ import {
 import { replaceUrlQuery } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { FacilityFilterBar, useDescribeSearch } from "../facility-filters";
-import { ChartsTab } from "./charts-tab";
 import { CompareTab } from "./compare-tab";
-import { DatasetTab } from "./dataset-tab";
+import { DistributionTab } from "./distribution-tab";
 import { ImpactsTab } from "./impacts-tab";
-import { StatisticsTab } from "./statistics-tab";
+import { OverviewTab } from "./overview-tab";
+import { RelationshipsTab } from "./relationships-tab";
 
+/** One tab per question, in the order an analysis usually goes. */
 const TABS = {
-  dataset: { label: "Dataset", Tab: DatasetTab },
-  statistics: { label: "Statistics", Tab: StatisticsTab },
-  charts: { label: "Charts", Tab: ChartsTab },
-  compare: { label: "Compare", Tab: CompareTab },
-  impacts: { label: "Impacts", Tab: ImpactsTab },
+  overview: { label: "Overview", Tab: OverviewTab },
+  distribution: { label: "Distribution", Tab: DistributionTab },
+  relationships: { label: "Relationships", Tab: RelationshipsTab },
+  compare: { label: "Compare groups", Tab: CompareTab },
+  impacts: { label: "TRACI impacts", Tab: ImpactsTab },
 };
 
 /**
- * Phase 2 Analyze page: the Explore filters define the analytical dataset (§4.1); the tabs
- * summarize, chart, compare, and assess it. Filters and every tab choice live in the URL.
+ * Phase 2 Analyze page: the Explore filters define the analytical dataset (§4.1); each tab answers
+ * one question about it. Filters and every tab choice live in the URL.
  */
 export function AnalyzeView({
   initial,
@@ -61,6 +63,18 @@ export function AnalyzeView({
   });
 
   const [catalog] = api.analysis.catalog.useSuspenseQuery();
+  // A hand-edited link with an unknown variable falls back to the default instead of an error.
+  const known = (key: string) => catalog.variables.some((v) => v.key === key);
+  const unknown = (["variable", "x", "y"] as const).filter(
+    (k) => !known(view[k]),
+  );
+  useEffect(() => {
+    if (unknown.length)
+      setViewState((v) => ({
+        ...v,
+        ...Object.fromEntries(unknown.map((k) => [k, DEFAULT_VIEW[k]])),
+      }));
+  }, [unknown.join()]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
   const { data: source } = api.analysis.provenance.useQuery();
   const filterQuery = filterSearchParams(deferredFilters);
@@ -69,6 +83,7 @@ export function AnalyzeView({
     { placeholderData: (prev) => prev },
   );
   const { Tab } = TABS[view.tab];
+  if (unknown.length) return null;
 
   return (
     <ExportContext
@@ -80,7 +95,7 @@ export function AnalyzeView({
       }}
     >
       <div className="space-y-6">
-        <PageTitle lead="Choose unit-years with the filters, then summarize, chart, and compare them, or convert their emissions into TRACI impact indicators. Every view follows the same selection and can be shared by its URL.">
+        <PageTitle lead="Pick unit-years with the filters; each tab answers one question about them. Every view can be shared by its URL.">
           Analyze
         </PageTitle>
 
@@ -120,7 +135,7 @@ export function AnalyzeView({
                 className={buttonClass({ variant: "outline", size: "sm" })}
                 title="Every selected unit-year with all variables, as CSV in a ZIP with metadata.json"
               >
-                Download dataset
+                Download all
               </a>
             </>
           }

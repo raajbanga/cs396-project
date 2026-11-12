@@ -223,13 +223,13 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
                   className={buttonClass({ variant: "outline", size: "sm" })}
                   title="Download every matching row as CSV"
                 >
-                  Download CSV
+                  Download all
                 </a>
                 <Link
                   href={`/download?${explorerQuery}`}
                   className={buttonClass({ variant: "ghost", size: "sm" })}
                 >
-                  More options
+                  More formats
                 </Link>
               </>
             )}

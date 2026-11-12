@@ -2,10 +2,16 @@
 
 import { Chart } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
-import { Field, ReportTable } from "~/components/ui/report";
+import {
+  Disclosure,
+  Field,
+  ReportTable,
+  Section,
+} from "~/components/ui/report";
 import { formatPct, formatStat } from "~/lib/analysis";
 import {
   featureLabel,
+  MODEL_COLORS,
   outOfRange,
   predict,
   type ModelInputs,
@@ -59,20 +65,19 @@ function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
   ];
 }
 
-/** §6.3–§6.4: named scenarios against the baseline, for each trained model. */
-export function ScenariosTab({
+/** §6.3–§6.4: named scenarios against the baseline, for each chosen model. */
+export function ScenariosSection({
   view,
   setView,
-  models,
+  chosen,
   baseline,
 }: PredictTabProps) {
-  const trained = models.filter((m) => m.kind !== "baseline");
   const list = scenarios(
     baseline.inputs,
     Number(view.load) || 0,
     Number(view.heat) || 0,
   );
-  const results = trained.flatMap((m) => {
+  const results = chosen.flatMap((m) => {
     const base = predict(m.artifact, baseline.inputs);
     return list.map((s) => {
       const prediction = predict(m.artifact, s.inputs);
@@ -88,7 +93,7 @@ export function ScenariosTab({
   });
 
   return (
-    <div className="space-y-4">
+    <Section title="Scenarios" note="Each scenario changes only what it names.">
       <Controls>
         <Field label="Gross load change (%)">
           <Input
@@ -110,10 +115,11 @@ export function ScenariosTab({
 
       <Chart
         title="Predicted NOₓ under each scenario"
-        subtitle={`${baseline.label}; actual ${formatStat(baseline.actual)} t. Labels give the change from each model's baseline prediction; faded bars use inputs outside the training data. Model responses, not measured effects.`}
+        subtitle="Labels: change from the model's baseline prediction; faded bars use inputs outside the training data."
+        note="The prior-year NOₓ rate still describes the unit as it was. When the models disagree on a scenario, the data cannot settle the effect: the tree learns NOₓ mostly from heat input and last year's rate, so adding SCR barely moves it, while Ridge applies one average SCR effect to every unit. Model responses, not measured effects."
         filename="scenarios"
         height={420}
-        data={trained.map((m) => {
+        data={chosen.map((m) => {
           const rows = results.filter((r) => r.model === m);
           return {
             type: "bar",
@@ -124,7 +130,10 @@ export function ScenariosTab({
               r.scenario.name === "Baseline" ? "" : formatPct(r.diffPct),
             ),
             textposition: "outside",
-            marker: { opacity: rows.map((r) => (r.warnings.length ? 0.4 : 1)) },
+            marker: {
+              color: MODEL_COLORS[m.kind],
+              opacity: rows.map((r) => (r.warnings.length ? 0.4 : 1)),
+            },
             customdata: rows.map((r) => [
               formatStat(r.diff),
               formatPct(r.diffPct),
@@ -135,7 +144,6 @@ export function ScenariosTab({
         })}
         layout={{
           barmode: "group",
-          xaxis: { title: { text: "Scenario" } },
           yaxis: {
             title: { text: "Predicted NOₓ (short tons)" },
             rangemode: "tozero",
@@ -163,43 +171,37 @@ export function ScenariosTab({
         }}
       />
 
-      <ReportTable
-        head={[
-          "Scenario",
-          "What changes",
-          ...trained.flatMap((m) => [`${m.name} (t)`, "Change"]),
-          "Outside the training data",
-        ]}
-        rows={list.map((scenario) => {
-          const rows = results.filter((r) => r.scenario === scenario);
-          const warnings = [...new Set(rows.flatMap((r) => r.warnings))];
-          return [
-            <span key="n" className="text-fg font-medium">
-              {scenario.name}
-            </span>,
-            scenario.change,
-            ...rows.flatMap((r) => [
-              formatStat(r.prediction),
-              r.scenario === list[0] ? "—" : formatPct(r.diffPct),
-            ]),
-            warnings.length ? (
-              <span key="w" className="text-warn">
-                {warnings.map(featureLabel).join(", ")}
-              </span>
-            ) : (
-              "—"
-            ),
-          ];
-        })}
-      />
-      <p className="text-fg-muted max-w-4xl text-xs">
-        Each scenario changes only what it names; the prior-year NOₓ rate still
-        describes the unit as it was. When two models disagree on a scenario,
-        the data cannot settle the effect: the decision tree, for example,
-        learns NOₓ mostly from heat input and last year's rate, so adding SCR
-        barely moves it, while the Ridge model applies one average SCR effect to
-        every unit.
-      </p>
-    </div>
+      <Disclosure title="Show values" hint="what each scenario changes">
+        <ReportTable
+          head={[
+            "Scenario",
+            "What changes",
+            ...chosen.flatMap((m) => [`${m.name} (t)`, "Change"]),
+            "Outside the training data",
+          ]}
+          rows={list.map((scenario) => {
+            const rows = results.filter((r) => r.scenario === scenario);
+            const warnings = [...new Set(rows.flatMap((r) => r.warnings))];
+            return [
+              <span key="n" className="text-fg font-medium">
+                {scenario.name}
+              </span>,
+              scenario.change,
+              ...rows.flatMap((r) => [
+                formatStat(r.prediction),
+                r.scenario === list[0] ? "—" : formatPct(r.diffPct),
+              ]),
+              warnings.length ? (
+                <span key="w" className="text-warn">
+                  {warnings.map(featureLabel).join(", ")}
+                </span>
+              ) : (
+                "—"
+              ),
+            ];
+          })}
+        />
+      </Disclosure>
+    </Section>
   );
 }

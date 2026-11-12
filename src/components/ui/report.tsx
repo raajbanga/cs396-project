@@ -38,9 +38,9 @@ export function Field({
     <Tag
       className={cn("space-y-1", className)}
       role={group ? "group" : undefined}
-      aria-label={group ? label : undefined}
+      aria-label={group ? label || undefined : undefined}
     >
-      <span className={cn(FIELD_LABEL, "block")}>{label}</span>
+      {label && <span className={cn(FIELD_LABEL, "block")}>{label}</span>}
       {children}
     </Tag>
   );
@@ -225,5 +225,35 @@ export function DetailList({
         </div>
       ))}
     </dl>
+  );
+}
+
+/**
+ * A collapsed section: a title, a short hint of what's inside, and content rendered only once
+ * opened (so a hidden table doesn't query or draw until someone asks for it).
+ */
+export function Disclosure({
+  title,
+  hint,
+  children,
+  className,
+}: {
+  title: ReactNode;
+  hint?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const [opened, setOpened] = useState(false);
+  return (
+    <details
+      className={cn("border-edge rounded-md border", className)}
+      onToggle={(e) => e.currentTarget.open && setOpened(true)}
+    >
+      <summary className="hover:bg-surface flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3">
+        <span className="text-fg font-semibold">{title}</span>
+        {hint && <span className="text-fg-muted text-xs">{hint}</span>}
+      </summary>
+      {opened && <div className="space-y-6 px-4 pt-2 pb-5">{children}</div>}
+    </details>
   );
 }

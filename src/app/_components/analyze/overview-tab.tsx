@@ -1,11 +1,12 @@
 "use client";
 
 import { ProgressBar } from "~/components/ui/metric-bar";
-import { ReportTable, Section } from "~/components/ui/report";
+import { Disclosure, ReportTable, Section } from "~/components/ui/report";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import type { VariableInfo } from "~/lib/analysis";
 import { formatNumber } from "~/lib/utils";
-import { combinedLabel, type TabProps } from "./shared";
+import { MapChart, RankingChart, TrendChart } from "./charts";
+import { bind, combinedLabel, VariableField, type TabProps } from "./shared";
 
 const KINDS: { group: VariableInfo["group"]; note: string }[] = [
   { group: "Measured", note: "As reported to CAMPD." },
@@ -23,13 +24,17 @@ const KINDS: { group: VariableInfo["group"]; note: string }[] = [
   },
 ];
 
-/** §4.1: the size of the selection, its missing values, and the variables available. */
-export function DatasetTab({ catalog, summary }: TabProps) {
+/**
+ * §4.1 + §4.4: what the selection holds and how it changed. Size first, then one variable over
+ * time, by state, and by its largest emitters; the missing-value summary and variable
+ * definitions are one click away.
+ */
+export function OverviewTab(props: TabProps) {
+  const { summary } = props;
   if (!summary) return null;
   const { records, years } = summary;
-  const missing = new Map(summary.missing.map((m) => [m.key, m.missing]));
   return (
-    <div className="space-y-10">
+    <div className="space-y-6">
       <KpiStrip className="lg:grid-cols-4">
         <StatTile
           variant="card"
@@ -54,9 +59,36 @@ export function DatasetTab({ catalog, summary }: TabProps) {
         />
       </KpiStrip>
 
+      <VariableField {...bind(props, "variable")} label="Show" />
+      <TrendChart {...props} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <MapChart {...props} />
+        <RankingChart {...props} />
+      </div>
+
+      <DataQuality {...props} />
+    </div>
+  );
+}
+
+/** §4.1 missing-value summary and the variables available, collapsed under one heading. */
+function DataQuality({ catalog, summary }: TabProps) {
+  if (!summary) return null;
+  const { records } = summary;
+  const missing = new Map(summary.missing.map((m) => [m.key, m.missing]));
+  const worst = [...summary.missing].sort((a, b) => b.missing - a.missing)[0];
+  return (
+    <Disclosure
+      title="Data quality and variables"
+      hint={`${catalog.variables.length} variables, missing values per variable, grouping fields${
+        worst && records
+          ? `; most missing: ${catalog.variables.find((v) => v.key === worst.key)?.label} (${((worst.missing / records) * 100).toFixed(0)} %)`
+          : ""
+      }`}
+    >
       <Section
         title="Grouping fields"
-        note="Every analysis can be grouped and compared by these fields; the number is how many distinct values the selection has. Fuel class and the control classes simplify the reported values."
+        note="Every analysis can be grouped and compared by these fields; the number is how many distinct values the selection has."
       >
         <KpiStrip className="lg:grid-cols-9">
           {summary.distinct.map((d) => (
@@ -70,26 +102,25 @@ export function DatasetTab({ catalog, summary }: TabProps) {
           ))}
         </KpiStrip>
       </Section>
-
-      {KINDS.map(({ group, note }) => {
-        const variables = catalog.variables.filter((v) => v.group === group);
-        return (
-          <Section
-            key={group}
-            title={`${group} variables`}
-            note={`${note} Missing values are left out of every statistic, never counted as 0.`}
-          >
-            <ReportTable
-              head={[
-                "Variable",
-                "Unit",
-                "Groups combine as",
-                "Missing",
-                "",
-                "Definition",
-              ]}
-              wrap={[5]}
-              rows={variables.map((v) => {
+      {KINDS.map(({ group, note }) => (
+        <Section
+          key={group}
+          title={`${group} variables`}
+          note={`${note} Missing values are left out of every statistic, never counted as 0.`}
+        >
+          <ReportTable
+            head={[
+              "Variable",
+              "Unit",
+              "Groups combine as",
+              "Missing",
+              "",
+              "Definition",
+            ]}
+            wrap={[5]}
+            rows={catalog.variables
+              .filter((v) => v.group === group)
+              .map((v) => {
                 const n = missing.get(v.key) ?? 0;
                 const share = records ? (n / records) * 100 : 0;
                 return [
@@ -108,10 +139,9 @@ export function DatasetTab({ catalog, summary }: TabProps) {
                   </span>,
                 ];
               })}
-            />
-          </Section>
-        );
-      })}
-    </div>
+          />
+        </Section>
+      ))}
+    </Disclosure>
   );
 }
