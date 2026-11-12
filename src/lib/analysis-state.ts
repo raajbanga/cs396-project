@@ -120,6 +120,12 @@ export function parseAnalysisParams(params: Params) {
     if (!(optional && value === "") && !DIMENSION_KEYS.includes(value as never))
       view[key] = DEFAULT_VIEW[key];
   }
+  // The default groups (SCR|None) are NOₓ-control values; they mean nothing for another field.
+  if (
+    view.compareBy !== DEFAULT_VIEW.compareBy &&
+    first(params, "groups") === undefined
+  )
+    view.groups = "";
   return { filters, view };
 }
 
