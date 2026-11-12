@@ -9,7 +9,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` dropped (say why)
 machine. Put initials after a task when you pick it up (`— RB` / `— AB`). **P1** costs real points
 if not fixed · **P2** should fix · **P3** polish. Finished items move to **Done** as one line.
 
-Workflow: commit straight to `dev` (short subject, bullet body, `Co-authored-by` trailer); merge
+Workflow: commit straight to `dev` under your own git identity (short subject, bullet body, `Co-authored-by` trailer); merge
 `dev` into `master` by PR with a merge commit (not squash) when it should go live. `master` and
 `dev` are in sync as of 11/11 (#5), and production deploys again.
 
@@ -23,31 +23,30 @@ search, filters, layout, exports, colors, loading/error states, and Phase 1 ↔ 
 shared site-wide (details under Done). Format, lint, typecheck, `npm test` (63 pass), and
 `npm run build` pass; production deploy succeeds.
 
-Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20, GitHub
-record ≈ 4.25/8; not re-graded since):
+Rubric 1.2 (GitHub record) cleanup is done (11/11): no commit is authored by Claude (the 9
+Phase 2 commits of 10/30 were re-authored as Raaj, keeping their AI co-author trailers; trees
+unchanged), `master` and `dev` share history, stale branches are gone, README and docs use the
+current tab names, and open work is in issues #6–#15 split by area. What 1.2 still needs is
+Arnav's own commits (below).
 
-- **1.2 GitHub record (8 pts), the weakest area:** participation and issues (P1 below).
-- **2 Presentation (6 pts):** not started (Final section).
-- **2 Prediction (9) / report Evaluation (4):** only a weak median baseline (P2 persistence
-  baseline); no uncertainty on model metrics.
-- **3 Results (5):** the report's charts figure covers 3 of 7 chart types, and its screenshots and
-  tab names predate the 11/11 restructure (P1).
+Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20; not
+re-graded since):
+
+- **2 Presentation (6 pts):** not started (#15, Final section).
+- **2 Prediction (9) / report Evaluation (4):** only a weak median baseline (#6); no uncertainty
+  on model metrics.
+- **3 Results (5):** the report's charts figure covers 3 of 7 chart types (#12); the PDF needs a
+  rebuild after the 11/11 figure update (#13).
 
 ---
 
 ## P1 — fix before submission
 
-- [~] **Report after the 11/11 restructure.** Done: 10 figures re-taken (2×, light theme;
-  `p2-dataset`/`p2-statistics` → `p2-overview`/`p2-distribution`), tab names and §4 text
-  updated, a paragraph on the redesign added, sensitivity text now covers the tree's flat
-  curve. Left: rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
-  11/11 and there is no local cache) and check the figure placement. Demo script tab names
-  are in the Final section.
-- [~] **Commit history and participation (rubric 1.2, 5 pts).** (11/11: issues #6–#15 opened, labeled P2, unassigned; split them and close them from commits.) Don't rewrite history again. Both
-  members commit weekly under their own git identity (credit AI with a `Co-Authored-By`
-  trailer, not as author), and Arnav owns a visible share of the remaining work (e.g. the P2
-  code items, slides). Open GitHub issues for the open items below and close them from
-  commits (`Fixes #n`).
+- [ ] **Arnav: reset your clone, then commit your issues under your own git identity.** History
+      was rewritten on 11/11 (hashes from 10/30 on changed; files did not). Run
+      `git fetch origin && git checkout dev && git reset --hard origin/dev` (after saving any
+      local work), and the same for `master`. Then #8, #9, #10, and #15 are yours; close each
+      from a commit (`Fixes #n`). Don't rewrite history again.
 
 ## P2 — should fix
 
@@ -79,7 +78,8 @@ record ≈ 4.25/8; not re-graded since):
 - [ ] Proofread on paper; both confirm the contributions section. 🧪
 - [ ] (#14) Update `pipeline_version` `5d5e7d0` → a current commit in `ml/models/metrics.json` and the
       `models` table (the next `ml:train` writes a new one).
-- [ ] (#13) Commit the final `report/phase2/phase2-report.pdf`.
+- [ ] (#13) Rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
+      11/11), check figure placement, and commit the final `report/phase2/phase2-report.pdf`.
 
 ### Local checks 🧪
 
@@ -144,6 +144,9 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
   "Download" labels; fuel and model colors kept apart; one loading/error pattern plus
   `app/error.tsx`; "Analyze these", "Analyze", and "Predict" links from Explore's dialogs.
 - **Deploy:** `master` back to zod 3 via `git merge -s ours`; production deploys (11/11, #5).
+- **Report, 11/11:** all 10 figures re-taken from the new tabs; §4, traceability, tests, and
+  contributions use the new tab names; a paragraph on the redesign.
+- **GitHub record, 11/11:** Claude-authored commits re-authored; issues #6–#15 assigned.
 - **Report:** 32 pages in the Phase 1 structure; numbers re-checked 10/31 and spot-checked 11/02.
 
 ---
