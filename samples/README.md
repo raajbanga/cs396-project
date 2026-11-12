@@ -26,7 +26,7 @@ spreadsheet, add 1.
 
 |   Row | Facility (ID) · unit · year         | Expected result   | Why                                                                       |
 | ----: | :---------------------------------- | :---------------- | :------------------------------------------------------------------------ |
-|   1–3 | E W Brown (1355) · 1, 2, 3 · 2014   | New               | 2014 is not in the database (it covers 2015–2026)                         |
+|   1–3 | E W Brown (1355) · 1, 2, 3 · 2014   | New               | 2014 is not in the database (it has 1996–98, 2006–08, 2015–2026)          |
 |   4–7 | Ghent (1356) · 1–4 · 2014           | New               |                                                                           |
 |  8–11 | Mill Creek (1364) · 1–4 · 2014      | New               |                                                                           |
 |    12 | Elmer Smith (1374) · _blank_ · 2014 | **Rejected**      | `Unit ID: Missing required value`                                         |
@@ -52,9 +52,9 @@ Uploading either file into the committed `db.sqlite` should show:
 Five columns are reported as unmapped (`Associated Stacks`, `Operating Time Count`, and the
 three emission rates); epaData recomputes rates from the stored masses.
 
-After **Approve & Import**:
+After **Approve and import**:
 
-- The **Units** tab with **More filters → Origin: File upload** lists 21 unit-years.
+- The **Unit-years** tab with **Advanced → Origin: File upload** lists 21 unit-years.
 - **Download → Invalid records** for the upload dataset holds the 3 rejected rows, the
   duplicate, and the flagged row, each with its original columns.
 - Uploading the other file (CSV after Excel, or the reverse) shows 21 Unchanged and no New.
