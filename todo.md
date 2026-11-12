@@ -214,7 +214,7 @@ it bears on Interactive visualization (10), Integration and usability (5), and P
       from those. Checked: acidification per MWh by facility shows only 5 of the true top 15. The
       subtitle "the 15 largest of 1,590 groups" is then wrong. Fix: rank each category on the
       server (one `aggregate` call per category, `limit: 15`), keep the table call separate.
-- [ ] **Model metadata gives the wrong training years.** The registered models are refit on
+- [x] **Model metadata gives the wrong training years.** (11/11: no retrain needed; exports and the model record now give `fitYears` 2016–2023 and label 2016–2021 / 2022–2023 as the tuning split. The report already said "refit on 2016–2023".) The registered models are refit on
       2016–2023, but `models.train_years` (and so every Predict export's `trainYears`) says
       2016–2021. Training ranges for the warnings also come from 2016–2023. Fix in
       `ml/train.py`: store `fit_years` 2016–2023 and keep the tuning split separately, then

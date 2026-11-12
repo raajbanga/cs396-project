@@ -15,6 +15,7 @@ import {
 } from "~/lib/analysis-state";
 import {
   featureLabel,
+  fitYears,
   MODEL_COLORS,
   predict,
   type ModelInputs,
@@ -74,8 +75,9 @@ export function PredictView({ initial }: { initial: View }) {
           target: m.target,
           features: m.features,
           settings: m.params,
-          trainYears: m.trainYears,
-          validationYears: m.validationYears,
+          fitYears: fitYears(m),
+          tuningTrainYears: m.trainYears,
+          tuningValidationYears: m.validationYears,
           testYears: m.testYears,
           metrics: m.metrics,
           savedModel: m.artifactPath,

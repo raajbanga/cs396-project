@@ -12,7 +12,7 @@ import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
-import { featureLabel, MODEL_COLORS } from "~/lib/model";
+import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
@@ -350,9 +350,10 @@ export function ModelsTab({
           rows={[
             ["Model ID", chosen.id],
             ["Inputs", chosen.features.map(featureLabel).join(", ")],
+            ["Fit on / tested on", `${fitYears(chosen)} / ${chosen.testYears}`],
             [
-              "Training / validation / test years",
-              `${chosen.trainYears} / ${chosen.validationYears} / ${chosen.testYears}`,
+              "Tuning: trained / validated on",
+              `${chosen.trainYears} / ${chosen.validationYears}`,
             ],
             ["Saved model", chosen.artifactPath],
             ["Pipeline", chosen.pipelineVersion],
