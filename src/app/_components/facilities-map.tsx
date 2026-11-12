@@ -2,27 +2,27 @@
 
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { X } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { SourceBadge } from "~/components/ui/badge";
 import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
   DEFAULT_FILTERS,
   filterSearchParams,
-  isFilterActive,
-  isStrictKey,
   type ExplorerState,
-  type FacilityFilters,
   type FilterChangeHandler,
 } from "~/lib/facility-filters";
 import {
   FUEL_CATEGORIES,
   getFuelTheme,
   MAP_FRAME,
+  type MapFocus,
   type MetricMode,
 } from "~/lib/map-utils";
 import { cn, formatQuantity, plural, replaceUrlQuery } from "~/lib/utils";
+import { FacilityFilterBar, useDescribeSearch } from "./facility-filters";
+import type { FacilitySuggestion } from "./facility-search";
 import { api } from "~/trpc/react";
 import { D3Globe, MapSpinner } from "./d3-globe";
 import { DetailLink } from "./detail-link";
@@ -56,6 +56,19 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
   const [viewMode, setViewMode] = useState<"globe" | "leaflet">("globe");
   const [metricMode, setMetricMode] = useState<MetricMode>("capacity");
   const [fuelClass, setFuelClass] = useState<string | null>(null);
+  const [focused, setFocused] = useState<FacilitySuggestion | null>(null);
+  const focus = useMemo<MapFocus | null>(
+    () =>
+      focused?.latitude != null && focused.longitude != null
+        ? {
+            id: focused.id,
+            latitude: focused.latitude,
+            longitude: focused.longitude,
+          }
+        : null,
+    [focused],
+  );
+  const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
   const query = filterSearchParams(filters).toString();
   useEffect(() => replaceUrlQuery(query), [query]);
 
@@ -78,16 +91,15 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
   const unlocated = mapQuery.data?.unlocated ?? [];
   const setFilter: FilterChangeHandler = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value }));
+  const { describe, reset: resetDescribe } = useDescribeSearch({
+    initialText: initialState.filters.search,
+    onNameSearch: (text) => setFilter("search", text),
+    onApply: (r) => setFilters(r.filters),
+  });
   const onInspectFacility = useCallback(
     (id: number) => inspect({ kind: "facility", id }),
     [inspect],
   );
-  // Filters the map has no control for, carried over from Explore.
-  const otherFilters = (
-    Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
-  ).filter(
-    (k) => k !== "stateCode" && !isStrictKey(k) && isFilterActive(filters, k),
-  ).length;
 
   const fuelCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -104,29 +116,26 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
 
   return (
     <div className="space-y-5">
-      <PageTitle
-        lead={
-          <>
-            Every facility with coordinates, colored by primary fuel and sized
-            by capacity or CO₂. Hover a dot for a summary; click it for details.
-            {otherFilters > 0 && (
-              <>
-                {" "}
-                Also filtered by {plural(otherFilters, "setting")} from{" "}
-                <Link
-                  href={`/explore?${query}`}
-                  className="text-primary hover:underline"
-                >
-                  Explore
-                </Link>
-                .
-              </>
-            )}
-          </>
-        }
-      >
+      <PageTitle lead="Every facility with coordinates, colored by primary fuel and sized by capacity or CO₂. Search to fly to a facility; hover a dot for a summary, click it for details.">
         Map
       </PageTitle>
+
+      <FacilityFilterBar
+        filters={filters}
+        onFilterChange={setFilter}
+        onResetFilters={() => {
+          setFilters(DEFAULT_FILTERS);
+          resetDescribe();
+          setFocused(null);
+        }}
+        filterOptions={filterOptions}
+        describe={describe}
+        onPickFacility={setFocused}
+        itemLabel="facilities"
+        totalMatching={allFacilities.length}
+        isLoading={mapQuery.isLoading}
+        actions={<SourceBadge kind="db" className="hidden md:inline-flex" />}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -151,7 +160,6 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
             />
           </div>
         </div>
-        <SourceBadge kind="db" />
       </div>
 
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -188,29 +196,44 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
               />
               {cat.name}
               <span className="text-fg-muted tabular-nums">
-                {fuelCounts[cat.name] ?? 0}
+                {(fuelCounts[cat.name] ?? 0).toLocaleString()}
               </span>
             </button>
           );
         })}
-        {filters.stateCode !== "ALL" && (
-          <button
-            type="button"
-            onClick={() => setFilter("stateCode", "ALL")}
-            className={cn(CHIP, "border-edge bg-surface text-fg")}
-            aria-label={`Remove state filter ${filters.stateCode}`}
-          >
-            State {filters.stateCode}
-            <X className="text-fg-muted h-3 w-3" />
-          </button>
-        )}
       </div>
 
       <MapView
         facilities={facilities}
         onInspectFacility={onInspectFacility}
         metricMode={metricMode}
+        focus={focus}
       />
+      {focused && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-fg-muted">
+            {focus ? "Centered on" : "No coordinates for"}
+          </span>
+          <span className="text-fg font-medium">
+            {focused.name} ({focused.id}), {focused.stateCode}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => inspect({ kind: "facility", id: focused.id })}
+          >
+            Details
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFocused(null)}
+            aria-label="Clear the centered facility"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
 
       <p className="text-fg-2 text-sm">
         <strong className="text-fg font-medium tabular-nums">
