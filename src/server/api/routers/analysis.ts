@@ -1,6 +1,11 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { DIMENSION_KEYS } from "~/lib/analysis";
+import {
+  DIMENSION_KEYS,
+  findVariable,
+  UnknownVariableError,
+} from "~/lib/analysis";
 import { facilityFilterSchema } from "~/lib/facility-filters";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
@@ -12,7 +17,6 @@ import {
   datasetSummary,
   describeVariable,
   distribution,
-  findVariable,
   loadVariables,
   provenance,
   scatterPoints,
@@ -28,11 +32,18 @@ async function load(input: z.infer<typeof filters>, keys: string[]) {
     analysisRows(input),
     loadVariables(),
   ]);
-  return {
-    rows,
-    variables,
-    picked: keys.map((k) => findVariable(variables, k)),
-  };
+  try {
+    return {
+      rows,
+      variables,
+      picked: keys.map((k) => findVariable(variables, k)),
+    };
+  } catch (e) {
+    // A bad key is the caller's mistake (400), not a server failure (500).
+    if (e instanceof UnknownVariableError)
+      throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
+    throw e;
+  }
 }
 
 export const analysisRouter = createTRPCRouter({

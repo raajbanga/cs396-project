@@ -397,6 +397,21 @@ export const buildVariables = (factors: readonly TraciFactor[]) => [
   ...impactVariables(factors),
 ];
 
+/** A request named a variable the catalogue does not have (a hand-edited link, an old TRACI key). */
+export class UnknownVariableError extends Error {
+  constructor(readonly key: string) {
+    super(`Unknown variable: ${key}`);
+    this.name = "UnknownVariableError";
+  }
+}
+
+/** The variable with this key; an unknown key throws instead of analysing nothing. */
+export function findVariable(variables: readonly Variable[], key: string) {
+  const v = variables.find((x) => x.key === key);
+  if (!v) throw new UnknownVariableError(key);
+  return v;
+}
+
 export const variableInfo = ({
   value: _v,
   ratio: _r,

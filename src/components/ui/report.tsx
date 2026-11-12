@@ -72,13 +72,18 @@ export function Section({
   );
 }
 
-/** A cell's text: a string or number, or the text of an element wrapping one (a bold value). */
+/**
+ * A cell's text: a string or number, or the text of an element wrapping one (a bold value). With
+ * several children (a value over a smaller note), the first one's.
+ */
 const cellText = (c: ReactNode): string | null =>
   typeof c === "string" || typeof c === "number"
     ? String(c)
-    : isValidElement<{ children?: ReactNode }>(c)
-      ? cellText(c.props.children)
-      : null;
+    : Array.isArray(c)
+      ? cellText(c[0] as ReactNode)
+      : isValidElement<{ children?: ReactNode }>(c)
+        ? cellText(c.props.children)
+        : null;
 
 /** Formatted numbers as tables show them: "1,234", "-0.5", "+12.3 %", "3.1 – 4.2", "< 0.001". */
 const NUMERIC_TEXT =

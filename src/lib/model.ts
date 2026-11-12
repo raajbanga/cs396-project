@@ -205,3 +205,140 @@ export function featureLabel(name: string) {
         : (CATEGORY_LABELS[field] ?? field);
   return category ? `${label}: ${category}` : label;
 }
+
+/** Percentage change from `base`; null when the base is 0, where it is undefined. */
+export const percentChange = (value: number, base: number) =>
+  base ? (value / base - 1) * 100 : null;
+
+/** The most points a sensitivity curve draws. */
+export const MAX_SENSITIVITY_POINTS = 401;
+
+/**
+ * §6.2: the input values of a sensitivity curve, from `from` to `to` in steps of `step`, as values
+ * in the input's own unit or (`asValues` false) as percentages of the baseline value `value0`.
+ * The baseline itself is always included. A reversed range is read low to high and a negative or
+ * zero step as its size (or 1); `capped` says the grid stopped at the point limit.
+ */
+export function sensitivityGrid(
+  value0: number,
+  from: number,
+  to: number,
+  step: number,
+  asValues: boolean,
+  maxPoints = MAX_SENSITIVITY_POINTS,
+) {
+  const size = Math.abs(step) || 1;
+  const toValue = (x: number) => (asValues ? x : value0 * (1 + x / 100));
+  const grid = [value0];
+  for (
+    let x = Math.min(from, to);
+    x <= Math.max(from, to) + size * 1e-9 && grid.length < maxPoints;
+    x += size
+  ) {
+    grid.push(toValue(x));
+  }
+  return {
+    values: [...new Set(grid)].sort((a, b) => a - b),
+    capped: grid.length >= maxPoints,
+  };
+}
+
+/**
+ * §6.2: one model's prediction at each value of one input, every other input held at the
+ * baseline, with the input's change from `value0` (its baseline value, or the training median
+ * standing in for a missing one), the prediction's absolute and percentage change, and whether
+ * the value is outside the training data.
+ */
+export function sensitivityCurve(
+  model: ModelArtifact,
+  base: ModelInputs,
+  input: NumericInput,
+  values: readonly number[],
+  value0: number,
+) {
+  const pred0 = predict(model, base);
+  return {
+    pred0,
+    points: values.map((value) => {
+      const inputs = { ...base, [input]: value };
+      const prediction = predict(model, inputs);
+      return {
+        value,
+        change: percentChange(value, value0),
+        prediction,
+        diff: prediction - pred0,
+        diffPct: percentChange(prediction, pred0),
+        outside: outOfRange(model, inputs).includes(input),
+      };
+    }),
+  };
+}
+
+const scaleBy = (v: number | null, pct: number) =>
+  v === null ? null : v * (1 + pct / 100);
+
+/** §6.3: the named scenarios, built from the baseline inputs and the chosen percentages. */
+export function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
+  const gas = /gas/i.test(base.primary_fuel);
+  const fuel = gas ? "Coal" : "Pipeline Natural Gas";
+  const scr = base.scr ? 0 : 1;
+  const signed = (p: number) => `${p > 0 ? "+" : ""}${p} %`;
+  return [
+    { name: "Baseline", change: "As reported", inputs: base },
+    {
+      name: `Gross load ${signed(loadPct)}`,
+      change: `Gross load × ${1 + loadPct / 100}`,
+      inputs: {
+        ...base,
+        gross_load_mwh: scaleBy(base.gross_load_mwh, loadPct),
+      },
+    },
+    {
+      name: `Heat input ${signed(heatPct)}`,
+      change: `Heat input × ${1 + heatPct / 100}`,
+      inputs: {
+        ...base,
+        heat_input_mmbtu: scaleBy(base.heat_input_mmbtu, heatPct),
+      },
+    },
+    {
+      name: scr ? "Add SCR" : "Remove SCR",
+      change: `Selective catalytic reduction ${scr ? "installed" : "removed"}`,
+      inputs: { ...base, scr },
+    },
+    {
+      name: `Fuel: ${fuel}`,
+      change: `Primary fuel changed from ${base.primary_fuel}`,
+      inputs: { ...base, primary_fuel: fuel },
+    },
+    {
+      name: "High efficiency",
+      change: `Heat input × ${1 + heatPct / 100} with the same gross load, plus SCR`,
+      inputs: {
+        ...base,
+        heat_input_mmbtu: scaleBy(base.heat_input_mmbtu, heatPct),
+        scr: 1,
+      },
+    },
+  ];
+}
+export type Scenario = ReturnType<typeof scenarios>[number];
+
+/** §6.3–§6.4: one model's prediction per scenario, its change from the baseline, and range warnings. */
+export function scenarioResults(
+  model: ModelArtifact,
+  base: ModelInputs,
+  list: readonly Scenario[],
+) {
+  const pred0 = predict(model, base);
+  return list.map((scenario) => {
+    const prediction = predict(model, scenario.inputs);
+    return {
+      scenario,
+      prediction,
+      diff: prediction - pred0,
+      diffPct: percentChange(prediction, pred0),
+      warnings: outOfRange(model, scenario.inputs),
+    };
+  });
+}

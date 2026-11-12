@@ -10,6 +10,7 @@ import {
 } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
+import { modelMetadata } from "~/lib/export-bundle";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
 import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
@@ -23,12 +24,26 @@ const KIND_ORDER = ["baseline", "ridge", "tree"];
 const metric = (m: Model, split: string, key: string) =>
   m.metrics[split]?.[key] ?? null;
 
+/** The bootstrap 95 % interval of a test metric, as [low, high], or null for older models. */
+const interval = (m: Model, key: string) => {
+  const lo = metric(m, "test_ci_low", key);
+  const hi = metric(m, "test_ci_high", key);
+  return lo === null || hi === null ? null : ([lo, hi] as const);
+};
+const formatInterval = (ci: readonly [number, number] | null) =>
+  ci ? `${formatStat(ci[0])}–${formatStat(ci[1])}` : "—";
+
+/** Test metrics exported with their intervals (the table shows them under the value). */
+const CI_METRICS = ["mae", "rmse", "r2"] as const;
+
 /** The comparison table's columns: which split and metric, and which direction is better. */
 const METRICS: {
   key: string;
   label: string;
   get: (m: Model) => number | null;
   lowerIsBetter?: boolean;
+  /** A test metric with a bootstrap interval, drawn under its value. */
+  ci?: (typeof CI_METRICS)[number];
   format: (v: number | null) => string;
 }[] = [
   {
@@ -46,6 +61,7 @@ const METRICS: {
   },
   {
     key: "test_mae",
+    ci: "mae",
     label: "Test MAE (t)",
     get: (m) => metric(m, "test", "mae"),
     lowerIsBetter: true,
@@ -53,6 +69,7 @@ const METRICS: {
   },
   {
     key: "test_rmse",
+    ci: "rmse",
     label: "Test RMSE (t)",
     get: (m) => metric(m, "test", "rmse"),
     lowerIsBetter: true,
@@ -60,6 +77,7 @@ const METRICS: {
   },
   {
     key: "test_r2",
+    ci: "r2",
     label: "Test R²",
     get: (m) => metric(m, "test", "r2"),
     format: formatStat,
@@ -79,12 +97,12 @@ const METRICS: {
   },
 ];
 
-/** Tuned settings in words: "α = 10", "depth 16, leaves ≥ 20". */
+/** Tuned settings in words: "α = 10", "depth ≤ 20, leaves ≥ 20". */
 const settings = (m: Model) => {
-  const p = m.params as Record<string, number>;
+  const p = m.params as Record<string, number | null>;
   if (m.kind === "ridge") return `α = ${p.alpha}`;
   if (m.kind === "tree")
-    return `depth ${p.max_depth}, leaves ≥ ${p.min_samples_leaf}`;
+    return `${p.max_depth === null ? "unlimited depth" : `depth ≤ ${p.max_depth}`}, leaves ≥ ${p.min_samples_leaf}`;
   return "median of training years";
 };
 
@@ -133,8 +151,8 @@ export function ModelsTab({
     <div className="space-y-8">
       <Chart
         title={`Test error, ${chosen.testYears}: lower is better`}
-        subtitle={`Mean absolute error per unit-year; against the baseline, ${gains.join(", ")} lower.`}
-        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median for every unit-year.`}
+        subtitle={`Mean absolute error per unit-year, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
+        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median of unit-years with the same fuel and unit type. Intervals come from resampling test units (a unit's two test years together).`}
         filename="test-mae"
         height={220}
         data={[
@@ -144,11 +162,32 @@ export function ModelsTab({
             y: sorted.map((m) => m.name),
             x: sorted.map((m) => metric(m, "test", "mae")),
             marker: { color: sorted.map((m) => MODEL_COLORS[m.kind]!) },
+            // Whiskers from the point estimate to each end of the interval (none without one).
+            error_x: {
+              type: "data",
+              symmetric: false,
+              array: sorted.map((m) => {
+                const [, hi] = interval(m, "mae") ?? [];
+                const v = metric(m, "test", "mae");
+                return hi !== undefined && v !== null ? hi - v : 0;
+              }),
+              arrayminus: sorted.map((m) => {
+                const [lo] = interval(m, "mae") ?? [];
+                const v = metric(m, "test", "mae");
+                return lo !== undefined && v !== null ? v - lo : 0;
+              }),
+              color: "gray",
+              thickness: 1.5,
+              width: 6,
+            },
             text: sorted.map(
               (m) => `${formatStat(metric(m, "test", "mae"))} t`,
             ),
-            textposition: "outside",
-            hovertemplate: "%{y}: %{x:,.4~g} t<extra></extra>",
+            textposition: "inside",
+            insidetextanchor: "start",
+            customdata: sorted.map((m) => formatInterval(interval(m, "mae"))),
+            hovertemplate:
+              "%{y}: %{x:,.4~g} t<br>95 % interval %{customdata} t<extra></extra>",
           },
         ]}
         layout={{
@@ -157,27 +196,45 @@ export function ModelsTab({
           margin: { l: 16, r: 48, t: 8, b: 48 },
         }}
         table={{
-          head: ["model", "test_mae_tons"],
-          rows: sorted.map((m) => [m.id, metric(m, "test", "mae")]),
+          head: [
+            "model",
+            "test_mae_tons",
+            "test_mae_ci_low",
+            "test_mae_ci_high",
+          ],
+          rows: sorted.map((m) => [
+            m.id,
+            metric(m, "test", "mae"),
+            ...(interval(m, "mae") ?? [null, null]),
+          ]),
         }}
       />
 
       <Section
         title="All metrics"
-        note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the last column refits without same-year heat input, load, and hours."
+        note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the ablation column refits without same-year heat input, load, and hours; small print under a test value is its 95 % bootstrap interval over test units."
         actions={
           <ExportButton
             name="model-comparison"
             title="NOₓ model comparison"
             table={{
-              head: ["model", "settings", ...METRICS.map((m) => m.key)],
+              head: [
+                "model",
+                "settings",
+                ...METRICS.map((m) => m.key),
+                ...CI_METRICS.flatMap((k) => [
+                  `test_${k}_ci_low`,
+                  `test_${k}_ci_high`,
+                ]),
+              ],
               rows: sorted.map((m) => [
                 m.id,
                 settings(m),
                 ...METRICS.map((c) => c.get(m)),
+                ...CI_METRICS.flatMap((k) => interval(m, k) ?? [null, null]),
               ]),
             }}
-            meta={{ models: sorted.map(({ artifact: _a, ...m }) => m) }}
+            meta={{ models: sorted.map(modelMetadata) }}
           />
         }
       >
@@ -194,13 +251,22 @@ export function ModelsTab({
               const best = c.lowerIsBetter
                 ? Math.min(...values)
                 : Math.max(...values);
-              const text = c.format(v);
-              return v === best && values.length > 1 ? (
-                <span key={c.key} className="text-fg font-semibold">
+              const text =
+                v === best && values.length > 1 ? (
+                  <span className="text-fg font-semibold">{c.format(v)}</span>
+                ) : (
+                  c.format(v)
+                );
+              const ci = c.ci && interval(m, c.ci);
+              return ci ? (
+                <span key={c.key} title="95 % bootstrap interval">
                   {text}
+                  <span className="text-fg-muted block text-xs">
+                    {formatInterval(ci)}
+                  </span>
                 </span>
               ) : (
-                text
+                <span key={c.key}>{text}</span>
               );
             }),
           ])}

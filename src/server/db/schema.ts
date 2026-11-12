@@ -285,8 +285,8 @@ export const traciFactors = sqliteTable(
 );
 
 /**
- * Models: prediction models trained offline by ml/train.py (Phase 2 §5) and registered by
- * `npm run ml:register`. `artifact` holds everything the app needs to predict without Python.
+ * Models: prediction models trained offline and registered by ml/train.py (`npm run ml:train`,
+ * Phase 2 §5). `artifact` holds everything the app needs to predict without Python.
  */
 export const models = sqliteTable("models", {
   id: text("id").primaryKey(), // e.g. "nox-ridge"

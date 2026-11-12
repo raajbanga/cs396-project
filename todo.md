@@ -9,82 +9,60 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` dropped (say why)
 machine. Put initials after a task when you pick it up (`— RB` / `— AB`). **P1** costs real points
 if not fixed · **P2** should fix · **P3** polish. Finished items move to **Done** as one line.
 
-Workflow: commit straight to `dev` under your own git identity (short subject, bullet body, `Co-authored-by` trailer); merge
-`dev` into `master` by PR with a merge commit (not squash) when it should go live. `master` and
-`dev` are in sync as of 11/11 (#5), and production deploys again.
+Workflow: commit straight to `dev` under your own git identity (short subject, bullet body,
+`Co-authored-by` trailer); merge `dev` into `master` by PR with a merge commit (not squash) when it
+should go live. #16 was squash-merged; `dev` merged `master` back on 11/12, so they share history
+again. `dev` is ahead of `master` by the 11/12 prediction and report work.
 
 ---
 
-## Status (11/11)
+## Status (11/12)
 
 The professor's critique (Analyze and Predict heavy, a sub-page data dump, a different site) is
 addressed: Analyze has 5 question tabs on one tab level, Predict has Models and What-if, and
 search, filters, layout, exports, colors, loading/error states, and Phase 1 ↔ Phase 2 links are
-shared site-wide (details under Done). Format, lint, typecheck, `npm test` (63 pass), and
-`npm run build` pass; production deploy succeeds.
+shared site-wide (details under Done). `npm run validate` passes on 11/12 (81 tests: 80 pass, 1
+skipped; 10 pytest); production deploy succeeded on 11/11.
 
 Rubric 1.2 (GitHub record) cleanup is done (11/11): no commit is authored by Claude (the 9
 Phase 2 commits of 10/30 were re-authored as Raaj, keeping their AI co-author trailers; trees
 unchanged), `master` and `dev` share history, stale branches are gone, README and docs use the
 current tab names, and open work is in issues #6–#15 split by area. What 1.2 still needs is
-Arnav's own commits (below).
+Arnav's own commits (#8, #9, #10, #15).
 
 Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20; not
 re-graded since):
 
 - **1 Presentation (6 pts):** not started (#15, Final section).
-- **2 Prediction (9) / report Evaluation (4):** only a weak median baseline (#6); no uncertainty
-  on model metrics.
-- **3 Results (5):** the report's charts figure covers 3 of 7 chart types (#12); the PDF needs a
-  rebuild after the 11/11 figure update (#13).
+- **2 Prediction (9) / report Evaluation (4):** addressed 11/12 — test metrics have 95 %
+  intervals, and a persistence reference (last year's rate × heat input) is reported. It beats
+  both models (18.5 t vs tree 26.3 t); Q4 says so and why. Rehearse the answer for the demo.
 
 ---
-
-## P1 — fix before submission
-
-- [ ] **Arnav: reset your clone, then commit your issues under your own git identity.** History
-      was rewritten on 11/11 (hashes from 10/30 on changed; files did not). Run
-      `git fetch origin && git checkout dev && git reset --hard origin/dev` (after saving any
-      local work), and the same for `master`. Then #8, #9, #10, and #15 are yours; close each
-      from a commit (`Fixes #n`). Don't rewrite history again.
 
 ## P2 — should fix
 
 ### Code
 
-- [ ] (#6) Add a persistence baseline (last year's NOₓ, or prior-year rate × this year's heat input)
-      next to the median baseline. The median baseline is easy to beat, and graders will ask how
-      much the models add over "same as last year". Report the result honestly in Q4.
-- [ ] (#7) Tree tuning picked depth 16, the top of the grid. Extend the grid (20, 24, unlimited) and
-      say so in the report.
 - [ ] (#8) Sensitivity: show an inline message for min > max or a zero step instead of silently
-      fixing them. (The 401-point cap now warns.)
+      fixing them. (The 401-point cap now warns.) The grid now lives in `sensitivityGrid`
+      (`src/lib/model.ts`, tested), which still normalizes the inputs; add the message in
+      `sensitivity.tsx` and extend the tests.
 - [ ] (#9) Spearman heat map takes 1.8 s (measured 11/02). Rank each column once when it has no
       missing values; update the report's Performance table and Known issues.
 - [ ] (#10) `downloadBundle` revokes the object URL right after `a.click()`, which can cancel downloads
       in Safari. Revoke in a `setTimeout`.
-- [ ] (#11) Tests: export metadata has every §7 field; OVAT and % change logic moved from the What-if
-      components into `src/lib/model.ts` and unit-tested; `findVariable` rejects unknown keys.
+- [ ] Merge `dev` into `master` by PR (merge commit) once the 11/12 work is reviewed; the
+      `Fixes #6/#7/#11–#14` trailers close those issues then.
 
 ### Report and docs
 
-- [ ] Re-verify every "passes / green" claim (§Testing: `npm run validate`).
-- [ ] (#12) Fix drifts: row cache is 5 minutes in code, "60 seconds" in the report (pick one); parity
-      fixture is 124 KB, not 100 KB.
-- [ ] (#12) Charts coverage: add one composite figure (histogram, scatter, ranking, state map) so all of
-      §4.4 is visible.
-- [ ] (#13) Integration: one sentence and one slide on why Next.js instead of Flask (the rubric says
-      "existing Flask application"; the spec allows React).
-- [ ] Proofread on paper; both confirm the contributions section. 🧪
-- [ ] (#14) Update `pipeline_version` `5d5e7d0` → a current commit in `ml/models/metrics.json` and the
-      `models` table (the next `ml:train` writes a new one).
-- [ ] (#13) Rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
-      11/11), check figure placement, and commit the final `report/phase2/phase2-report.pdf`.
+- [ ] Proofread on paper (34 pages since 11/12); both confirm the contributions section. 🧪
+- [ ] (#15) The Flask slide from #13 belongs in the slides: the report's Architecture paragraph
+      has the argument (extending Phase 1 vs re-implementing it; spec allows React).
 
 ### Local checks 🧪
 
-- [ ] Python 3.9 venv (README's documented minimum): `pip install -r requirements.txt`, then
-      `npm run test:py`. If it passes, say so in the README and report §4.2.
 - [ ] Hosted build: charts render, ZIP downloads work, Upload refuses writes.
 - [ ] ZIP downloads in Safari and Chrome (PNG, CSV, `metadata.json`); every tab in dark mode.
 - [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`). If lint
@@ -111,7 +89,7 @@ plan. Both members attend and speak.
 | 1    | Analytical data layer             | Overview tab, derived indicators, TRACI import (done)   |
 | 2    | Descriptive and TRACI analysis    | Distribution, Compare groups, TRACI impacts (done)      |
 | 3    | Interactive visualization         | The 11/11 restructure; shared search; Phase 1 ↔ 2 links |
-| 4    | Prediction models                 | Models tab; persistence baseline                        |
+| 4    | Prediction models                 | Models tab with intervals; persistence beats the models |
 | 5    | Sensitivity and scenario analysis | What-if (Ridge vs tree on SCR); report figures re-taken |
 | 6    | Integration, testing, final       | Slides, rehearsed demo, final report PDF                |
 
@@ -148,6 +126,20 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
   contributions use the new tab names; a paragraph on the redesign.
 - **GitHub record, 11/11:** Claude-authored commits re-authored; issues #6–#15 assigned.
 - **Report:** 32 pages in the Phase 1 structure; numbers re-checked 10/31 and spot-checked 11/02.
+- **Prediction, 11/12 (#6, #7, #14):** persistence reference in `train.py` and `metrics.json`
+  (not served); it beats both models, and `ml/reformulations.py` shows three reformulations
+  don't close the gap. Tree grid to 20/24/unlimited (the tree stops at depth 18 by itself).
+  Cluster-bootstrap 95 % intervals on test metrics, shown on the Models tab. Retrained from
+  `567665c`, which `pipeline_version` now records.
+- **Tests, 11/12 (#11):** §7 metadata check (`missingMetadata`) with builders the pages and server
+  export share; What-if math moved to `src/lib/model.ts` and tested; `findVariable` in
+  `src/lib/analysis.ts` throws `UnknownVariableError` (still HTTP 400).
+- **Report, 11/12 (#12, #13):** Q4 rewritten (persistence, intervals, reformulations); Figure 3
+  (histogram, scatter) completes §4.4; Models figure re-taken; Flask paragraph; cache drift
+  fixed; PDF rebuilt (34 pages). `npm run report` uses the bundle URL since the relay is down.
+- **Python 3.9, 11/12:** on 3.9.25 (pandas 2.3, NumPy 2.0, scikit-learn 1.6) pytest passes and a
+  retrain in a scratch worktree reproduces every reported number (tree MAE within 0.0001 t);
+  README and report §4.2 say so.
 
 ---
 
@@ -167,6 +159,9 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
 - **Fuel and unit type are per unit, not per year** (in the report's limitations).
 - **Models disagree on SCR:** the tree barely responds; Ridge cuts Ghent 2 by ~59 %. Feature it
   (What-if, Both).
+- **Persistence beats the models:** expect "why not just use last year?" Answer: it is the better
+  forecast (Q4); the models are for responses to load, controls, and fuel, which persistence
+  cannot express, and those responses are associations, not causal effects.
 - **State map needs `cdn.plot.ly`**, and the build needs Google Fonts. Check the demo network.
 - **Rubric says "Flask":** prepare the justification before the demo.
 
@@ -183,7 +178,7 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
   - [ ] Interpret ≥ 2 visualizations: CO₂ trend by fuel on Overview (crossings 2023/2025);
         NOₓ-rate box plot by fuel on Distribution; backup: Pearson vs Spearman on Relationships.
   - [ ] TRACI impacts for Ghent 2024 (matches the worked example).
-  - [ ] Models vs baseline (Models tab).
+  - [ ] Models vs baseline (Models tab), the intervals, and the persistence result.
   - [ ] What-if for Ghent unit 2 with Both: sensitivity curve + scenarios with an out-of-range
         warning.
   - [ ] Limitations.

@@ -115,21 +115,29 @@ keep every choice in the URL, so a view can be reloaded or shared.
 | §4.4 Interactive visualization  | Plotly charts on the tab whose question they answer: trend, state map, and rankings (**Overview**); histograms and box plots (**Distribution**); scatter and correlation heat map, Pearson or Spearman (**Relationships**); bars per group (**Compare groups**). Zoom, tooltips, PNG export, and data download on every chart                                                                                                                                                                              |
 | §4.5 Comparative analysis       | **Compare groups** tab: bars for every group, then two to eight groups along any grouping field (facilities or units by search, states, fuels, with vs without SCR, 2015 vs 2024, …): pooled values, ranks, differences, 95 % CIs, Welch t, Mann–Whitney U, ANOVA, Kruskal–Wallis, and a plain-language reading                                                                                                                                                                                            |
 | §4.6 TRACI impact indicators    | **TRACI impacts** tab: global warming, acidification, particulate human health, and smog formation, each in its own unit, total or per MWh, by any grouping field; the factors and formulas are shown                                                                                                                                                                                                                                                                                                      |
-| §5 Prediction                   | **Predict** → **Models**: annual NOₓ per unit-year; median baseline, Ridge regression, decision tree; tune on 2016–21 / 2022–23, refit on 2016–23, test 2024–25; MAE, RMSE, R², MAPE; predicted vs actual; importances                                                                                                                                                                                                                                                                                     |
+| §5 Prediction                   | **Predict** → **Models**: annual NOₓ per unit-year; median baseline, Ridge regression, decision tree; tune on 2016–21 / 2022–23, refit on 2016–23, test 2024–25; MAE, RMSE, R², MAPE with 95 % intervals; predicted vs actual; importances                                                                                                                                                                                                                                                                 |
 | §6 Sensitivity and scenarios    | **Predict** → **What-if**: a baseline unit-year with each model's prediction; Ridge, tree, or both. Sensitivity: one input varied from a minimum to a maximum (in its own unit or as % of the baseline) for a chosen unit-year, with the baseline marked and the region outside the training data shaded. Scenarios on the same page: load +10 %, heat input −5 %, add SCR, fuel switch, high efficiency, with range warnings. A unit's details on Explore link here                                       |
 | §7 Saving and exporting         | Every chart and result table downloads a ZIP: CSV, `metadata.json` (date, software commit, database snapshot, filters, definitions, TRACI factors, model and split), and the chart PNG. **Download all** on Analyze exports every selected unit-year with all variables                                                                                                                                                                                                                                    |
 
 ### Prediction results (test years 2024–2025, refit on 2016–2023)
 
-| Model                                  | MAE (t) | RMSE (t) |    R² | MAPE    |
-| :------------------------------------- | ------: | -------: | ----: | :------ |
-| Baseline: median by fuel and unit type |   109.4 |    366.9 | 0.489 | 143.6 % |
-| Ridge regression (log target)          |    58.5 |    213.5 | 0.827 | 49.3 %  |
-| Decision tree                          |    26.3 |    113.9 | 0.951 | 20.9 %  |
+| Model                                  | MAE (t) | MAE 95 % interval | RMSE (t) |    R² | MAPE    |
+| :------------------------------------- | ------: | :---------------- | -------: | ----: | :------ |
+| Baseline: median by fuel and unit type |   109.4 | 99.3–121.0        |    366.9 | 0.489 | 143.6 % |
+| Ridge regression (log target)          |    58.5 | 52.7–64.9         |    213.5 | 0.827 | 49.3 %  |
+| Decision tree (depth ≤ 20, leaf ≥ 20)  |    26.3 | 23.4–29.7         |    113.9 | 0.951 | 20.9 %  |
+| _Persistence (reference, not served)_  |    18.5 | 16.1–21.2         |     92.8 | 0.967 | 15.3 %  |
 
-Without same-year heat input, gross load, and operating time, validation R² falls to 0.70
-(Ridge) and 0.84 (tree): the rest comes from unit attributes, controls, and the previous
-year's NOₓ rate. Full metrics are in `ml/models/metrics.json`.
+Intervals come from a cluster bootstrap over test units (1,000 samples). Without same-year heat
+input, gross load, and operating time, validation R² falls to 0.70 (Ridge) and 0.84 (tree): the
+rest comes from unit attributes, controls, and the previous year's NOₓ rate.
+
+**Persistence beats both models.** Last year's NOₓ rate × this year's heat input (the median
+baseline where either is missing) has a lower test error than the tree, by 7.8 t (6.3–9.4). A
+unit's rate barely changes from year to year, and three reformulations that build this product
+into the models did not close the gap (`ml/reformulations.py`, report §Q4). The models'
+value is their response to load, controls, and fuel in the What-if tab, not a better forecast.
+Full metrics, including persistence, are in `ml/models/metrics.json`.
 
 ### How prediction works without Python on the server
 
@@ -143,6 +151,7 @@ scikit-learn's predictions on 200 test rows (`ml/fixtures/parity.json`) to 10⁻
 ```bash
 npm run ml:train      # retrain and re-register the models (needs the Python venv)
 npm run test:py       # pytest for the training pipeline
+epaDataVENV/bin/python ml/reformulations.py   # the persistence comparison (writes nothing)
 npm run traci:import  # reload the TRACI factors from data/traci
 ```
 
@@ -201,7 +210,9 @@ environment at `epaDataVENV/bin/python3`).
 
 - Node.js 20.9 or newer, with npm
 - Python 3.9 or newer (reads uploaded files; Phase 2 model training uses pandas and scikit-learn,
-  trained with Python 3.13; `npm run test:py` also passes on Python 3.15)
+  the committed models were trained with Python 3.15 and scikit-learn 1.9). On Python 3.9,
+  `npm run test:py` passes and `npm run ml:train` reproduces the committed results (checked
+  11/12 with 3.9.25); NumPy 2.0 may print harmless matrix-product warnings on macOS.
 - Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
   for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
   without it.
@@ -492,22 +503,22 @@ Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide
 
 ## Scripts
 
-| Command                       | What it does                                                                                                                                                 |
-| :---------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                 | Development server on port 3000                                                                                                                              |
-| `npm run build` / `npm start` | Production build and server                                                                                                                                  |
-| `npm run validate`            | Format check, lint, typecheck, tests, build                                                                                                                  |
-| `npm test`                    | Unit tests in `src/lib/*.test.ts` (description parser, CSV writer, upload report, record diff, domain helpers, statistics, analysis variables, model parity) |
-| `npm run test:py`             | pytest for the training pipeline                                                                                                                             |
-| `npm run check`               | ESLint and `tsc --noEmit`                                                                                                                                    |
-| `npm run db:migrate`          | Apply migrations in `drizzle/` to `DATABASE_URL`                                                                                                             |
-| `npm run db:generate`         | Create a migration after a schema change                                                                                                                     |
-| `npm run db:seed`             | Load facilities and units from CAMPD facility CSV files                                                                                                      |
-| `npm run db:rebuild`          | Rebuild the database from facility CSVs and daily-emissions files                                                                                            |
-| `npm run sync:campd`          | Fetch annual emissions from the EPA API and store them                                                                                                       |
-| `npm run traci:import`        | Reload the TRACI factors from `data/traci`                                                                                                                   |
-| `npm run ml:train`            | Retrain and re-register the prediction models (needs the Python venv)                                                                                        |
-| `npm run report`              | Build the Phase 2 report with Tectonic (`report/phase2/phase2-report.pdf`); `report:phase1` for Phase 1                                                      |
+| Command                       | What it does                                                                                                                                                                                   |
+| :---------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                 | Development server on port 3000                                                                                                                                                                |
+| `npm run build` / `npm start` | Production build and server                                                                                                                                                                    |
+| `npm run validate`            | Format check, lint, typecheck, tests, build                                                                                                                                                    |
+| `npm test`                    | Unit tests in `src/lib/*.test.ts` (description parser, CSV writer, upload report, record diff, domain helpers, statistics, analysis variables, model parity and What-if math, export metadata) |
+| `npm run test:py`             | pytest for the training pipeline                                                                                                                                                               |
+| `npm run check`               | ESLint and `tsc --noEmit`                                                                                                                                                                      |
+| `npm run db:migrate`          | Apply migrations in `drizzle/` to `DATABASE_URL`                                                                                                                                               |
+| `npm run db:generate`         | Create a migration after a schema change                                                                                                                                                       |
+| `npm run db:seed`             | Load facilities and units from CAMPD facility CSV files                                                                                                                                        |
+| `npm run db:rebuild`          | Rebuild the database from facility CSVs and daily-emissions files                                                                                                                              |
+| `npm run sync:campd`          | Fetch annual emissions from the EPA API and store them                                                                                                                                         |
+| `npm run traci:import`        | Reload the TRACI factors from `data/traci`                                                                                                                                                     |
+| `npm run ml:train`            | Retrain and re-register the prediction models (needs the Python venv)                                                                                                                          |
+| `npm run report`              | Build the Phase 2 report with Tectonic (`report/phase2/phase2-report.pdf`); `report:phase1` for Phase 1. Uses the bundle URL directly, since Tectonic's relay is unreliable                    |
 
 ## Repository layout
 
@@ -524,7 +535,7 @@ Leaflet with CARTO/OpenStreetMap tiles (2D map), D3 and TopoJSON (globe), lucide
 | `src/server/analysis.ts`, `src/server/prediction.ts`                            | Phase 2 analysis queries, registered models, predictions                                                                                                                                                                                                     |
 | `src/lib/`                                                                      | Pure logic with tests: filters and URL state, description parser, emissions math, record diff, CSV writer, statistics, analysis variables and TRACI, model inference                                                                                         |
 | `scripts/`                                                                      | CLI entry points (`migrate`, `seed-facilities-from-csv`, `rebuild-db`, `sync_campd`, `import_traci`) and the Python helpers `parse_import.py` and `daily_to_annual.py`                                                                                       |
-| `ml/`                                                                           | Offline training (`train.py`), its tests, the saved models and metrics, and the parity fixture                                                                                                                                                               |
+| `ml/`                                                                           | Offline training (`train.py`), its tests, the saved models and metrics, the parity fixture, and the persistence comparison (`reformulations.py`)                                                                                                             |
 | `data/traci/`                                                                   | The TRACI 2.2 factor extract and its source                                                                                                                                                                                                                  |
 | `drizzle/`                                                                      | SQL migrations                                                                                                                                                                                                                                               |
 | `samples/`                                                                      | Sample upload files and their expected results                                                                                                                                                                                                               |

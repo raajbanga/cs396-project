@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { execSync } from "node:child_process";
 import { and, count, eq, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -115,16 +114,6 @@ export const loadFactors = (): Promise<TraciFactor[]> =>
 
 export async function loadVariables() {
   return buildVariables(await loadFactors());
-}
-
-export function findVariable(variables: Variable[], key: string) {
-  const v = variables.find((x) => x.key === key);
-  if (!v)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Unknown variable: ${key}`,
-    });
-  return v;
 }
 
 /** The app version and commit, read once (Vercel provides the commit; locally, git does). */
