@@ -1,10 +1,10 @@
 import { asc, count, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
-import { buildVariables, dimension } from "~/lib/analysis";
+import { buildVariables, dimension, variableInfo } from "~/lib/analysis";
 import { parseAnalysisParams } from "~/lib/analysis-state";
 import { EXPORT_TYPES, toCsv, type CsvColumn } from "~/lib/csv";
-import { zipBundle } from "~/lib/export-bundle";
+import { datasetMetadata, zipBundle } from "~/lib/export-bundle";
 import { filterSearchParams } from "~/lib/facility-filters";
 import { analysisRows, loadFactors, provenance } from "~/server/analysis";
 import {
@@ -374,26 +374,13 @@ export async function buildExport(params: URLSearchParams) {
               ...variables.map((v) => v.value(r)),
             ]),
           },
-          {
-            title: "Analytical dataset",
-            exportedAt: new Date().toISOString(),
-            ...source,
+          datasetMetadata({
+            source,
             filters: Object.fromEntries(filterSearchParams(filters)),
             unitYears: rows.length,
-            variables: variables.map(
-              ({ key, label, unit, group, definition, aggregation }) => ({
-                key,
-                label,
-                unit,
-                group,
-                definition,
-                aggregation,
-              }),
-            ),
-            traciFactors: factors,
-            missingValues:
-              "Blank cells are missing: not reported, or undefined (an input missing or a zero denominator). Never read them as 0.",
-          },
+            variables: variables.map(variableInfo),
+            factors,
+          }),
         ),
       };
     }

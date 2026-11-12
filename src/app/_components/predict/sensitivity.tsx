@@ -12,16 +12,15 @@ import {
 import { Select } from "~/components/ui/select";
 import { formatPct, formatStat } from "~/lib/analysis";
 import {
+  MAX_SENSITIVITY_POINTS,
   MODEL_COLORS,
   NUMERIC_INPUTS,
-  outOfRange,
-  predict,
+  sensitivityCurve,
+  sensitivityGrid,
   type NumericInput,
 } from "~/lib/model";
 import { Controls, Toggle } from "../analyze/shared";
 import { rangeWarning, type PredictTabProps } from "./predict-view";
-
-const MAX_POINTS = 401;
 
 /** A dashed reference line at x (vertical) or y (horizontal). */
 const refLine = (axis: "x" | "y", at: number): Partial<Shape> => ({
@@ -74,39 +73,17 @@ export function SensitivitySection({
   const asValues = view.values === "1";
 
   // The grid of input values, always including the baseline itself.
-  const from = Number(view.from) || 0;
-  const to = Number(view.to) || 0;
-  const step = Math.abs(Number(view.step)) || 1;
-  const toValue = (x: number) => (asValues ? x : value0 * (1 + x / 100));
-  const grid = [value0];
-  for (
-    let x = Math.min(from, to);
-    x <= Math.max(from, to) + step * 1e-9 && grid.length < MAX_POINTS;
-    x += step
-  ) {
-    grid.push(toValue(x));
-  }
-  const capped = grid.length >= MAX_POINTS;
-  const values = [...new Set(grid)].sort((a, b) => a - b);
-  const curves = chosen.map((m) => {
-    const pred0 = predict(m.artifact, base);
-    return {
-      model: m,
-      pred0,
-      points: values.map((value) => {
-        const inputs = { ...base, [input]: value };
-        const prediction = predict(m.artifact, inputs);
-        return {
-          value,
-          change: value0 ? (value / value0 - 1) * 100 : null,
-          prediction,
-          diff: prediction - pred0,
-          diffPct: pred0 ? ((prediction - pred0) / pred0) * 100 : null,
-          outside: outOfRange(m.artifact, inputs).includes(input),
-        };
-      }),
-    };
-  });
+  const { values, capped } = sensitivityGrid(
+    value0,
+    Number(view.from) || 0,
+    Number(view.to) || 0,
+    Number(view.step),
+    asValues,
+  );
+  const curves = chosen.map((m) => ({
+    model: m,
+    ...sensitivityCurve(m.artifact, base, input, values, value0),
+  }));
   const lo = values[0] ?? value0;
   const hi = values.at(-1) ?? value0;
   const outside = curves[0]!.points.filter((q) => q.outside).length;
@@ -185,7 +162,7 @@ export function SensitivitySection({
           {outside > 0 &&
             `${rangeWarning([input])} (${outside} of ${values.length} points, shaded.) `}
           {capped &&
-            `The curve stops at ${MAX_POINTS} points; use a larger step to cover the whole range.`}
+            `The curve stops at ${MAX_SENSITIVITY_POINTS} points; use a larger step to cover the whole range.`}
         </p>
       )}
 

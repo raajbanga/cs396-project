@@ -10,6 +10,7 @@ import {
 } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
+import { modelMetadata } from "~/lib/export-bundle";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
 import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
@@ -233,7 +234,7 @@ export function ModelsTab({
                 ...CI_METRICS.flatMap((k) => interval(m, k) ?? [null, null]),
               ]),
             }}
-            meta={{ models: sorted.map(({ artifact: _a, ...m }) => m) }}
+            meta={{ models: sorted.map(modelMetadata) }}
           />
         }
       >

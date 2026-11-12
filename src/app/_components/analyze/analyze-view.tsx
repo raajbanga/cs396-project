@@ -13,6 +13,7 @@ import {
 } from "~/lib/analysis-state";
 import { exportUrl } from "~/lib/csv";
 import { ExportContext } from "~/components/ui/export-button";
+import { analyzeMetadata } from "~/lib/export-bundle";
 import {
   DEFAULT_FILTERS,
   filterSearchParams,
@@ -87,12 +88,7 @@ export function AnalyzeView({
 
   return (
     <ExportContext
-      value={{
-        page: "Analyze",
-        ...source,
-        filters: Object.fromEntries(filterQuery),
-        view,
-      }}
+      value={analyzeMetadata(source, Object.fromEntries(filterQuery), view)}
     >
       <div className="space-y-6">
         <PageTitle lead="Pick unit-years with the filters; each tab answers one question about them. Every view can be shared by its URL.">

@@ -12,58 +12,11 @@ import { formatPct, formatStat } from "~/lib/analysis";
 import {
   featureLabel,
   MODEL_COLORS,
-  outOfRange,
-  predict,
-  type ModelInputs,
+  scenarioResults,
+  scenarios,
 } from "~/lib/model";
 import { Controls } from "../analyze/shared";
 import { rangeWarning, type PredictTabProps } from "./predict-view";
-
-const scale = (v: number | null, pct: number) =>
-  v === null ? null : v * (1 + pct / 100);
-
-/** The named scenarios of §6.3, built from the baseline inputs and the chosen percentages. */
-function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
-  const gas = /gas/i.test(base.primary_fuel);
-  const fuel = gas ? "Coal" : "Pipeline Natural Gas";
-  const scr = base.scr ? 0 : 1;
-  const signed = (p: number) => `${p > 0 ? "+" : ""}${p} %`;
-  return [
-    { name: "Baseline", change: "As reported", inputs: base },
-    {
-      name: `Gross load ${signed(loadPct)}`,
-      change: `Gross load × ${1 + loadPct / 100}`,
-      inputs: { ...base, gross_load_mwh: scale(base.gross_load_mwh, loadPct) },
-    },
-    {
-      name: `Heat input ${signed(heatPct)}`,
-      change: `Heat input × ${1 + heatPct / 100}`,
-      inputs: {
-        ...base,
-        heat_input_mmbtu: scale(base.heat_input_mmbtu, heatPct),
-      },
-    },
-    {
-      name: scr ? "Add SCR" : "Remove SCR",
-      change: `Selective catalytic reduction ${scr ? "installed" : "removed"}`,
-      inputs: { ...base, scr },
-    },
-    {
-      name: `Fuel: ${fuel}`,
-      change: `Primary fuel changed from ${base.primary_fuel}`,
-      inputs: { ...base, primary_fuel: fuel },
-    },
-    {
-      name: "High efficiency",
-      change: `Heat input × ${1 + heatPct / 100} with the same gross load, plus SCR`,
-      inputs: {
-        ...base,
-        heat_input_mmbtu: scale(base.heat_input_mmbtu, heatPct),
-        scr: 1,
-      },
-    },
-  ];
-}
 
 /** §6.3–§6.4: named scenarios against the baseline, for each chosen model. */
 export function ScenariosSection({
@@ -77,20 +30,12 @@ export function ScenariosSection({
     Number(view.load) || 0,
     Number(view.heat) || 0,
   );
-  const results = chosen.flatMap((m) => {
-    const base = predict(m.artifact, baseline.inputs);
-    return list.map((s) => {
-      const prediction = predict(m.artifact, s.inputs);
-      return {
-        model: m,
-        scenario: s,
-        prediction,
-        diff: prediction - base,
-        diffPct: base ? ((prediction - base) / base) * 100 : null,
-        warnings: outOfRange(m.artifact, s.inputs),
-      };
-    });
-  });
+  const results = chosen.flatMap((m) =>
+    scenarioResults(m.artifact, baseline.inputs, list).map((r) => ({
+      model: m,
+      ...r,
+    })),
+  );
 
   return (
     <Section title="Scenarios" note="Each scenario changes only what it names.">

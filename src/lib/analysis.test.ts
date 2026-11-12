@@ -5,10 +5,12 @@ import test from "node:test";
 import {
   aggregate,
   buildVariables,
+  findVariable,
   formatPct,
   hoursInYear,
   noxControlClass,
   so2ControlClass,
+  UnknownVariableError,
   type AnalysisRow,
 } from "./analysis";
 import { parseAnalysisParams, parsePredictParams } from "./analysis-state";
@@ -207,4 +209,19 @@ void test("changing Compare's field without groups drops the default groups", ()
     parseAnalysisParams({ compareBy: "state", groups: "KY|WV" }).view.groups,
     "KY|WV",
   );
+});
+
+void test("findVariable: known keys resolve, unknown keys are rejected", () => {
+  assert.equal(findVariable(variables, "noxRate").key, "noxRate");
+  const impact = variables.find((x) => x.group === "TRACI impact")!;
+  assert.equal(findVariable(variables, impact.key), impact);
+  for (const key of ["", "noxrate", "noxRate ", "nox_rate", "constructor"]) {
+    assert.throws(
+      () => findVariable(variables, key),
+      (e: unknown) =>
+        e instanceof UnknownVariableError &&
+        e.key === key &&
+        e.message === `Unknown variable: ${key}`,
+    );
+  }
 });

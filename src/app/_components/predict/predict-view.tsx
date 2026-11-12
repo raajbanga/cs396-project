@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportContext } from "~/components/ui/export-button";
+import { predictMetadata } from "~/lib/export-bundle";
 import { PageTitle } from "~/components/ui/page";
 import { DetailList, Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
@@ -15,7 +16,6 @@ import {
 } from "~/lib/analysis-state";
 import {
   featureLabel,
-  fitYears,
   MODEL_COLORS,
   predict,
   type ModelInputs,
@@ -64,28 +64,7 @@ export function PredictView({ initial }: { initial: View }) {
       : trained;
 
   return (
-    <ExportContext
-      value={{
-        page: "Predict",
-        ...source,
-        view,
-        models: chosen.map((m) => ({
-          id: m.id,
-          name: m.name,
-          target: m.target,
-          features: m.features,
-          settings: m.params,
-          fitYears: fitYears(m),
-          tuningTrainYears: m.trainYears,
-          tuningValidationYears: m.validationYears,
-          testYears: m.testYears,
-          metrics: m.metrics,
-          savedModel: m.artifactPath,
-          pipeline: m.pipelineVersion,
-          trainedAt: m.trainedAt,
-        })),
-      }}
-    >
+    <ExportContext value={predictMetadata(source, view, chosen)}>
       <div className="space-y-6">
         <PageTitle lead="Annual NOₓ per unit-year, predicted from operating data, unit attributes, controls, and the previous year. Check the models, then change one unit's inputs.">
           Predict
