@@ -37,10 +37,12 @@ record ≈ 4.25/8; not re-graded since):
 
 ## P1 — fix before submission
 
-- [ ] **Re-take report figures and screenshots after the 11/11 restructure.** Tab names changed
-      (Dataset/Statistics/Charts → Overview/Distribution/Relationships; Sensitivity/Scenarios →
-      What-if). Update the report text, figures, and the demo script; old URLs still open the
-      right view, so links in the report keep working.
+- [~] **Report after the 11/11 restructure.** Done: 10 figures re-taken (2×, light theme;
+  `p2-dataset`/`p2-statistics` → `p2-overview`/`p2-distribution`), tab names and §4 text
+  updated, a paragraph on the redesign added, sensitivity text now covers the tree's flat
+  curve. Left: rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
+  11/11 and there is no local cache) and check the figure placement. Demo script tab names
+  are in the Final section.
 - [ ] **Commit history and participation (rubric 1.2, 5 pts).** Don't rewrite history again. Both
       members commit weekly under their own git identity (credit AI with a `Co-Authored-By`
       trailer, not as author), and Arnav owns a visible share of the remaining work (e.g. the P2
