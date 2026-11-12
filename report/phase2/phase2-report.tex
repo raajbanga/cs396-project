@@ -454,9 +454,13 @@ their previous year is a self-join written as a Drizzle query.
 \subsection{Frameworks and libraries}
 
 Table~\ref{tab:stack} lists what Phase~2 adds to the Phase~1 stack. The committed models were
-trained with Python~3.13, and the pipeline tests also pass on Python~3.15. The minimum versions
-in \code{requirements.txt} are chosen to allow the Python~3.9 documented in the README, but the
-pipeline has not been re-run on 3.9.
+trained with Python~3.15 and the versions in the table. The minimum versions in
+\code{requirements.txt} allow the Python~3.9 documented in the README. On Python~3.9.25 with the
+newest versions it installs (pandas 2.3, NumPy 2.0, scikit-learn 1.6), the pipeline tests pass
+and retraining gives the same Ridge and baseline models; the tree's test MAE differs by
+0.0001~t, and no reported value changes at the precision shown. NumPy 2.0 on macOS prints
+spurious overflow warnings from the bootstrap's matrix products; on the same inputs the bootstrap
+gives identical intervals on both versions.
 
 \begin{table}[H]
 \centering\small

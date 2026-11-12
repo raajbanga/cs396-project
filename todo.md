@@ -63,9 +63,6 @@ re-graded since):
 
 ### Local checks 🧪
 
-- [ ] Python 3.9 venv (README's documented minimum): `pip install -r requirements.txt`, then
-      `npm run test:py`. If it passes, say so in the README and report §4.2. (Models are now
-      trained with Python 3.15.)
 - [ ] Hosted build: charts render, ZIP downloads work, Upload refuses writes.
 - [ ] ZIP downloads in Safari and Chrome (PNG, CSV, `metadata.json`); every tab in dark mode.
 - [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`). If lint
@@ -140,6 +137,9 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
 - **Report, 11/12 (#12, #13):** Q4 rewritten (persistence, intervals, reformulations); Figure 3
   (histogram, scatter) completes §4.4; Models figure re-taken; Flask paragraph; cache drift
   fixed; PDF rebuilt (34 pages). `npm run report` uses the bundle URL since the relay is down.
+- **Python 3.9, 11/12:** on 3.9.25 (pandas 2.3, NumPy 2.0, scikit-learn 1.6) pytest passes and a
+  retrain in a scratch worktree reproduces every reported number (tree MAE within 0.0001 t);
+  README and report §4.2 say so.
 
 ---
 

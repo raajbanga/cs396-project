@@ -210,7 +210,9 @@ environment at `epaDataVENV/bin/python3`).
 
 - Node.js 20.9 or newer, with npm
 - Python 3.9 or newer (reads uploaded files; Phase 2 model training uses pandas and scikit-learn,
-  the committed models were trained with Python 3.15 and scikit-learn 1.9)
+  the committed models were trained with Python 3.15 and scikit-learn 1.9). On Python 3.9,
+  `npm run test:py` passes and `npm run ml:train` reproduces the committed results (checked
+  11/12 with 3.9.25); NumPy 2.0 may print harmless matrix-product warnings on macOS.
 - Optional: an EPA API key ([api.data.gov signup](https://www.epa.gov/airmarkets/cam-api-portal))
   for Retrieve, `npm run sync:campd`, and the granular time series. Everything else works
   without it.
