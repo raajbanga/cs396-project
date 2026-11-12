@@ -68,26 +68,29 @@ report and slides keep working.
 
 ### Site-wide alignment (most of these remove code)
 
-- [ ] **One search box with suggestions, everywhere.** Today there are four behaviors: Explore
+- [x] **One search box with suggestions, everywhere.** (11/11, `feat/shared-search`) Today there are four behaviors: Explore
       parses descriptions (`describeSearch`), Analyze matches name/operator/county as you type,
       Predict runs its own name-or-ID `LIKE` (`server/prediction.ts` `baselineOptions`), and
       Compare and Map have no search. Build one `<FacilitySearch>` combobox on one procedure
       `facilities.suggest({ q })`, reusing the `facilityConditions` search (name, operator,
       county, exact ID). It returns facilities and their units with state, fuel dot, and
       capacity. Enter runs the description parser, as on Explore. Use it in:
-  - [ ] Explore: adds suggestions; picking one opens the detail dialog.
-  - [ ] Analyze filter bar: gains description search. The parser already emits `yearMin`/`yearMax`,
+  - [x] Explore: adds suggestions; picking one filters to that facility (chip shows its name;
+        a row click still opens the details).
+  - [x] Analyze filter bar: gains description search. The parser already emits `yearMin`/`yearMax`,
         which Analyze uses.
-  - [ ] **Map (new):** picking a facility flies the globe or flat map to it, highlights the dot,
-        and opens its card; a description sets filters as on Explore.
-  - [ ] Predict baseline: replaces the "Find facility" input and the 40-row select; delete
-        `baselineOptions`.
-  - [ ] Compare group picker when grouping by facility or unit. This closes the P2 "80 of 1,590"
+  - [x] **Map (new):** picking a facility turns the globe or flies the flat map to it, rings it,
+        and shows "Centered on … · Details"; a description sets filters as on Explore.
+  - [x] Predict baseline: search → Year → Unit (that facility's units); `baselineOptions`
+        replaced by `baselineUnits`; years come from the data.
+  - [x] Compare group picker when grouping by facility or unit. This closes the P2 "80 of 1,590"
         item; keep the chip list for small groupings (fuel, state, control).
-- [ ] **One filter bar.** Map gets the same `FacilityFilterBar` (compact) instead of only fuel
-      chips and a state chip; keep the fuel chips as the legend. Move Facility ID and Unit ID
-      into Advanced once search suggests them; that shortens the bar on every page. Year
-      options everywhere come from `getFilterOptions`, not hard-coded lists.
+- [~] **One filter bar.** Done 11/11: Map uses `FacilityFilterBar`; Facility/Unit ID moved to
+  Advanced; Predict years from `getFilterOptions`; Map chip counts formatted. Left: compact
+  the bar so the map and charts start higher. Original item: Map gets the same `FacilityFilterBar` (compact) instead of only fuel
+  chips and a state chip; keep the fuel chips as the legend. Move Facility ID and Unit ID
+  into Advanced once search suggests them; that shortens the bar on every page. Year
+  options everywhere come from `getFilterOptions`, not hard-coded lists.
 - [ ] **One page layout.** `PageTitle` with a one-sentence lead, one underline tab row, then
       content. No second tab row.
 - [ ] **One export label set.** Today exports are labeled "Download CSV" (Explore), "Download dataset" (Analyze),
@@ -218,7 +221,7 @@ it bears on Interactive visualization (10), Integration and usability (5), and P
 
 ### Code
 
-- [ ] Compare tab group picker lists the first 80 groups alphabetically (facility: 80 of 1,590),
+- [x] Compare tab group picker lists the first 80 groups alphabetically (facility: 80 of 1,590),
       so most facilities and units can't be compared without extra filters. Add a search box, or
       order by count and raise the limit. → Fixed by the P0 shared search (Compare picker).
 - [ ] Add a persistence baseline (last year's NOₓ, or prior-year rate × this year's heat input)

@@ -11,6 +11,7 @@ import {
   MAP_FRAME,
   readThemeColors,
   type MapFacility,
+  type MapFocus,
   type MetricMode,
 } from "~/lib/map-utils";
 import { cn } from "~/lib/utils";
@@ -28,10 +29,12 @@ export function LeafletMap({
   facilities,
   onInspectFacility,
   metricMode,
+  focus,
 }: {
   facilities: MapFacility[];
   onInspectFacility: (id: number) => void;
   metricMode: MetricMode;
+  focus?: MapFocus | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -100,6 +103,24 @@ export function LeafletMap({
         .addTo(layerGroup);
     }
   }, [facilities, metricMode, onInspectFacility, isDark]);
+
+  // A facility picked in the search box: fly to it and ring it.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    const at: L.LatLngExpression = [focus.latitude, focus.longitude];
+    map.flyTo(at, Math.max(map.getZoom(), 10), { duration: 0.8 });
+    const ring = L.circleMarker(at, {
+      radius: 14,
+      color: readThemeColors().fg,
+      weight: 2.5,
+      fill: false,
+      interactive: false,
+    }).addTo(map);
+    return () => {
+      ring.remove();
+    };
+  }, [focus, isDark]);
 
   const container = containerRef.current;
   return (

@@ -56,27 +56,20 @@ export async function listModels() {
   }));
 }
 
-/** Unit-years a user can pick as a sensitivity baseline: by facility name or ID, largest NOₓ first. */
-export async function baselineOptions(search: string, year: number) {
-  const term = search.trim();
-  const num = Number.parseInt(term, 10);
-  const match = term
-    ? Number.isNaN(num)
-      ? sql`lower(${facilities.name}) LIKE ${`%${term.toLowerCase()}%`}`
-      : eq(facilities.id, num)
-    : undefined;
+/** A facility's units with a NOₓ value in `year`, largest NOₓ first: the baseline choices. */
+export async function baselineUnits(facilityId: number, year: number) {
   const rows = await modelRows(
     and(
+      eq(annualRecords.facilityId, facilityId),
       eq(annualRecords.year, year),
       sql`${annualRecords.noxMassTons} IS NOT NULL`,
-      match,
     ),
     40,
   );
   return rows.map((r) => ({
     facilityId: r.facilityId,
+    facilityName: r.facilityName,
     unitId: r.unitId,
-    label: `${r.facilityName} (${r.facilityId}) unit ${r.unitId}`,
     fuel: r.primary_fuel,
     noxMassTons: r.noxMassTons,
   }));
