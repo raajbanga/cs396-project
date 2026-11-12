@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CheckCircle2, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 export function EmptyState({
@@ -55,6 +55,38 @@ export function InlineLoading({
       <RefreshCw className="text-fg-muted mx-auto mb-2 h-4 w-4 animate-spin" />
       <p className="text-fg-2 text-sm">{title}</p>
       {subtitle && <p className="text-fg-muted mt-1 text-xs">{subtitle}</p>}
+    </div>
+  );
+}
+
+/** A failed query, with what went wrong and a retry (every Phase 2 view uses this). */
+export function QueryError({
+  error,
+  onRetry,
+  className,
+}: {
+  error: { message: string };
+  onRetry?: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("py-10 text-center", className)} role="alert">
+      <AlertTriangle className="text-warn mx-auto mb-2 h-4 w-4" />
+      <p className="text-fg text-sm font-medium">
+        Couldn&apos;t load this view
+      </p>
+      <p className="text-fg-muted mx-auto mt-1 max-w-md text-xs">
+        {error.message}
+      </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-primary mt-3 cursor-pointer text-sm hover:underline"
+        >
+          Try again
+        </button>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { DIMENSION_KEYS } from "~/lib/analysis";
 import {
   DEFAULT_FILTERS,
   filterSearchParams,
@@ -9,30 +10,33 @@ import {
  * plus the active tab and each tab's choices, all as strings so they round-trip through the URL.
  */
 
-const ANALYSIS_TABS = [
-  "dataset",
-  "statistics",
-  "charts",
+/** One tab per question: what's selected, how one variable is spread, what moves together, how groups differ, and the TRACI impacts. */
+export const ANALYSIS_TABS = [
+  "overview",
+  "distribution",
+  "relationships",
   "compare",
   "impacts",
 ] as const;
+export type AnalysisTab = (typeof ANALYSIS_TABS)[number];
 
-export const CHART_TYPES = [
-  "trend",
-  "bars",
-  "distribution",
-  "scatter",
-  "correlation",
-  "ranking",
-  "map",
-] as const;
-export type ChartType = (typeof CHART_TYPES)[number];
+/** Where the tabs and chart types before the 11/11 regroup now live, so old links keep working. */
+const MOVED: Record<string, AnalysisTab> = {
+  dataset: "overview",
+  statistics: "distribution",
+  trend: "overview",
+  map: "overview",
+  ranking: "overview",
+  distribution: "distribution",
+  scatter: "relationships",
+  correlation: "relationships",
+  bars: "compare",
+};
 
 export const DEFAULT_VIEW = {
-  tab: "dataset" as (typeof ANALYSIS_TABS)[number],
+  tab: "overview" as AnalysisTab,
   variable: "co2MassTons",
   by: "state", // "" = no grouping
-  chart: "trend" as ChartType,
   series: "fuelClass",
   x: "heatInputMMBtu",
   y: "noxMassTons",
@@ -96,8 +100,26 @@ export function parseAnalysisParams(params: Params) {
     params,
   );
   const view = readView(DEFAULT_VIEW, params);
+  const tab: string = view.tab;
+  view.tab =
+    tab === "charts"
+      ? (MOVED[first(params, "chart") ?? "trend"] ?? "overview")
+      : (MOVED[tab] ?? view.tab);
   if (!ANALYSIS_TABS.includes(view.tab)) view.tab = DEFAULT_VIEW.tab;
-  if (!CHART_TYPES.includes(view.chart)) view.chart = DEFAULT_VIEW.chart;
+  // An unknown grouping field in a hand-edited link falls back to the default, not an error.
+  // (Unknown variables are checked against the catalog on the page.)
+  for (const key of [
+    "by",
+    "series",
+    "color",
+    "compareBy",
+    "impactBy",
+  ] as const) {
+    const optional = key === "by" || key === "series";
+    const value = view[key];
+    if (!(optional && value === "") && !DIMENSION_KEYS.includes(value as never))
+      view[key] = DEFAULT_VIEW[key];
+  }
   return { filters, view };
 }
 
@@ -115,9 +137,10 @@ export function analysisSearchParams(
 }
 
 /** Predict page state (Phase 2 §5–§6): tab, model, baseline unit-year, and analysis inputs. */
+export const PREDICT_TABS = ["models", "whatif"] as const;
 export const DEFAULT_PREDICT_VIEW = {
-  tab: "models" as "models" | "sensitivity" | "scenarios",
-  model: "ridge",
+  tab: "models" as (typeof PREDICT_TABS)[number],
+  model: "both", // "ridge" | "tree" | "both" (What-if); Models shows "both" as Ridge
   fid: "1356", // baseline: Ghent unit 2, 2024 (coal, no SCR)
   uid: "2",
   year: "2024",
@@ -133,8 +156,9 @@ export type PredictView = typeof DEFAULT_PREDICT_VIEW;
 
 export function parsePredictParams(params: Params) {
   const view = readView(DEFAULT_PREDICT_VIEW, params);
-  if (!["models", "sensitivity", "scenarios"].includes(view.tab)) {
-    view.tab = DEFAULT_PREDICT_VIEW.tab;
-  }
+  // Sensitivity and Scenarios were separate tabs before 11/11; both now live on What-if.
+  const tab: string = view.tab;
+  if (tab === "sensitivity" || tab === "scenarios") view.tab = "whatif";
+  if (!PREDICT_TABS.includes(view.tab)) view.tab = DEFAULT_PREDICT_VIEW.tab;
   return view;
 }

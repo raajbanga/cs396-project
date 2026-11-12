@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -19,7 +19,8 @@ import {
 } from "~/lib/facility-filters";
 import { AUDIT_RULES, AUDIT_SEVERITIES } from "~/lib/emissions-metrics";
 import { cn } from "~/lib/utils";
-import { type RouterOutputs } from "~/trpc/react";
+import { api, type RouterOutputs } from "~/trpc/react";
+import { FacilitySearch, type FacilitySuggestion } from "./facility-search";
 
 type FilterOptions = RouterOutputs["facilities"]["getFilterOptions"];
 type DescribeResult = Pick<
@@ -38,6 +39,69 @@ export interface DescribeProps {
   onSubmit: () => void;
   isLoading: boolean;
   result: DescribeResult | null;
+}
+
+type DescribeResponse = RouterOutputs["facilities"]["describeSearch"];
+
+/** Whether a description set anything besides a name search. */
+const setsFilters = (filters: FacilityFilters) =>
+  (Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]).some(
+    (k) => k !== "search" && isFilterActive(filters, k),
+  );
+
+/**
+ * Rubric §6 description search for any filter bar: the text is parsed into filters on submit.
+ * Text the parser recognizes nothing in (a plant name) becomes a name search instead
+ * (`onNameSearch`); otherwise `onApply` gets the parsed filters, sort, and view.
+ */
+export function useDescribeSearch({
+  initialText = "",
+  onApply,
+  onNameSearch,
+}: {
+  initialText?: string;
+  onApply: (result: DescribeResponse, text: string) => void;
+  onNameSearch: (text: string) => void;
+}) {
+  const utils = api.useUtils();
+  const [text, setText] = useState(initialText);
+  const [result, setResult] = useState<DescribeResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const run = async () => {
+    const value = text.trim();
+    setResult(null);
+    if (!value) return onNameSearch("");
+    setIsLoading(true);
+    try {
+      const r = await utils.facilities.describeSearch.fetch({ text: value });
+      if (!setsFilters(r.filters) && !r.filters.search && !r.sort && !r.tab) {
+        onNameSearch(value);
+        return;
+      }
+      setResult(r);
+      onApply(r, value);
+    } catch (err) {
+      setResult({
+        unrecognized: [],
+        via: "parser",
+        notes: [err instanceof Error ? err.message : String(err)],
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const describe: DescribeProps = {
+    text,
+    onTextChange: setText,
+    onSubmit: () => void run(),
+    isLoading,
+    result,
+  };
+  const reset = () => {
+    setText("");
+    setResult(null);
+  };
+  return { describe, reset };
 }
 
 const DESCRIBE_EXAMPLES = [
@@ -69,14 +133,15 @@ const formatBound = (v: string) => {
 };
 
 /** One removable chip per active filter (range pairs and ranking combined), built from the filters themselves. */
-function activeChips(filters: FacilityFilters) {
+function activeChips(filters: FacilityFilters, names: Record<string, string>) {
   const on = (key: keyof FacilityFilters) => isFilterActive(filters, key);
   const chips: { label: string; keys: (keyof FacilityFilters)[] }[] = [];
   if (on("search"))
     chips.push({ label: `"${filters.search}"`, keys: ["search"] });
   if (on("facilityId"))
     chips.push({
-      label: `Facility #${filters.facilityId}`,
+      label:
+        names[filters.facilityId.trim()] ?? `Facility #${filters.facilityId}`,
       keys: ["facilityId"],
     });
   if (on("unitId"))
@@ -133,18 +198,18 @@ function FilterChips({
   filters,
   onFilterChange,
   result,
+  names,
 }: {
   filters: FacilityFilters;
   onFilterChange: FilterChangeHandler;
   result?: DescribeResult | null;
+  names: Record<string, string>;
 }) {
-  const chips = activeChips(filters);
+  const chips = activeChips(filters, names);
   if (chips.length === 0 && !result) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-sm">
-      <span className="text-fg-muted">
-        {result ? "Interpreted as" : "Filters"}
-      </span>
+      {result && <span className="text-fg-muted">interpreted as</span>}
       {chips.map(({ label, keys }) => (
         <Badge key={keys.join()} variant="outline" className="gap-1 pr-0.5">
           {label}
@@ -205,10 +270,6 @@ function BasicFilters({
       toOptions(filterOptions?.unitTypes, "All unit types"),
     ],
   ] as const;
-  const inputs = [
-    ["facilityId", "Facility ID", "e.g. 3", "numeric"],
-    ["unitId", "Unit ID", "e.g. 1, CT1", "text"],
-  ] as const;
   return (
     <>
       {yearRange && (
@@ -238,19 +299,15 @@ function BasicFilters({
           />
         </Field>
       ))}
-      {inputs.map(([key, label, placeholder, inputMode]) => (
-        <Field key={key} label={label}>
-          <Input
-            value={filters[key]}
-            onChange={(e) => onFilterChange(key, e.target.value)}
-            placeholder={placeholder}
-            inputMode={inputMode}
-          />
-        </Field>
-      ))}
     </>
   );
 }
+
+/** Facility and unit IDs, typed exactly (the search box suggests facilities by name). */
+const ID_INPUTS = [
+  ["facilityId", "Facility ID", "e.g. 3", "numeric"],
+  ["unitId", "Unit ID", "e.g. 1, CT1", "text"],
+] as const;
 
 /** §8.1 remaining fields, §8.2 min–max ranges, and §8.3 Top-N ranking; all AND together. */
 function AdvancedFilters({
@@ -320,6 +377,16 @@ function AdvancedFilters({
   return (
     <div className="border-edge space-y-5 border-y py-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {ID_INPUTS.map(([key, label, placeholder, inputMode]) => (
+          <Field key={key} label={label}>
+            <Input
+              value={filters[key]}
+              onChange={(e) => onFilterChange(key, e.target.value)}
+              placeholder={placeholder}
+              inputMode={inputMode}
+            />
+          </Field>
+        ))}
         {selects.map(([key, label, options]) => (
           <Field key={key} label={label}>
             <Select
@@ -439,6 +506,11 @@ interface FilterBarProps {
   /** Extra controls beside the result count, e.g. a CSV download. */
   actions?: ReactNode;
   describe?: DescribeProps;
+  /**
+   * A picked search suggestion. Defaults to filtering to that facility; the Map flies to it
+   * instead.
+   */
+  onPickFacility?: (facility: FacilitySuggestion) => void;
   /** Analyze page: the year range among the basic fields, no Top-N ranking (analyses ignore it). */
   analysis?: boolean;
 }
@@ -458,11 +530,14 @@ export function FacilityFilterBar({
   isLoading,
   actions,
   describe,
+  onPickFacility,
   analysis,
 }: FilterBarProps) {
   const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter(
     (key) =>
       isFilterActive(filters, key) &&
+      // A facility picked in the search box shows as a chip; it shouldn't open Advanced.
+      key !== "facilityId" &&
       !(analysis && /^year|^topN|^rankGroup/.test(key)),
   ).length;
   // Until toggled by hand, Advanced is open exactly when one of its filters is set.
@@ -474,9 +549,18 @@ export function FacilityFilterBar({
   const text = describe ? describe.text : filters.search;
   const setText = (value: string) =>
     describe ? describe.onTextChange(value) : onFilterChange("search", value);
+  // Facility names picked from suggestions, so their chip reads "Ghent (1356)", not "Facility #1356".
+  const [names, setNames] = useState<Record<string, string>>({});
+  const pickFacility = (f: FacilitySuggestion) => {
+    setNames((n) => ({ ...n, [f.id]: `${f.name} (${f.id})` }));
+    setText("");
+    if (onPickFacility) return onPickFacility(f);
+    onFilterChange("search", "");
+    onFilterChange("facilityId", String(f.id));
+  };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <form
         role="search"
         className="flex gap-2"
@@ -485,38 +569,30 @@ export function FacilityFilterBar({
           describe?.onSubmit();
         }}
       >
-        <div className="relative min-w-0 flex-1">
-          {describe?.isLoading ? (
-            <Loader2 className="text-fg-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 animate-spin" />
-          ) : (
-            <Search className="text-fg-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          )}
-          <Input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={
-              describe
-                ? `Describe what you want, or type a name: “${DESCRIBE_EXAMPLES[0]}”`
-                : "Search plant, operator, or county"
-            }
-            aria-label={
-              describe
-                ? "Describe what you want to find, or search by name"
-                : "Search by plant, operator, or county"
-            }
-            className="h-10 pr-9 pl-9 text-[15px]"
-          />
-          {text && (
-            <button
-              type="button"
-              onClick={onResetFilters}
-              className="text-fg-muted hover:text-fg absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer"
-              aria-label="Clear search and filters"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        <FacilitySearch
+          className="flex-1"
+          value={text}
+          onValueChange={setText}
+          onPick={pickFacility}
+          onSubmit={describe?.onSubmit}
+          onClear={onResetFilters}
+          isLoading={describe?.isLoading}
+          placeholder={
+            describe
+              ? `Describe what you want, or type a name: “${DESCRIBE_EXAMPLES[0]}”`
+              : "Search plant, operator, county, or ID"
+          }
+          aria-label={
+            describe
+              ? "Describe what you want to find, or search by name"
+              : "Search by plant, operator, county, or ID"
+          }
+          hint={
+            describe
+              ? "Pick a facility, or press Enter to search by description."
+              : undefined
+          }
+        />
         {describe && (
           <Button
             type="submit"
@@ -538,7 +614,7 @@ export function FacilityFilterBar({
         />
       )}
 
-      <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(6,minmax(0,1fr))_auto]">
+      <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
         <BasicFilters
           filters={filters}
           filterOptions={filterOptions}
@@ -576,37 +652,40 @@ export function FacilityFilterBar({
         />
       )}
 
-      <FilterChips
-        filters={filters}
-        onFilterChange={onFilterChange}
-        result={describe?.result}
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-2">
-        <p className="text-fg-2 text-sm" aria-live="polite">
-          {isLoading ? (
-            "Searching…"
-          ) : (
-            <>
-              <strong className="text-fg font-semibold tabular-nums">
-                {totalMatching?.toLocaleString() ?? 0}
-              </strong>{" "}
-              {totalMatching === 1
-                ? itemLabel.replace(/s$/, "").replace(/ie$/, "y")
-                : itemLabel}
-            </>
-          )}
+      {/* One line: how many match, what filters produced them, and the page's actions. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <p className="text-fg-2 text-sm whitespace-nowrap" aria-live="polite">
+            {isLoading ? (
+              "Searching…"
+            ) : (
+              <>
+                <strong className="text-fg font-semibold tabular-nums">
+                  {totalMatching?.toLocaleString() ?? 0}
+                </strong>{" "}
+                {totalMatching === 1
+                  ? itemLabel.replace(/s$/, "").replace(/ie$/, "y")
+                  : itemLabel}
+              </>
+            )}
+          </p>
+          <FilterChips
+            filters={filters}
+            onFilterChange={onFilterChange}
+            result={describe?.result}
+            names={names}
+          />
           {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onResetFilters}
-              className="text-fg-muted ml-2 h-7 px-2"
+              className="text-fg-muted h-7 px-2"
             >
               Clear filters
             </Button>
           )}
-        </p>
+        </div>
         <div className="flex items-center gap-2">{actions}</div>
       </div>
     </div>

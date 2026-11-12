@@ -55,6 +55,12 @@ export const findInfo = (catalog: Catalog, key: string) =>
 export const dimensionLabel = (catalog: Catalog, key: string) =>
   catalog.dimensions.find((d) => d.key === key)?.label ?? key;
 
+/** A label inside a sentence: "fuel class", but "NOₓ control" and "SO₂ control" keep their case. */
+export const inSentence = (label: string) =>
+  /^[A-Z][A-Z]/.test(label)
+    ? label
+    : label.charAt(0).toLowerCase() + label.slice(1);
+
 /** A variable picker over the catalog, optionally limited to some groups. */
 export function VariableField({
   label = "Variable",

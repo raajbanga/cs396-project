@@ -89,6 +89,13 @@ const perFacility = (year?: number) => {
   };
 };
 
+/** A facility's primary fuel: that of its largest unit that reports one. */
+const largestUnitFuel = sql<string | null>`(
+  SELECT "units"."primary_fuel" FROM "units"
+  WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
+  ORDER BY "units"."nameplate_capacity_mw" DESC LIMIT 1
+)`;
+
 const facilitySortColumns = (year?: number) => {
   const m = facilityMetrics(year);
   return {
@@ -684,6 +691,48 @@ export const facilitiesRouter = createTRPCRouter({
       };
     }),
 
+  /**
+   * Suggestions for every search box: the same name, operator, county, and ID match as the
+   * explorer's search, best matches first (exact ID, name prefix, name, then operator or county),
+   * larger plants first within each.
+   */
+  suggest: publicProcedure
+    .input(
+      z.object({
+        q: z.string().trim().min(1).max(100),
+        limit: z.number().int().min(1).max(20).default(8),
+      }),
+    )
+    .query(({ ctx, input }) => {
+      const q = input.q.toLowerCase();
+      const id = Number.parseInt(q, 10);
+      const capacity = facilityMetrics().totalCapacityMW;
+      return ctx.db
+        .select({
+          id: facilities.id,
+          name: facilities.name,
+          stateCode: facilities.stateCode,
+          county: facilities.county,
+          ownerOperator: facilities.ownerOperator,
+          latitude: facilities.latitude,
+          longitude: facilities.longitude,
+          primaryFuel: largestUnitFuel.as("primary_fuel"),
+          totalCapacityMW: capacity.as("total_capacity_mw"),
+        })
+        .from(facilities)
+        .where(and(...facilityConditions({ search: input.q })))
+        .orderBy(
+          sql`CASE
+            WHEN ${facilities.id} = ${Number.isNaN(id) ? -1 : id} THEN 0
+            WHEN lower(${facilities.name}) LIKE ${`${q}%`} THEN 1
+            WHEN lower(${facilities.name}) LIKE ${`%${q}%`} THEN 2
+            ELSE 3 END`,
+          desc(capacity),
+          asc(facilities.name),
+        )
+        .limit(input.limit);
+    }),
+
   getFacilities: publicProcedure
     .input(
       facilityFilterSchema.extend({
@@ -731,11 +780,7 @@ export const facilitiesRouter = createTRPCRouter({
           nercRegion: facilities.nercRegion,
           sourceCategory: facilities.sourceCategory,
           ownerOperator: facilities.ownerOperator,
-          primaryFuel: sql<string | null>`(
-            SELECT "units"."primary_fuel" FROM "units"
-            WHERE "units"."facility_id" = "facilities"."id" AND "units"."primary_fuel" IS NOT NULL AND "units"."primary_fuel" != ''
-            ORDER BY "units"."nameplate_capacity_mw" DESC LIMIT 1
-          )`.as("primary_fuel"),
+          primaryFuel: largestUnitFuel.as("primary_fuel"),
           ...perFacility(input && filterYear(input)),
         })
         .from(facilities)

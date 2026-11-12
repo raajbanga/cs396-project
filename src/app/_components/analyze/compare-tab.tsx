@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { Chart } from "~/components/ui/chart";
+import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ReportTable, Section } from "~/components/ui/report";
 import { TryExamples } from "~/components/ui/try-examples";
 import { formatPct, formatStat } from "~/lib/analysis";
 import { cn, formatNumber } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
+import { FacilitySearch } from "../facility-search";
+import { BarsChart } from "./charts";
 import {
   asDimension,
   bind,
@@ -88,8 +92,18 @@ export function CompareTab(props: TabProps) {
   const info = findInfo(catalog, view.variable);
   const by = asDimension(view.compareBy) ?? "noxControl";
   const groups = view.groups.split("|").filter(Boolean);
+  // Facilities and units are too many to list: the search box adds a facility, or narrows the
+  // unit list to one facility.
+  const searchable = by === "facility" || by === "unit";
+  const [text, setText] = useState("");
+  const [unitsOf, setUnitsOf] = useState<{ id: number; name: string } | null>(
+    null,
+  );
   const options = api.analysis.aggregate.useQuery({
-    filters,
+    filters:
+      by === "unit" && unitsOf
+        ? { ...filters, facilityId: String(unitsOf.id) }
+        : filters,
     variables: [view.variable],
     by,
     order: "label",
@@ -135,12 +149,52 @@ export function CompareTab(props: TabProps) {
         }))}
       />
 
+      <BarsChart {...props} by={by} />
+
       <Section
         title={`${dimensionLabel(catalog, by)} groups`}
-        note="Pick two to eight; the first one picked is the baseline for differences."
+        note={`Pick two to eight; the first one picked is the baseline for differences.${searchable ? (by === "facility" ? " Search to add any facility; the list shows the first 80 by name." : unitsOf ? ` Units of ${unitsOf.name}.` : " Search for a facility to list its units; the list shows the first 80 by name.") : ""}`}
       >
+        {searchable && (
+          <FacilitySearch
+            className="max-w-md"
+            inputClassName="h-9 text-sm"
+            value={text}
+            onValueChange={setText}
+            onPick={(f) => {
+              setText("");
+              const label = `${f.name} (${f.id})`;
+              if (by === "unit") setUnitsOf({ id: f.id, name: label });
+              else if (!groups.includes(label)) toggleGroup(label);
+            }}
+            onClear={() => {
+              setText("");
+              setUnitsOf(null);
+            }}
+            placeholder={
+              by === "unit"
+                ? "Find a facility to list its units"
+                : "Add a facility: name, operator, county, or ID"
+            }
+          />
+        )}
+        {options.isLoading && (
+          <p className="text-fg-muted text-sm">Loading groups…</p>
+        )}
+        {options.error && (
+          <QueryError
+            error={options.error}
+            onRetry={() => void options.refetch()}
+          />
+        )}
         <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-          {(options.data?.rows ?? []).map((r) => {
+          {[
+            // Picked groups outside the listed ones stay visible, so they can be removed.
+            ...groups
+              .filter((g) => !options.data?.rows.some((r) => r.group === g))
+              .map((group) => ({ group, n: undefined as number | undefined })),
+            ...(options.data?.rows ?? []),
+          ].map((r) => {
             const on = groups.includes(r.group);
             return (
               <button
@@ -161,9 +215,11 @@ export function CompareTab(props: TabProps) {
                   </span>
                 )}
                 {r.group}
-                <span className="text-fg-muted text-xs tabular-nums">
-                  {formatNumber(r.n)}
-                </span>
+                {r.n !== undefined && (
+                  <span className="text-fg-muted text-xs tabular-nums">
+                    {formatNumber(r.n)}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -174,6 +230,13 @@ export function CompareTab(props: TabProps) {
         <p className="text-fg-muted text-sm">
           Pick at least two groups to compare.
         </p>
+      ) : result.error ? (
+        <QueryError
+          error={result.error}
+          onRetry={() => void result.refetch()}
+        />
+      ) : !result.data || !info ? (
+        <InlineLoading title="Comparing groups…" />
       ) : (
         result.data &&
         info && (

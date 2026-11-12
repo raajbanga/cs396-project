@@ -23,12 +23,13 @@
     "traci:import": "tsx --env-file=.env scripts/import_traci.ts",
     "ml:train": "epaDataVENV/bin/python ml/train.py",
     "db:generate": "drizzle-kit generate --dialect sqlite --schema src/server/db/schema.ts --out drizzle",
-    "report": "tectonic -X compile report/main.tex && tectonic -X compile report/phase2.tex"
+    "report": "tectonic -X compile report/phase2/phase2-report.tex",
+    "report:phase1": "tectonic -X compile report/phase1/phase1-report.tex"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
     "@radix-ui/react-select": "^2.3.7",
-    "@t3-oss/env-nextjs": "^0.13.11",
+    "@t3-oss/env-nextjs": "^0.12.0",
     "@tanstack/react-query": "^5.69.0",
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
@@ -48,7 +49,7 @@
     "superjson": "^2.2.1",
     "tailwind-merge": "^3.6.0",
     "topojson-client": "^3.1.0",
-    "zod": "^4.6.7"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^16.3.4",
@@ -62,7 +63,7 @@
     "@types/react-dom": "^19.0.0",
     "@types/topojson-client": "^3.1.5",
     "@types/topojson-specification": "^1.0.5",
-    "drizzle-kit": "^0.18.1",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^10.10.0",
     "eslint-plugin-drizzle": "^0.2.3",
     "eslint-plugin-react-hooks": "^7.1.1",

@@ -1,12 +1,18 @@
 "use client";
 
-import type { Shape } from "plotly.js";
+import type { Data, Shape } from "plotly.js";
 import { Chart } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
-import { Field, ReportTable } from "~/components/ui/report";
+import {
+  Disclosure,
+  Field,
+  ReportTable,
+  Section,
+} from "~/components/ui/report";
 import { Select } from "~/components/ui/select";
 import { formatPct, formatStat } from "~/lib/analysis";
 import {
+  MODEL_COLORS,
   NUMERIC_INPUTS,
   outOfRange,
   predict,
@@ -37,7 +43,7 @@ const outsideBand = (x0: number, x1: number): Partial<Shape> => ({
   x1,
   y0: 0,
   y1: 1,
-  fillcolor: "rgba(217, 119, 6, 0.14)",
+  fillcolor: "rgba(120, 113, 108, 0.14)",
   line: { width: 0 },
 });
 
@@ -46,25 +52,25 @@ const round3 = (x: number) => Number(x.toPrecision(3));
 
 /**
  * §6.2: one input varied from a minimum to a maximum, as values in its own unit or as
- * percentages of the baseline value, everything else held constant. §6.4: the curve marks the
- * baseline and shades values outside the training data.
+ * percentages of the baseline value, everything else held constant; one curve per chosen model.
+ * §6.4: the curve marks the baseline and shades values outside the training data.
  */
-export function SensitivityTab({
+export function SensitivitySection({
   view,
   setView,
-  model,
+  chosen,
   baseline,
 }: PredictTabProps) {
   const input = (
     view.input in NUMERIC_INPUTS ? view.input : "heat_input_mmbtu"
   ) as NumericInput;
   const meta = NUMERIC_INPUTS[input];
-  const [min, max] = model.artifact.ranges.numeric[input];
+  // Every model is trained on the same rows, so their ranges are the same.
+  const first = chosen[0]!.artifact;
+  const [min, max] = first.ranges.numeric[input];
   const base = baseline.inputs;
-  const median =
-    model.artifact.spec.numeric.find((f) => f.name === input)?.median ?? 0;
+  const median = first.spec.numeric.find((f) => f.name === input)?.median ?? 0;
   const value0 = base[input] ?? median;
-  const pred0 = predict(model.artifact, base);
   const asValues = view.values === "1";
 
   // The grid of input values, always including the baseline itself.
@@ -72,31 +78,38 @@ export function SensitivityTab({
   const to = Number(view.to) || 0;
   const step = Math.abs(Number(view.step)) || 1;
   const toValue = (x: number) => (asValues ? x : value0 * (1 + x / 100));
-  const values = [value0];
+  const grid = [value0];
   for (
     let x = Math.min(from, to);
-    x <= Math.max(from, to) + step * 1e-9 && values.length < MAX_POINTS;
+    x <= Math.max(from, to) + step * 1e-9 && grid.length < MAX_POINTS;
     x += step
   ) {
-    values.push(toValue(x));
+    grid.push(toValue(x));
   }
-  const points = [...new Set(values)]
-    .sort((a, b) => a - b)
-    .map((value) => {
-      const inputs = { ...base, [input]: value };
-      const prediction = predict(model.artifact, inputs);
-      return {
-        value,
-        change: value0 ? (value / value0 - 1) * 100 : null,
-        prediction,
-        diff: prediction - pred0,
-        diffPct: pred0 ? ((prediction - pred0) / pred0) * 100 : null,
-        outside: outOfRange(model.artifact, inputs).includes(input),
-      };
-    });
-  const lo = points[0]?.value ?? value0;
-  const hi = points.at(-1)?.value ?? value0;
-  const outside = points.filter((q) => q.outside).length;
+  const capped = grid.length >= MAX_POINTS;
+  const values = [...new Set(grid)].sort((a, b) => a - b);
+  const curves = chosen.map((m) => {
+    const pred0 = predict(m.artifact, base);
+    return {
+      model: m,
+      pred0,
+      points: values.map((value) => {
+        const inputs = { ...base, [input]: value };
+        const prediction = predict(m.artifact, inputs);
+        return {
+          value,
+          change: value0 ? (value / value0 - 1) * 100 : null,
+          prediction,
+          diff: prediction - pred0,
+          diffPct: pred0 ? ((prediction - pred0) / pred0) * 100 : null,
+          outside: outOfRange(m.artifact, inputs).includes(input),
+        };
+      }),
+    };
+  });
+  const lo = values[0] ?? value0;
+  const hi = values.at(-1) ?? value0;
+  const outside = curves[0]!.points.filter((q) => q.outside).length;
 
   /** Switching units keeps the same span: ±50 % of the baseline, or the values it covers. */
   const setUnits = (v: string) =>
@@ -113,7 +126,10 @@ export function SensitivityTab({
   const unit = asValues ? meta.unit : "% of baseline";
 
   return (
-    <div className="space-y-4">
+    <Section
+      title="Change one input"
+      note="Every other input stays at its baseline value."
+    >
       <Controls>
         <Field label="Vary">
           <Select
@@ -153,7 +169,7 @@ export function SensitivityTab({
               type="number"
               value={view[key]}
               onChange={(e) => setView({ [key]: e.target.value })}
-              className="h-9 w-36"
+              className="h-9 w-32"
             />
           </Field>
         ))}
@@ -164,49 +180,59 @@ export function SensitivityTab({
           training median ({formatStat(median)} {meta.unit}) stands in for it.
         </p>
       )}
+      {(outside > 0 || capped) && (
+        <p className="text-warn text-sm">
+          {outside > 0 &&
+            `${rangeWarning([input])} (${outside} of ${values.length} points, shaded.) `}
+          {capped &&
+            `The curve stops at ${MAX_POINTS} points; use a larger step to cover the whole range.`}
+        </p>
+      )}
 
       <Chart
-        title={`Sensitivity of predicted NOₓ to ${meta.label.toLowerCase()}`}
-        subtitle={`${model.name}; ${baseline.label}. Every other input stays at its baseline value. Shaded: outside the training data (${formatStat(min)}–${formatStat(max)} ${meta.unit}). This shows how the model responds, not a measured real-world effect.`}
-        filename={`sensitivity-${model.id}-${input}`}
-        data={[
+        title={`Predicted NOₓ as ${meta.label.toLowerCase()} changes`}
+        subtitle={`${baseline.label}; diamonds mark the baseline, shading is outside the training data.`}
+        note={`Training data range: ${formatStat(min)}–${formatStat(max)} ${meta.unit}. This shows how each model responds, not a measured real-world effect.`}
+        filename={`sensitivity-${input}`}
+        data={curves.flatMap(({ model: m, points, pred0 }): Data[] => [
           {
             type: "scatter",
             mode: "lines+markers",
-            name: "Prediction",
+            name: m.name,
             x: points.map((q) => q.value),
             y: points.map((q) => q.prediction),
-            line: { width: 2 },
+            line: { width: 2, color: MODEL_COLORS[m.kind] },
             marker: {
-              color: points.map((q) => (q.outside ? "#d97706" : "#1d4ed8")),
-              size: 6,
+              color: MODEL_COLORS[m.kind],
+              size: 5,
+              opacity: points.map((q) => (q.outside ? 0.35 : 1)) as never,
             },
             customdata: points.map((q) => [
               formatPct(q.change),
               formatStat(q.diff),
               formatPct(q.diffPct),
             ]) as never,
-            hovertemplate: `${meta.label} %{x:,.4~g} ${meta.unit} (%{customdata[0]})<br>NOₓ %{y:,.4~g} t<br>change %{customdata[1]} t (%{customdata[2]})<extra></extra>`,
+            hovertemplate: `${meta.label} %{x:,.4~g} ${meta.unit} (%{customdata[0]})<br>NOₓ %{y:,.4~g} t<br>change %{customdata[1]} t (%{customdata[2]})<extra>${m.name}</extra>`,
           },
           {
             type: "scatter",
             mode: "markers",
-            name: "Baseline",
+            name: `${m.name} baseline`,
+            showlegend: false,
             x: [value0],
             y: [pred0],
             marker: {
-              size: 13,
+              size: 12,
               symbol: "diamond",
-              color: "#15803d",
-              line: { width: 1, color: "white" },
+              color: MODEL_COLORS[m.kind],
+              line: { width: 1.5, color: "white" },
             },
-            hovertemplate: `Baseline<br>${meta.label} %{x:,.4~g} ${meta.unit}<br>NOₓ %{y:,.4~g} t<extra></extra>`,
+            hovertemplate: `Baseline<br>${meta.label} %{x:,.4~g} ${meta.unit}<br>NOₓ %{y:,.4~g} t<extra>${m.name}</extra>`,
           },
-        ]}
+        ])}
         layout={{
           shapes: [
             refLine("x", value0),
-            refLine("y", pred0),
             ...(lo < min ? [outsideBand(lo, min)] : []),
             ...(hi > max ? [outsideBand(max, hi)] : []),
           ],
@@ -218,6 +244,7 @@ export function SensitivityTab({
         }}
         table={{
           head: [
+            "model",
             `${input} (${meta.unit})`,
             "change_from_baseline_pct",
             "predicted_nox_tons",
@@ -225,49 +252,51 @@ export function SensitivityTab({
             "prediction_change_pct",
             "outside_training_range",
           ],
-          rows: points.map((q) => [
-            q.value,
-            q.change,
-            q.prediction,
-            q.diff,
-            q.diffPct,
-            q.outside,
-          ]),
+          rows: curves.flatMap(({ model: m, points }) =>
+            points.map((q) => [
+              m.id,
+              q.value,
+              q.change,
+              q.prediction,
+              q.diff,
+              q.diffPct,
+              q.outside,
+            ]),
+          ),
         }}
       />
-      {outside > 0 && (
-        <p className="text-warn text-sm">
-          {rangeWarning([input])} ({outside} of {points.length} points.)
-        </p>
-      )}
 
-      <ReportTable
-        sortable
-        head={[
-          `${meta.label} (${meta.unit})`,
-          "Input change",
-          "Predicted NOₓ (t)",
-          "Change (t)",
-          "Change (%)",
-          "Training range",
-        ]}
-        rows={points.map((q) => [
-          formatStat(q.value),
-          q.value === value0 ? "baseline" : formatPct(q.change),
-          formatStat(q.prediction),
-          formatStat(q.diff),
-          formatPct(q.diffPct),
-          q.outside ? "outside" : "inside",
-        ])}
-        sortKeys={points.map((q) => [
-          q.value,
-          q.change,
-          q.prediction,
-          q.diff,
-          q.diffPct,
-          undefined,
-        ])}
-      />
-    </div>
+      <Disclosure title="Show values" hint={`${values.length} points`}>
+        <ReportTable
+          sortable
+          head={[
+            `${meta.label} (${meta.unit})`,
+            "Input change",
+            ...curves.flatMap(({ model: m }) => [`${m.name} (t)`, "Change"]),
+            "Training range",
+          ]}
+          rows={values.map((value, i) => [
+            formatStat(value),
+            value === value0
+              ? "baseline"
+              : formatPct(curves[0]!.points[i]!.change),
+            ...curves.flatMap(({ points }) => [
+              formatStat(points[i]!.prediction),
+              formatPct(points[i]!.diffPct),
+            ]),
+            curves[0]!.points[i]!.outside ? "outside" : "inside",
+          ])}
+          sortKeys={values.map((value, i) => [
+            value,
+            curves[0]!.points[i]!.change,
+            ...curves.flatMap(({ points }) => [
+              points[i]!.prediction,
+              points[i]!.diffPct,
+            ]),
+            undefined,
+          ])}
+        />
+      </Disclosure>
+    </Section>
   );
 }

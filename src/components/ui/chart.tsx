@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { useTheme } from "next-themes";
 import type { Config, Data, Layout } from "plotly.js";
 import { DataPanel } from "~/components/ui/data-panel";
-import { InlineLoading } from "~/components/ui/empty-state";
+import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
 import type { ExportMetadata, ExportTable } from "~/lib/export-bundle";
 
@@ -77,6 +77,20 @@ function mergeLayout(base: Partial<Layout>, layout: Partial<Layout>) {
   return merged as Partial<Layout>;
 }
 
+/** WebGL draws thousands of points fast; without it (old GPUs, some VMs) Plotly shows an error, so use SVG. */
+let webgl: boolean | undefined;
+/** "scattergl" when the browser has WebGL, else "scatter". */
+export const pointsType = (): "scattergl" | "scatter" => {
+  if (webgl === undefined && typeof document !== "undefined") {
+    try {
+      webgl = Boolean(document.createElement("canvas").getContext("webgl"));
+    } catch {
+      webgl = false;
+    }
+  }
+  return (webgl ?? true) ? "scattergl" : "scatter";
+};
+
 /**
  * A titled Plotly chart in a panel (Phase 2 §4.4): zoom, hover tooltips, and PNG export from the
  * mode bar, plus a "Data" button that saves `table`, the image, and metadata as a ZIP (§7). Plotly loads only when a chart mounts.
@@ -90,6 +104,9 @@ export function Chart({
   meta,
   filename,
   isLoading,
+  error,
+  onRetry,
+  note,
   height = 380,
   actions,
 }: {
@@ -102,6 +119,11 @@ export function Chart({
   meta?: ExportMetadata;
   filename: string;
   isLoading?: boolean;
+  /** A failed query: shown in place of the chart, with a retry. */
+  error?: { message: string } | null;
+  onRetry?: () => void;
+  /** Method, definitions, and caveats, under "About this chart", so the subtitle stays one line. */
+  note?: ReactNode;
   height?: number;
   actions?: ReactNode;
 }) {
@@ -110,7 +132,7 @@ export function Chart({
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || isLoading) return;
+    if (!el || isLoading || error) return;
     let cancelled = false;
     void import("plotly.js-dist-min").then(({ default: Plotly }) => {
       if (cancelled) return;
@@ -133,7 +155,7 @@ export function Chart({
     return () => {
       cancelled = true;
     };
-  }, [data, layout, resolvedTheme, height, filename, isLoading]);
+  }, [data, layout, resolvedTheme, height, filename, isLoading, error]);
 
   useEffect(() => {
     const el = ref.current;
@@ -161,7 +183,7 @@ export function Chart({
           {table && (
             <ExportButton
               variant="ghost"
-              label="Data"
+              label="Download"
               name={filename}
               title={title}
               table={table}
@@ -182,10 +204,20 @@ export function Chart({
           )}
         </div>
       </div>
-      {isLoading ? (
+      {error ? (
+        <QueryError error={error} onRetry={onRetry} />
+      ) : isLoading ? (
         <InlineLoading title="Loading…" />
       ) : (
         <div ref={ref} style={{ minHeight: height }} />
+      )}
+      {note && (
+        <details className="text-fg-muted mt-2 text-xs">
+          <summary className="hover:text-fg-2 w-fit cursor-pointer">
+            About this chart
+          </summary>
+          <div className="mt-1 max-w-[90ch] space-y-1 text-pretty">{note}</div>
+        </details>
       )}
     </DataPanel>
   );

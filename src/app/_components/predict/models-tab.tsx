@@ -1,13 +1,18 @@
 "use client";
 
-import { Chart } from "~/components/ui/chart";
+import { Chart, pointsType } from "~/components/ui/chart";
 import { ExportButton } from "~/components/ui/export-button";
-import { Field, ReportTable, Section } from "~/components/ui/report";
+import {
+  Disclosure,
+  Field,
+  ReportTable,
+  Section,
+} from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
-import { featureLabel } from "~/lib/model";
+import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
@@ -96,13 +101,17 @@ export function ModelsTab({
   const sorted = [...models].sort(
     (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
   );
-  const chosen = sorted.find((m) => m.kind === view.model) ?? sorted[0]!;
+  // "Both" (What-if's default) shows Ridge here.
+  const chosen =
+    sorted.find((m) => m.kind === view.model) ??
+    sorted.find((m) => m.kind === "ridge") ??
+    sorted[0]!;
   const [from, to] = chosen.testYears.split("-").map(Number);
-  const { data, isLoading } = api.prediction.testPredictions.useQuery({
+  const tests = api.prediction.testPredictions.useQuery({
     from: from!,
     to: to!,
   });
-  const points = data ?? [];
+  const points = tests.data ?? [];
   const fuels = [...new Set(points.map((p) => p.fuel))];
   const maxActual = Math.max(1, ...points.map((p) => p.actual));
   const base = sorted.find((m) => m.kind === "baseline");
@@ -122,9 +131,40 @@ export function ModelsTab({
 
   return (
     <div className="space-y-8">
+      <Chart
+        title={`Test error, ${chosen.testYears}: lower is better`}
+        subtitle={`Mean absolute error per unit-year; against the baseline, ${gains.join(", ")} lower.`}
+        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median for every unit-year.`}
+        filename="test-mae"
+        height={220}
+        data={[
+          {
+            type: "bar",
+            orientation: "h",
+            y: sorted.map((m) => m.name),
+            x: sorted.map((m) => metric(m, "test", "mae")),
+            marker: { color: sorted.map((m) => MODEL_COLORS[m.kind]!) },
+            text: sorted.map(
+              (m) => `${formatStat(metric(m, "test", "mae"))} t`,
+            ),
+            textposition: "outside",
+            hovertemplate: "%{y}: %{x:,.4~g} t<extra></extra>",
+          },
+        ]}
+        layout={{
+          yaxis: { autorange: "reversed", automargin: true },
+          xaxis: { title: { text: "Test MAE (short tons NOₓ)" } },
+          margin: { l: 16, r: 48, t: 8, b: 48 },
+        }}
+        table={{
+          head: ["model", "test_mae_tons"],
+          rows: sorted.map((m) => [m.id, metric(m, "test", "mae")]),
+        }}
+      />
+
       <Section
-        title="Model comparison"
-        note={`Target: ${chosen.target}. Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. Against the baseline, test MAE is lower by: ${gains.join("; ")}. “Val.” is validation; the last column refits without same-year heat input, load, and hours. MAPE counts only unit-years of at least 1 ton (smaller ones make percentages explode). The best value in each column is in bold.`}
+        title="All metrics"
+        note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the last column refits without same-year heat input, load, and hours."
         actions={
           <ExportButton
             name="model-comparison"
@@ -165,14 +205,6 @@ export function ModelsTab({
             }),
           ])}
         />
-        <p className="text-fg-muted max-w-4xl text-xs">
-          Leakage rules: no same-year NOₓ, NOₓ rate, or value computed from them
-          is an input; the previous year's NOₓ rate is allowed because it is
-          known before the year starts. Same-year heat input, gross load, and
-          operating time are inputs (the scenarios change them), so the last
-          column refits without them: what remains is genuine prediction from
-          unit attributes, controls, and history.
-        </p>
       </Section>
 
       <Controls>
@@ -188,15 +220,18 @@ export function ModelsTab({
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Chart
           title={`Predicted vs actual NOₓ, ${chosen.testYears}`}
-          subtitle={`An even sample of ${formatNumber(points.length)} test unit-years, log scales. On the dashed line the prediction is exact; predictions below 0.01 t are drawn at 0.01.`}
+          subtitle={`${formatNumber(points.length)} test unit-years (an even sample), log scales; on the dashed line the prediction is exact.`}
+          note="Predictions below 0.01 t are drawn at 0.01 so they fit the log scale."
           filename={`predicted-vs-actual-${chosen.id}`}
-          isLoading={isLoading}
+          isLoading={tests.isLoading}
+          error={tests.error}
+          onRetry={() => void tests.refetch()}
           height={440}
           data={[
             ...fuels.map((fuel) => {
               const pts = points.filter((p) => p.fuel === fuel && p.actual > 0);
               return {
-                type: "scattergl" as const,
+                type: pointsType(),
                 mode: "markers" as const,
                 name: fuel,
                 x: pts.map((p) => p.actual),
@@ -254,8 +289,13 @@ export function ModelsTab({
             }
             subtitle={
               chosen.kind === "tree"
-                ? "Share of the tree's error reduction from each input; the 15 largest."
-                : "Effect on log(1 + NOₓ) of one standard deviation (numeric) or of the category or control being present; the 15 largest by size."
+                ? "Share of the tree's error reduction per input; the 15 largest."
+                : "Effect on log(1 + NOₓ) per input; the 15 largest by size."
+            }
+            note={
+              chosen.kind === "ridge"
+                ? "Numeric inputs are standardized, so a coefficient is the effect of one standard deviation; for a category or control, the effect of it being present."
+                : undefined
             }
             filename={`importance-${chosen.id}`}
             height={440}
@@ -265,6 +305,7 @@ export function ModelsTab({
                 orientation: "h",
                 y: importance.map(([k]) => featureLabel(k)),
                 x: importance.map(([, v]) => v),
+                marker: { color: MODEL_COLORS[chosen.kind] },
                 hovertemplate: "%{y}: %{x:.4f}<extra></extra>",
               },
             ]}
@@ -291,23 +332,36 @@ export function ModelsTab({
         )}
       </div>
 
-      <Section title="Model record">
+      <Disclosure
+        title="Leakage rules and model record"
+        hint="what the models may not see, settings, files, and versions"
+      >
+        <p className="text-fg-muted max-w-4xl text-sm">
+          No same-year NOₓ, NOₓ rate, or value computed from them is an input;
+          the previous year&apos;s NOₓ rate is allowed because it is known
+          before the year starts. Same-year heat input, gross load, and
+          operating time are inputs (the What-if scenarios change them), so the
+          last metric refits without them: what remains is genuine prediction
+          from unit attributes, controls, and history.
+        </p>
         <ReportTable
           head={["Field", "Value"]}
           wrap={[1]}
           rows={[
             ["Model ID", chosen.id],
             ["Inputs", chosen.features.map(featureLabel).join(", ")],
+            ["Fit on / tested on", `${fitYears(chosen)} / ${chosen.testYears}`],
             [
-              "Training / validation / test years",
-              `${chosen.trainYears} / ${chosen.validationYears} / ${chosen.testYears}`,
+              "Tuning: trained / validated on",
+              `${chosen.trainYears} / ${chosen.validationYears}`,
             ],
             ["Saved model", chosen.artifactPath],
             ["Pipeline", chosen.pipelineVersion],
             ["Trained", new Date(chosen.trainedAt).toLocaleString()],
+            ["Target", chosen.target],
           ]}
         />
-      </Section>
+      </Disclosure>
     </div>
   );
 }
