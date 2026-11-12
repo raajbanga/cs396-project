@@ -38,6 +38,10 @@ export function UnitDetail({ unitInternalId }: { unitInternalId: string }) {
 
   const records = unit.annualRecords;
   const latest = records[0];
+  // The current year is still being reported, so the What-if baseline is the last complete one.
+  const predictYear = records.find(
+    (r) => r.year < new Date().getFullYear(),
+  )?.year;
   const auditLogs = flagsOfRecords(records, unit.unitId);
   const clean = (v: string | null | undefined) =>
     v ? v.replaceAll("|", " · ") : "—";
@@ -96,6 +100,13 @@ export function UnitDetail({ unitInternalId }: { unitInternalId: string }) {
           <CompareActions
             isInCompare={compareUnitIds.includes(unit.id)}
             onToggle={() => toggleUnitCompare(unit.id)}
+            links={[
+              [
+                "Predict",
+                `/predict?tab=whatif&fid=${unit.facilityId}&uid=${encodeURIComponent(unit.unitId)}${predictYear ? `&year=${predictYear}` : ""}`,
+                "Predicted NOₓ for this unit's last complete year, and how it responds to changes",
+              ],
+            ]}
           />
         }
       />

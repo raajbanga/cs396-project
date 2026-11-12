@@ -43,7 +43,6 @@ last, sensible defaults).
 **Done 11/11** (on `dev`): the 5 tabs below, old links mapped, unknown variables/fields reset to
 defaults, error + retry on every chart, Compare bars + loading states, Impacts per-category top 15
 with the table and factors collapsed, `src/app/error.tsx`, `scatter` fallback without WebGL.
-Left: compact the filter bar (Overview's trend chart still starts ~600 px down).
 
 | Tab                      | Question it answers                             | Contents (moved from)                                                                                                                                                                                                                                        | Spec             |
 | :----------------------- | :---------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- |
@@ -95,25 +94,20 @@ values"). Model colors: Ridge indigo, tree fuchsia, baseline stone. Old tab link
         replaced by `baselineUnits`; years come from the data.
   - [x] Compare group picker when grouping by facility or unit. This closes the P2 "80 of 1,590"
         item; keep the chip list for small groupings (fuel, state, control).
-- [~] **One filter bar.** Done 11/11: Map uses `FacilityFilterBar`; Facility/Unit ID moved to
-  Advanced; Predict years from `getFilterOptions`; Map chip counts formatted. Left: compact
-  the bar so the map and charts start higher. Original item: Map gets the same `FacilityFilterBar` (compact) instead of only fuel
-  chips and a state chip; keep the fuel chips as the legend. Move Facility ID and Unit ID
-  into Advanced once search suggests them; that shortens the bar on every page. Year
-  options everywhere come from `getFilterOptions`, not hard-coded lists.
+- [x] **One filter bar.** (11/11: Map uses `FacilityFilterBar`; Facility/Unit ID under Advanced; chips share the count row, so results start one row higher.)
 - [x] **One page layout.** (11/11) `PageTitle` with a one-sentence lead, one underline tab row, then
       content. No second tab row.
-- [ ] **One export label set.** Today exports are labeled "Download CSV" (Explore), "Download dataset" (Analyze),
+- [x] **One export label set.** (11/11: "Download all" per page, "Download" per chart/section, "More formats".) Today exports are labeled "Download CSV" (Explore), "Download dataset" (Analyze),
       "Download" (sections), "Data" (charts), and "More options". Use "Download" + format through
       `ExportButton` everywhere.
-- [~] **One color system.** (models done 11/11; TRACI charts still default blue) Fuel colors from `getFuelTheme` (already used in Analyze). Models and
-  TRACI categories get a palette that doesn't reuse Coal orange or Gas green.
+- [x] **One color system.** (11/11: fuel colors for fuels, model colors for models, the default for single series.) Fuel colors from `getFuelTheme` (already used in Analyze). Models and
+      TRACI categories get a palette that doesn't reuse Coal orange or Gas green.
 - [x] **One number format** (11/11: Impacts table, Map chips, `formatPct` rounds before signing) for large quantities (`formatQuantity`: k/M/B, Mt) in the Impacts
       table, axes, and tiles. Also: Map fuel chips print `1139` next to `1,652`, and Scenarios
       mixes `+0.0 %` with `0.0 %`.
 - [x] **One loading/empty/error pattern** (11/11) (`InlineLoading`, `EmptyState`) for Statistics and
       Compare (blank today). Do this together with the P1 error-handling item.
-- [ ] **Link Phase 1 and Phase 2.** Explore's compare dock gets "Analyze in Compare"
+- [x] **Link Phase 1 and Phase 2.** (11/11: "Analyze these", "Analyze", "Predict" for the last complete year.) Explore's compare dock gets "Analyze in Compare"
       (`/analyze?tab=compare&compareBy=facility&groups=…`); the facility dialog gets "Analyze this
       facility"; the unit dialog gets "Predict this unit" (opens What-if with it as the baseline).
       Two "compare" features with no link between them is part of the "different site" feel.

@@ -209,9 +209,7 @@ function FilterChips({
   if (chips.length === 0 && !result) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-sm">
-      <span className="text-fg-muted">
-        {result ? "Interpreted as" : "Filters"}
-      </span>
+      {result && <span className="text-fg-muted">interpreted as</span>}
       {chips.map(({ label, keys }) => (
         <Badge key={keys.join()} variant="outline" className="gap-1 pr-0.5">
           {label}
@@ -562,7 +560,7 @@ export function FacilityFilterBar({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <form
         role="search"
         className="flex gap-2"
@@ -654,38 +652,40 @@ export function FacilityFilterBar({
         />
       )}
 
-      <FilterChips
-        filters={filters}
-        onFilterChange={onFilterChange}
-        result={describe?.result}
-        names={names}
-      />
-
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-2">
-        <p className="text-fg-2 text-sm" aria-live="polite">
-          {isLoading ? (
-            "Searching…"
-          ) : (
-            <>
-              <strong className="text-fg font-semibold tabular-nums">
-                {totalMatching?.toLocaleString() ?? 0}
-              </strong>{" "}
-              {totalMatching === 1
-                ? itemLabel.replace(/s$/, "").replace(/ie$/, "y")
-                : itemLabel}
-            </>
-          )}
+      {/* One line: how many match, what filters produced them, and the page's actions. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <p className="text-fg-2 text-sm whitespace-nowrap" aria-live="polite">
+            {isLoading ? (
+              "Searching…"
+            ) : (
+              <>
+                <strong className="text-fg font-semibold tabular-nums">
+                  {totalMatching?.toLocaleString() ?? 0}
+                </strong>{" "}
+                {totalMatching === 1
+                  ? itemLabel.replace(/s$/, "").replace(/ie$/, "y")
+                  : itemLabel}
+              </>
+            )}
+          </p>
+          <FilterChips
+            filters={filters}
+            onFilterChange={onFilterChange}
+            result={describe?.result}
+            names={names}
+          />
           {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
               onClick={onResetFilters}
-              className="text-fg-muted ml-2 h-7 px-2"
+              className="text-fg-muted h-7 px-2"
             >
               Clear filters
             </Button>
           )}
-        </p>
+        </div>
         <div className="flex items-center gap-2">{actions}</div>
       </div>
     </div>
