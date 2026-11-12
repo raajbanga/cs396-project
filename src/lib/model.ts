@@ -35,6 +35,13 @@ const CONTROLS = {
 export type Control = keyof typeof CONTROLS;
 
 /** The numeric inputs, with labels and units for the sensitivity controls. */
+/** Model colors: kept apart from the fuel colors (amber coal, green gas, blue hydro, rose oil). */
+export const MODEL_COLORS: Record<string, string> = {
+  baseline: "#78716c",
+  ridge: "#6366f1",
+  tree: "#c026d3",
+};
+
 export const NUMERIC_INPUTS = {
   heat_input_mmbtu: { label: "Heat input", unit: "MMBtu" },
   gross_load_mwh: { label: "Gross load", unit: "MWh" },

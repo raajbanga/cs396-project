@@ -1,7 +1,7 @@
 "use client";
 
 import type { Data } from "plotly.js";
-import { Chart } from "~/components/ui/chart";
+import { Chart, pointsType } from "~/components/ui/chart";
 import { Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
@@ -53,19 +53,6 @@ const shownOf = (shown: number, total = 0, noun = "groups") =>
   total > shown
     ? `; the ${shown} largest of ${formatNumber(total)} ${noun}`
     : "";
-
-/** WebGL draws thousands of points fast; without it (old GPUs, some VMs) Plotly shows an error, so use SVG. */
-let webgl: boolean | undefined;
-const hasWebGL = () => {
-  if (webgl === undefined && typeof document !== "undefined") {
-    try {
-      webgl = Boolean(document.createElement("canvas").getContext("webgl"));
-    } catch {
-      webgl = false;
-    }
-  }
-  return webgl ?? true;
-};
 
 /** A query's state as Chart props: loading, error, and retry. */
 const status = (q: {
@@ -416,7 +403,7 @@ export function ScatterChart(props: TabProps) {
         data={groups.map((group): Data => {
           const pts = points.filter((p) => p.group === group);
           return {
-            type: hasWebGL() ? "scattergl" : "scatter",
+            type: pointsType(),
             mode: "markers",
             name: group,
             x: pts.map((p) => p.x),
