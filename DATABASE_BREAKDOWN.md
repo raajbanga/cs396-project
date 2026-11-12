@@ -308,7 +308,7 @@ EPA TRACI 2.2 characterization factors for the three pollutants CAMPD reports, e
 | `id`             | `INTEGER PRIMARY KEY` | Row number.                                                                   | **Key**.                                                                |
 | `traciVersion`   | `TEXT`                | `2.2`.                                                                        | **Reproducibility**: Shown with every result and in exports.            |
 | `pollutant`      | `TEXT`                | CAMPD pollutant: `co2`, `so2`, or `nox`.                                      | **Matching**: Which `annual_records` mass column the factor multiplies. |
-| `substance`      | `TEXT`                | TRACI substance, matched exactly (`NITROGEN OXIDES`, not `NITROGEN DIOXIDE`). | **Provenance**: Factor table on the Impacts tab.                        |
+| `substance`      | `TEXT`                | TRACI substance, matched exactly (`NITROGEN OXIDES`, not `NITROGEN DIOXIDE`). | **Provenance**: Factor table on the TRACI impacts tab.                  |
 | `cas`            | `TEXT`                | TRACI's CAS number (`x` when TRACI lists none).                               | **Provenance**.                                                         |
 | `medium`         | `TEXT`                | Always `air`.                                                                 | **Matching**.                                                           |
 | `impactCategory` | `TEXT`                | Global warming, Acidification, Human health (particulate), Smog formation.    | **Grouping**: Impacts are summed only within a category.                |
@@ -530,13 +530,13 @@ flowchart LR
 
 ### View 11: Analyze Page (`AnalyzeView`, `src/app/_components/analyze/`)
 
-- **Purpose**: The Phase 2 analytical dataset, statistics, charts, group comparisons, and TRACI impacts, on the Dataset, Statistics, Charts, Compare, and Impacts tabs.
+- **Purpose**: The Phase 2 analytical dataset, statistics, charts, group comparisons, and TRACI impacts, on the Overview, Distribution, Relationships, Compare groups, and TRACI impacts tabs.
 - **Queries Used**: `api.analysis.catalog`, `provenance`, `summary`, `describe`, `aggregate`, `distribution`, `scatter`, `correlation`, and `compare`.
 - **What Part of the Table It Uses**: `annual_records ⨝ units ⨝ facilities` for the selected unit-years, `traci_factors` for impacts, and `datasets` for the last import in export metadata. Derived values are computed on read (Caveat 8).
 
 ### View 12: Predict Page (`PredictView`, `src/app/_components/predict/`)
 
-- **Purpose**: Compares the NOₓ models and runs sensitivity and scenario analysis, on the Models, Sensitivity, and Scenarios tabs.
+- **Purpose**: Compares the NOₓ models and runs sensitivity and scenario analysis, on the Models and What-if tabs.
 - **Queries Used**: `api.prediction.models`, `baselineOptions`, `baseline`, and `testPredictions`.
 - **What Part of the Table It Uses**: `models` for the registered models, and `annual_records ⨝ units ⨝ facilities` for baseline unit-years.
 
