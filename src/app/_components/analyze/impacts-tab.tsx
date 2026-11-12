@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Chart } from "~/components/ui/chart";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
-import { ReportTable, Section } from "~/components/ui/report";
+import { Disclosure, ReportTable, Section } from "~/components/ui/report";
 import { formatStat } from "~/lib/analysis";
 import { IMPACT_DISCLAIMER, SHORT_TON_KG } from "~/lib/traci";
 import { formatNumber } from "~/lib/utils";
@@ -56,7 +55,6 @@ export function ImpactsTab(props: TabProps) {
       t.analysis.aggregate({ filters, variables: [v.key], by, limit: TOP }),
     ),
   );
-  const [showTable, setShowTable] = useState(false);
   const version = catalog.factors[0]?.traciVersion;
   const groupName = inSentence(dimensionLabel(catalog, by));
   const traciMeta = {
@@ -127,68 +125,49 @@ export function ImpactsTab(props: TabProps) {
         })}
       </div>
 
-      <details
-        className="border-edge rounded-md border"
-        onToggle={(e) => setShowTable(e.currentTarget.open)}
+      <Disclosure
+        title={`All results by ${groupName}`}
+        hint="every category side by side, with a CSV download"
       >
-        <summary className="hover:bg-surface cursor-pointer px-4 py-3">
-          <span className="text-fg font-semibold">
-            All results by {groupName}
-          </span>
-          <span className="text-fg-muted ml-3 text-xs">
-            every category side by side, with a CSV download
-          </span>
-        </summary>
-        <div className="px-4 pt-2 pb-5">
-          {showTable && (
-            <ResultsTable {...props} impacts={impacts} traciMeta={traciMeta} />
-          )}
-        </div>
-      </details>
+        <ResultsTable {...props} impacts={impacts} traciMeta={traciMeta} />
+      </Disclosure>
 
-      <details className="border-edge rounded-md border">
-        <summary className="hover:bg-surface cursor-pointer px-4 py-3">
-          <span className="text-fg font-semibold">
-            TRACI {version} factors used
-          </span>
-          <span className="text-fg-muted ml-3 text-xs">
-            how each CAMPD pollutant maps to a TRACI substance and factor
-          </span>
-        </summary>
-        <div className="space-y-3 px-4 pt-2 pb-5">
-          <p className="text-fg-muted max-w-3xl text-xs">
-            Matched by exact TRACI substance and the air medium; masses
-            converted with 1 short ton = {SHORT_TON_KG} kg. Impact = Σ mass (kg)
-            × factor over the pollutants in a category.
-          </p>
-          <ReportTable
-            head={[
-              "CAMPD pollutant",
-              "TRACI substance",
-              "CAS",
-              "Impact category",
-              "Factor",
-              "Unit per kg",
-            ]}
-            rows={catalog.factors.map((f) => [
-              POLLUTANT_LABELS[f.pollutant] ?? f.pollutant,
-              f.substance,
-              f.cas,
-              f.impactCategory,
-              String(Number(f.factor.toPrecision(6))),
-              f.factorUnit,
-            ])}
-          />
-          <div className="text-fg-muted max-w-4xl space-y-1 text-xs">
-            {impacts.map((v) => (
-              <p key={v.key}>
-                <span className="text-fg-2 font-medium">{v.label}:</span>{" "}
-                {v.definition}
-              </p>
-            ))}
-          </div>
+      <Disclosure
+        title={`TRACI ${version} factors used`}
+        hint="how each CAMPD pollutant maps to a TRACI substance and factor"
+      >
+        <p className="text-fg-muted max-w-3xl text-xs">
+          Matched by exact TRACI substance and the air medium; masses converted
+          with 1 short ton = {SHORT_TON_KG} kg. Impact = Σ mass (kg) × factor
+          over the pollutants in a category.
+        </p>
+        <ReportTable
+          head={[
+            "CAMPD pollutant",
+            "TRACI substance",
+            "CAS",
+            "Impact category",
+            "Factor",
+            "Unit per kg",
+          ]}
+          rows={catalog.factors.map((f) => [
+            POLLUTANT_LABELS[f.pollutant] ?? f.pollutant,
+            f.substance,
+            f.cas,
+            f.impactCategory,
+            String(Number(f.factor.toPrecision(6))),
+            f.factorUnit,
+          ])}
+        />
+        <div className="text-fg-muted max-w-4xl space-y-1 text-xs">
+          {impacts.map((v) => (
+            <p key={v.key}>
+              <span className="text-fg-2 font-medium">{v.label}:</span>{" "}
+              {v.definition}
+            </p>
+          ))}
         </div>
-      </details>
+      </Disclosure>
     </div>
   );
 }

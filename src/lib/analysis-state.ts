@@ -137,9 +137,10 @@ export function analysisSearchParams(
 }
 
 /** Predict page state (Phase 2 §5–§6): tab, model, baseline unit-year, and analysis inputs. */
+export const PREDICT_TABS = ["models", "whatif"] as const;
 export const DEFAULT_PREDICT_VIEW = {
-  tab: "models" as "models" | "sensitivity" | "scenarios",
-  model: "ridge",
+  tab: "models" as (typeof PREDICT_TABS)[number],
+  model: "both", // "ridge" | "tree" | "both" (What-if); Models shows "both" as Ridge
   fid: "1356", // baseline: Ghent unit 2, 2024 (coal, no SCR)
   uid: "2",
   year: "2024",
@@ -155,8 +156,9 @@ export type PredictView = typeof DEFAULT_PREDICT_VIEW;
 
 export function parsePredictParams(params: Params) {
   const view = readView(DEFAULT_PREDICT_VIEW, params);
-  if (!["models", "sensitivity", "scenarios"].includes(view.tab)) {
-    view.tab = DEFAULT_PREDICT_VIEW.tab;
-  }
+  // Sensitivity and Scenarios were separate tabs before 11/11; both now live on What-if.
+  const tab: string = view.tab;
+  if (tab === "sensitivity" || tab === "scenarios") view.tab = "whatif";
+  if (!PREDICT_TABS.includes(view.tab)) view.tab = DEFAULT_PREDICT_VIEW.tab;
   return view;
 }

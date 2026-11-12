@@ -11,7 +11,7 @@ import {
   so2ControlClass,
   type AnalysisRow,
 } from "./analysis";
-import { parseAnalysisParams } from "./analysis-state";
+import { parseAnalysisParams, parsePredictParams } from "./analysis-state";
 import { SHORT_TON_KG, type TraciFactor } from "./traci";
 
 /** The committed TRACI extract, as the import script reads it. */
@@ -157,6 +157,8 @@ void test("formatPct: signed, one decimal, dash when undefined", () => {
   assert.equal(formatPct(12.345), "+12.3 %");
   assert.equal(formatPct(-4), "-4.0 %");
   assert.equal(formatPct(null), "—");
+  assert.equal(formatPct(0.04), "0.0 %");
+  assert.equal(formatPct(-0.04), "0.0 %");
   assert.equal(formatPct(Infinity), "—");
 });
 
@@ -190,4 +192,10 @@ void test("parseAnalysisParams: unknown grouping fields fall back to defaults", 
   assert.equal(view.by, "state");
   assert.equal(view.compareBy, "noxControl");
   assert.equal(view.series, "");
+});
+
+void test("old Predict tab links open What-if", () => {
+  assert.equal(parsePredictParams({ tab: "sensitivity" }).tab, "whatif");
+  assert.equal(parsePredictParams({ tab: "scenarios" }).tab, "whatif");
+  assert.equal(parsePredictParams({ tab: "nope" }).tab, "models");
 });

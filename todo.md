@@ -61,6 +61,11 @@ report and slides keep working.
 
 ### Predict: 2 sections instead of 3 tabs
 
+**Done 11/11** (on `dev`): Models (test-MAE chart, metrics table, predicted vs actual +
+importance, leakage and record collapsed) and What-if (picker, baseline card with each model's
+prediction, sensitivity and scenarios on one page, Ridge | Tree | Both, tables behind "Show
+values"). Model colors: Ridge indigo, tree fuchsia, baseline stone. Old tab links open What-if.
+
 - **Models: "How good are the models?"** The comparison table with the baseline first, plus a
   small bar chart of test MAE per model as the visual anchor (§5.3); predicted-vs-actual and
   importance side by side; the leakage note and model record in a disclosure.
@@ -96,18 +101,18 @@ report and slides keep working.
   chips and a state chip; keep the fuel chips as the legend. Move Facility ID and Unit ID
   into Advanced once search suggests them; that shortens the bar on every page. Year
   options everywhere come from `getFilterOptions`, not hard-coded lists.
-- [~] **One page layout.** (Analyze done 11/11; Predict left) `PageTitle` with a one-sentence lead, one underline tab row, then
-  content. No second tab row.
+- [x] **One page layout.** (11/11) `PageTitle` with a one-sentence lead, one underline tab row, then
+      content. No second tab row.
 - [ ] **One export label set.** Today exports are labeled "Download CSV" (Explore), "Download dataset" (Analyze),
       "Download" (sections), "Data" (charts), and "More options". Use "Download" + format through
       `ExportButton` everywhere.
-- [ ] **One color system.** Fuel colors from `getFuelTheme` (already used in Analyze). Models and
-      TRACI categories get a palette that doesn't reuse Coal orange or Gas green.
-- [~] **One number format** (Impacts table done 11/11) for large quantities (`formatQuantity`: k/M/B, Mt) in the Impacts
-  table, axes, and tiles. Also: Map fuel chips print `1139` next to `1,652`, and Scenarios
-  mixes `+0.0 %` with `0.0 %`.
-- [~] **One loading/empty/error pattern** (Analyze done 11/11; Predict left) (`InlineLoading`, `EmptyState`) for Statistics and
-  Compare (blank today). Do this together with the P1 error-handling item.
+- [~] **One color system.** (models done 11/11; TRACI charts still default blue) Fuel colors from `getFuelTheme` (already used in Analyze). Models and
+  TRACI categories get a palette that doesn't reuse Coal orange or Gas green.
+- [x] **One number format** (11/11: Impacts table, Map chips, `formatPct` rounds before signing) for large quantities (`formatQuantity`: k/M/B, Mt) in the Impacts
+      table, axes, and tiles. Also: Map fuel chips print `1139` next to `1,652`, and Scenarios
+      mixes `+0.0 %` with `0.0 %`.
+- [x] **One loading/empty/error pattern** (11/11) (`InlineLoading`, `EmptyState`) for Statistics and
+      Compare (blank today). Do this together with the P1 error-handling item.
 - [ ] **Link Phase 1 and Phase 2.** Explore's compare dock gets "Analyze in Compare"
       (`/analyze?tab=compare&compareBy=facility&groups=…`); the facility dialog gets "Analyze this
       facility"; the unit dialog gets "Predict this unit" (opens What-if with it as the baseline).
@@ -205,11 +210,11 @@ it bears on Interactive visualization (10), Integration and usability (5), and P
       identity (credit AI with a `Co-Authored-By` trailer, not as author), commits go straight to `dev` (11/11: no feature branches), and Arnav owns a visible share of the remaining work (e.g. the P1
       error-handling and P2 UI items, slides). Open GitHub issues for the items below and close
       them from PRs.
-- [~] **Error handling (rubric: integration, 5 pts).** (11/11: all done except Predict's charts.) Phase 2 tabs never show query errors and
-  there is no `error.tsx`. `?variable=nope` throws `Unknown variable` as
-  `INTERNAL_SERVER_ERROR` and the tab stays blank. Fix: throw `TRPCError("BAD_REQUEST")` in
-  `findVariable`; fall back to defaults for unknown variable/dimension keys in
-  `parseAnalysisParams`; show an inline error with retry in each tab; add `src/app/error.tsx`.
+- [x] **Error handling (rubric: integration, 5 pts).** (11/11) Phase 2 tabs never show query errors and
+      there is no `error.tsx`. `?variable=nope` throws `Unknown variable` as
+      `INTERNAL_SERVER_ERROR` and the tab stays blank. Fix: throw `TRPCError("BAD_REQUEST")` in
+      `findVariable`; fall back to defaults for unknown variable/dimension keys in
+      `parseAnalysisParams`; show an inline error with retry in each tab; add `src/app/error.tsx`.
 - [x] **Impacts tab shows the wrong top 15 for large groupings** (`impacts-tab.tsx`). The query
       keeps the 100 groups largest in the _first_ category, and every other chart picks its top 15
       from those. Checked: acidification per MWh by facility shows only 5 of the true top 15. The

@@ -456,7 +456,9 @@ export function formatStat(v: number | null | undefined) {
 }
 
 /** A signed percentage: "+12.3 %", "-4.0 %"; "—" when undefined. */
-export const formatPct = (v: number | null | undefined) =>
-  v === null || v === undefined || !Number.isFinite(v)
-    ? "—"
-    : `${v > 0 ? "+" : ""}${v.toFixed(1)} %`;
+export const formatPct = (v: number | null | undefined) => {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  // Round first, so 0.04 and -0.04 both read "0.0 %" (not "+0.0 %" or "-0.0 %").
+  const r = Number(v.toFixed(1)) || 0;
+  return `${r > 0 ? "+" : ""}${r.toFixed(1)} %`;
+};
