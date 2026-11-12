@@ -35,6 +35,13 @@ const CONTROLS = {
 export type Control = keyof typeof CONTROLS;
 
 /** The numeric inputs, with labels and units for the sensitivity controls. */
+/**
+ * The years the saved model was fit on. Tuning trains on `trainYears` and scores `validationYears`;
+ * the registered model is then refit on both, so its fit years span the two.
+ */
+export const fitYears = (m: { trainYears: string; validationYears: string }) =>
+  `${m.trainYears.split("-")[0]}-${m.validationYears.split("-").at(-1)}`;
+
 /** Model colors: kept apart from the fuel colors (amber coal, green gas, blue hydro, rose oil). */
 export const MODEL_COLORS: Record<string, string> = {
   baseline: "#78716c",
