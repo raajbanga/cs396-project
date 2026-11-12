@@ -176,7 +176,6 @@ export function ModelsTab({
                 const v = metric(m, "test", "mae");
                 return lo !== undefined && v !== null ? v - lo : 0;
               }),
-              color: "gray",
               thickness: 1.5,
               width: 6,
             },

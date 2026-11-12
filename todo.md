@@ -64,7 +64,7 @@ re-graded since):
 ### Local checks 🧪
 
 - [ ] Hosted build: charts render, ZIP downloads work, Upload refuses writes.
-- [ ] ZIP downloads in Safari and Chrome (PNG, CSV, `metadata.json`); every tab in dark mode.
+- [ ] ZIP downloads in Safari (Chrome checked 11/12; Safari is the one #10 is about).
 - [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`). If lint
       or types fail where they passed before: `npm ci`, then delete `.next/`.
 
@@ -140,6 +140,10 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
 - **Python 3.9, 11/12:** on 3.9.25 (pandas 2.3, NumPy 2.0, scikit-learn 1.6) pytest passes and a
   retrain in a scratch worktree reproduces every reported number (tree MAE within 0.0001 t);
   README and report §4.2 say so.
+- **Dark mode and Chrome downloads, 11/12:** every page and tab screenshotted in dark mode; the only
+  defect, near-black CI error bars on Compare groups and Models, now take the theme's text color
+  (`<Chart>`). Chart ZIPs from all 5 Analyze tabs and both Predict tabs downloaded in Chrome:
+  CSV, PNG, and `metadata.json` in each, every §7 item present.
 
 ---
 

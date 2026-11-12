@@ -77,6 +77,19 @@ function mergeLayout(base: Partial<Layout>, layout: Partial<Layout>) {
   return merged as Partial<Layout>;
 }
 
+/** Error bars default to Plotly's near-black, invisible on the dark theme; give them the text color. */
+function themeData(data: Data[]): Data[] {
+  const color = token("--fg-2");
+  return data.map((trace) => {
+    const t = { ...trace } as Record<string, unknown>;
+    for (const key of ["error_x", "error_y"]) {
+      const bars = t[key] as Record<string, unknown> | undefined;
+      if (bars && bars.color === undefined) t[key] = { color, ...bars };
+    }
+    return t;
+  });
+}
+
 /** WebGL draws thousands of points fast; without it (old GPUs, some VMs) Plotly shows an error, so use SVG. */
 let webgl: boolean | undefined;
 /** "scattergl" when the browser has WebGL, else "scatter". */
@@ -144,7 +157,7 @@ export function Chart({
       };
       void Plotly.react(
         el,
-        data,
+        themeData(data),
         mergeLayout(themeLayout(resolvedTheme === "dark"), {
           height,
           ...layout,
