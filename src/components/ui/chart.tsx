@@ -183,7 +183,7 @@ export function Chart({
           {table && (
             <ExportButton
               variant="ghost"
-              label="Data"
+              label="Download"
               name={filename}
               title={title}
               table={table}

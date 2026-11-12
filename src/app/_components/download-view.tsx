@@ -76,7 +76,7 @@ const datasetLabel = (d: DatasetRow) =>
 /**
  * §9 / §10 download page: what to export (dataset, search results, selection, reports,
  * provenance), the dataset or filters, and the file format. Filters arrive in the URL from
- * Explore's "More options" link, so search results download exactly what Explore showed.
+ * Explore's "More formats" link, so search results download exactly what Explore showed.
  */
 export function DownloadView({
   initialState,
@@ -290,7 +290,7 @@ export function DownloadView({
       {type === "search" && (
         <Section
           title="2. Filters"
-          note="The same filters as Explore. Opened from Explore's “More options”, they start as Explore's current search."
+          note="The same filters as Explore. Opened from Explore's “More formats”, they start as Explore's current search."
         >
           <SegmentedControl
             value={view}

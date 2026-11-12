@@ -8,7 +8,8 @@ import {
   FuelBadge,
   SourceBadge,
 } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import Link from "next/link";
+import { Button, buttonClass } from "~/components/ui/button";
 import { DataPanel } from "~/components/ui/data-panel";
 import { DialogHeader } from "~/components/ui/dialog";
 import { EmptyState, InlineLoading } from "~/components/ui/empty-state";
@@ -372,6 +373,23 @@ export function CompareView() {
   const cleanest = pickCleanestByCarbonIntensity(plants);
   const totalUnits = sum(plants, "unitCount");
   const totalScrubbed = sum(plants, "controlledUnitsCount");
+  // The same selection as Analyze's Compare groups (labels as in lib/analysis DIMENSIONS); a mix
+  // of facilities and units compares their facilities.
+  const byUnit = plants.length > 0 && plants.every((p) => p.unitInternalId);
+  const groups = [
+    ...new Set(
+      plants.map((p) => {
+        const facility = `${p.name.split(" · Unit ")[0]} (${p.id})`;
+        return byUnit ? `${facility} unit ${p.units[0]?.unitId}` : facility;
+      }),
+    ),
+  ];
+  const analyzeHref = `/analyze?${new URLSearchParams({
+    tab: "compare",
+    compareBy: byUnit ? "unit" : "facility",
+    groups: groups.join("|"),
+    variable: "co2MassTons",
+  }).toString()}`;
 
   return (
     <div className="space-y-8">
@@ -382,6 +400,16 @@ export function CompareView() {
         actions={
           <>
             <SourceBadge kind="db" />
+            {canCompare && groups.length >= 2 && (
+              <Link
+                href={analyzeHref}
+                onClick={() => inspect(null)}
+                className={buttonClass({ variant: "outline", size: "sm" })}
+                title="Every year of each, with confidence intervals and significance tests"
+              >
+                Analyze these
+              </Link>
+            )}
             <Button variant="outline" size="sm" onClick={clearCompare}>
               Clear selection
             </Button>
@@ -478,15 +506,29 @@ export function CompareView() {
 export function CompareActions({
   isInCompare,
   onToggle,
+  links = [],
 }: {
   isInCompare: boolean;
   onToggle: () => void;
+  /** Phase 2 pages for this facility or unit: [label, href, tooltip]. */
+  links?: [string, string, string][];
 }) {
   const { compareIds, compareUnitIds, inspect } = use(SelectionContext);
   const count = compareIds.length + compareUnitIds.length;
   return (
     <>
       <SourceBadge kind="db" />
+      {links.map(([label, href, title]) => (
+        <Link
+          key={href}
+          href={href}
+          title={title}
+          onClick={() => inspect(null)}
+          className={buttonClass({ variant: "outline", size: "sm" })}
+        >
+          {label}
+        </Link>
+      ))}
       <Button
         variant="outline"
         size="sm"

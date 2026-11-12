@@ -135,7 +135,7 @@ export function AnalyzeView({
                 className={buttonClass({ variant: "outline", size: "sm" })}
                 title="Every selected unit-year with all variables, as CSV in a ZIP with metadata.json"
               >
-                Download dataset
+                Download all
               </a>
             </>
           }

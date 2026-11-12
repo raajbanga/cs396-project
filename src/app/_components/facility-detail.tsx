@@ -469,6 +469,13 @@ export function FacilityDetail({ facilityId }: { facilityId: number }) {
           <CompareActions
             isInCompare={compareIds.includes(facility.id)}
             onToggle={() => toggleCompare(facility.id)}
+            links={[
+              [
+                "Analyze",
+                `/analyze?facilityId=${facility.id}`,
+                "Trends, distributions, and TRACI impacts for this facility's units",
+              ],
+            ]}
           />
         }
       />
