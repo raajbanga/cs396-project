@@ -121,3 +121,10 @@ export function getMarkerRadius(
 export const FUEL_CATEGORIES = (["gas", "coal", "oil"] as const).map(
   (key) => FUEL_STYLES[key],
 );
+
+/** A facility the map should center on and ring (from the search box). */
+export interface MapFocus {
+  id: number;
+  latitude: number;
+  longitude: number;
+}

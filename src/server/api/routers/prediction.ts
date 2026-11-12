@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
-  baselineOptions,
+  baselineUnits,
   baselineUnitYear,
   listModels,
   testPredictions,
@@ -12,9 +12,9 @@ import {
 export const predictionRouter = createTRPCRouter({
   models: publicProcedure.query(() => listModels()),
 
-  baselineOptions: publicProcedure
-    .input(z.object({ search: z.string().max(100), year: z.number().int() }))
-    .query(({ input }) => baselineOptions(input.search, input.year)),
+  baselineUnits: publicProcedure
+    .input(z.object({ facilityId: z.number().int(), year: z.number().int() }))
+    .query(({ input }) => baselineUnits(input.facilityId, input.year)),
 
   baseline: publicProcedure
     .input(
