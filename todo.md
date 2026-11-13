@@ -21,14 +21,14 @@ again. `dev` is ahead of `master` by the 11/12 prediction and report work.
 The professor's critique (Analyze and Predict heavy, a sub-page data dump, a different site) is
 addressed: Analyze has 5 question tabs on one tab level, Predict has Models and What-if, and
 search, filters, layout, exports, colors, loading/error states, and Phase 1 ↔ Phase 2 links are
-shared site-wide (details under Done). `npm run validate` passes on 11/12 (81 tests: 80 pass, 1
+shared site-wide (details under Done). `npm run validate` passes on 11/12 (82 tests: 81 pass, 1
 skipped; 10 pytest); production deploy succeeded on 11/11.
 
 Rubric 1.2 (GitHub record) cleanup is done (11/11): no commit is authored by Claude (the 9
 Phase 2 commits of 10/30 were re-authored as Raaj, keeping their AI co-author trailers; trees
 unchanged), `master` and `dev` share history, stale branches are gone, README and docs use the
 current tab names, and open work is in issues #6–#15 split by area. What 1.2 still needs is
-Arnav's own commits (#8, #9, #10, #15).
+Arnav's own commits (#15; #8–#10 were done by Raaj on 11/12 with Arnav as co-author).
 
 Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20; not
 re-graded since):
@@ -44,14 +44,6 @@ re-graded since):
 
 ### Code
 
-- [ ] (#8) Sensitivity: show an inline message for min > max or a zero step instead of silently
-      fixing them. (The 401-point cap now warns.) The grid now lives in `sensitivityGrid`
-      (`src/lib/model.ts`, tested), which still normalizes the inputs; add the message in
-      `sensitivity.tsx` and extend the tests.
-- [ ] (#9) Spearman heat map takes 1.8 s (measured 11/02). Rank each column once when it has no
-      missing values; update the report's Performance table and Known issues.
-- [ ] (#10) `downloadBundle` revokes the object URL right after `a.click()`, which can cancel downloads
-      in Safari. Revoke in a `setTimeout`.
 - [ ] Merge `dev` into `master` by PR (merge commit) once the 11/12 work is reviewed; the
       `Fixes #6/#7/#11–#14` trailers close those issues then.
 
@@ -64,7 +56,7 @@ re-graded since):
 ### Local checks 🧪
 
 - [ ] Hosted build: charts render, ZIP downloads work, Upload refuses writes.
-- [ ] ZIP downloads in Safari (Chrome checked 11/12; Safari is the one #10 is about).
+- [ ] ZIP downloads in Safari (Chrome checked 11/12; #10's delayed revoke is untested there).
 - [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`). If lint
       or types fail where they passed before: `npm ci`, then delete `.next/`.
 
@@ -144,6 +136,10 @@ All spec functions are built, tested, and on `dev` and `master`; see git history
   defect, near-black CI error bars on Compare groups and Models, now take the theme's text color
   (`<Chart>`). Chart ZIPs from all 5 Analyze tabs and both Predict tabs downloaded in Chrome:
   CSV, PNG, and `metadata.json` in each, every §7 item present.
+- **P2 code, 11/12 (#8, #9, #10):** What-if says when it corrects a reversed range or a zero,
+  negative, or empty step; the Spearman heat map takes 0.3 s instead of 2.0 s (each column sorted
+  once, each pair once; identical matrices), report Performance and Known issues updated; ZIP
+  object URLs are revoked after 60 s.
 
 ---
 
