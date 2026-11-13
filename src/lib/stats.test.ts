@@ -8,6 +8,7 @@ import {
   kruskalWallis,
   mannWhitney,
   meanCi,
+  pairwiseCorrelations,
   pearson,
   quantile,
   spearman,
@@ -44,6 +45,37 @@ void test("correlations match SciPy", () => {
   // Pairwise-complete: a missing value drops its pair, not the whole series.
   close(pearson([1, 2, null, 4], [2, 4, 100, 8]), 1);
   assert.equal(pearson([1, 1, 1], [1, 2, 3]), null);
+});
+
+void test("pairwiseCorrelations: the pair-by-pair values, with missing values and ties", () => {
+  // A seeded generator, so the columns (and their missing values and ties) are fixed.
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const column = (missing: number) =>
+    Array.from({ length: 400 }, () =>
+      random() < missing ? null : Math.round(random() * 30),
+    );
+  const columns = [column(0), column(0.1), column(0.3), column(0), column(1)];
+  for (const method of ["pearson", "spearman"] as const) {
+    const fn = method === "pearson" ? pearson : spearman;
+    const { matrix, n } = pairwiseCorrelations(columns, method);
+    columns.forEach((x, i) =>
+      columns.forEach((y, j) => {
+        // Bit-identical to the pairwise function, so the heat map did not change.
+        assert.equal(
+          matrix[i]![j],
+          i === j ? 1 : fn(x, y),
+          `${method} ${i},${j}`,
+        );
+        assert.equal(
+          n[i]![j],
+          x.filter((v, k) => v !== null && y[k] !== null).length,
+        );
+      }),
+    );
+  }
+  // An all-missing column has no correlation with anything else.
+  assert.equal(pairwiseCorrelations(columns, "spearman").matrix[0]![4], null);
 });
 
 void test("two-sample tests match SciPy", () => {
