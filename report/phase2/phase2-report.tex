@@ -264,7 +264,9 @@ unit, and shows its inputs, its actual \NOx{}, and each model's prediction. The 
 selects Ridge, the tree, or both, which are then drawn side by side. Below the baseline, the
 sensitivity analysis varies one input from a minimum to a
 maximum with a chosen step, given in the input's own unit or as a percentage of its baseline
-value, and holds all other inputs fixed. It draws the prediction as a curve with the baseline
+value, and holds all other inputs fixed. A minimum above the maximum, or a step that is zero,
+negative, or empty, is corrected (the range read low to high, the step's size or 1 used), and a
+message under the inputs says what was drawn instead. It draws the prediction as a curve with the baseline
 marked and the region outside the training data shaded (Figure~\ref{fig:sensitivity}), and a
 collapsed table gives each input value with its prediction and the absolute and percentage
 change. The scenario analysis on the same page compares the baseline with five named changes:
@@ -332,7 +334,7 @@ meets it.
 \S7 Metadata for reproducibility & \code{metadata.json} in every ZIP; a unit test checks each of the six items & Met\\
 \S8 Steps 5 and 10: pandas analysis; Flask pages or JSON & Statistics in TypeScript, checked against NumPy and SciPy; tRPC procedures (Section~\ref{sec:design}) & Changed\\
 \S8.1 Flask, Jinja2, SQLAlchemy, pandas, scikit-learn, joblib, pytest & Next.js, React, Drizzle; pandas, scikit-learn, joblib, and pytest offline & Changed\\
-\S12.3 Instructions, migrations, environment template, tests, fixtures, no keys & README, migration 0009, \code{.env.example}, 81 + 10 tests, 100~KB fixture & Met\\
+\S12.3 Instructions, migrations, environment template, tests, fixtures, no keys & README, migration 0009, \code{.env.example}, 82 + 10 tests, 100~KB fixture & Met\\
 \bottomrule
 \end{longtable}}
 
@@ -1045,14 +1047,16 @@ passes.
 
 \subsection{Unit tests}
 
-\code{npm test} runs 81 TypeScript tests in nine files: 80 pass and one is skipped because it
-needs a folder of raw CAMPD files that is not committed. Thirty-seven tests in four new files
+\code{npm test} runs 82 TypeScript tests in nine files: 81 pass and one is skipped because it
+needs a folder of raw CAMPD files that is not committed. Thirty-eight tests in four new files
 cover Phase~2:
 \begin{itemize}
-  \item \code{stats.test.ts} (4 tests): quantiles and standard deviation against NumPy; Pearson
+  \item \code{stats.test.ts} (5 tests): quantiles and standard deviation against NumPy; Pearson
         and Spearman correlation, Welch's $t$, Mann--Whitney $U$, the confidence interval,
         ANOVA, Kruskal--Wallis, and the $\chi^2$ tail against SciPy, to $10^{-9}$ for statistics
-        and $10^{-6}$ for $p$-values; pairwise-complete correlation; constant inputs.
+        and $10^{-6}$ for $p$-values; pairwise-complete correlation; constant inputs; and the
+        heat map's correlation matrix, identical to the pair-by-pair values on columns with
+        missing values and ties.
   \item \code{analysis.test.ts} (13 tests): each derived rate, and its missing value when an input
         is missing or a denominator is zero; capacity factor in leap and ordinary years;
         year-over-year changes with a missing or zero previous year; pooled rates as a ratio of
@@ -1067,7 +1071,8 @@ cover Phase~2:
         rate that is missing when the previous heat input is zero); out-of-range detection; the
         direction of the response to heat input; readable feature names; and the What-if
         calculations: percentage change (undefined from zero), the sensitivity grid (baseline
-        included once, a reversed range, a zero step, the point limit), the curve (only the
+        included once, a reversed range and a zero, negative, or empty step, each reported to the
+        page, the point limit), the curve (only the
         varied input changes; absolute and percentage changes from the baseline prediction;
         values past the training maximum flagged), and the scenarios (each changes only what it
         names; coal and gas units get the opposite fuel and control changes; an unseen fuel is
@@ -1138,17 +1143,20 @@ Overview summary (missing counts of 29 variables) & 219\,ms\\
 Statistics of \NOx{} intensity by fuel class & 62\,ms\\
 Trend of \COtwo{} by year and fuel class & 23\,ms\\
 Comparison of two groups with all tests & 11\,ms\\
-Correlation heat map, 11 variables, Pearson & 182\,ms\\
-Correlation heat map, 11 variables, Spearman & 1.9\,s\\
+Correlation heat map, 11 variables, Pearson & 115\,ms\\
+Correlation heat map, 11 variables, Spearman & 0.3\,s\\
 Sensitivity curve, 61 tree predictions (browser code) & 0.1\,ms\\
 Analytical-dataset export, 2015--2025 (ZIP) & 0.7\,s\\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Most views take well under a second. The Spearman heat map is the exception: it ranks the
-values again for each of the 55 pairs of variables, because the pairwise-complete subset differs
-from pair to pair (Section~\ref{sec:known}).
+Every operation in the table takes under a second. The Spearman heat map took 1.9~s until 11/12: it sorted
+both variables again for each pair, because the pairwise-complete subset differs from pair to
+pair, and computed both halves of the symmetric matrix. It now sorts each variable once, ranks a
+pair's complete rows in one pass over that order, and computes each of the 55 pairs once, which
+also shortens the Pearson map. A unit test checks that the matrix is identical to the pair-by-pair
+calculation, and on the 2015--2025 selection both matrices are unchanged to the last digit.
 
 \subsection{Defects found and corrected}
 
@@ -1178,8 +1186,6 @@ comparison.
 \label{sec:known}
 
 \begin{itemize}
-  \item The Spearman correlation heat map takes about two seconds on the full selection.
-        Ranking each variable once when it has no missing values would remove most of the cost.
   \item The state choropleth needs internet access to load the U.S.\ outlines from
         \code{cdn.plot.ly}.
   \item Histograms, box plots, and scatter plots of very large selections draw a sample, as the
@@ -1213,7 +1219,7 @@ G9 Explaining methods and limitations & Met & Definitions, captions, and caveats
 O8 Environmental indicators & Met & Derived indicators and TRACI categories.\\
 O9 Multi-indicator scoring & Not met & Not in the Phase~2 specification; not built.\\
 O10 Interactive charts of results & Met & Every Analyze and Predict tab.\\
-O11 Test and deploy & Met & 81 + 10 automated tests; hosted at \url{https://cs396-project.vercel.app}.\\
+O11 Test and deploy & Met & 82 + 10 automated tests; hosted at \url{https://cs396-project.vercel.app}.\\
 O12 Document sources, assumptions, equations, units, limitations & Met & README, \code{DATABASE\_BREAKDOWN.md}, this report.\\
 \bottomrule
 \end{tabularx}

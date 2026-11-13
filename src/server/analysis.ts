@@ -20,8 +20,8 @@ import {
   kruskalWallis,
   mannWhitney,
   meanCi,
+  pairwiseCorrelations,
   pearson,
-  spearman,
   welchT,
 } from "~/lib/stats";
 import type { TraciFactor } from "~/lib/traci";
@@ -375,17 +375,9 @@ export function correlationMatrix(
   method: "pearson" | "spearman",
 ) {
   const columns = variables.map((v) => rows.map(v.value));
-  const fn = method === "pearson" ? pearson : spearman;
   return {
     keys: variables.map((v) => v.key),
-    matrix: columns.map((a, i) =>
-      columns.map((b, j) => (i === j ? 1 : fn(a, b))),
-    ),
-    n: columns.map((a) =>
-      columns.map(
-        (b) => a.filter((x, k) => x !== null && b[k] !== null).length,
-      ),
-    ),
+    ...pairwiseCorrelations(columns, method),
   };
 }
 

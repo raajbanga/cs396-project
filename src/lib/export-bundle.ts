@@ -228,5 +228,7 @@ export function downloadBundle(
     download: `${name}.zip`,
   });
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking right after click() can cancel the download in Safari, which starts it
+  // asynchronously; give it time to read the blob first.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

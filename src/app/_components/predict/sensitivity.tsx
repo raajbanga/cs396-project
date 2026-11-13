@@ -73,13 +73,13 @@ export function SensitivitySection({
   const asValues = view.values === "1";
 
   // The grid of input values, always including the baseline itself.
-  const { values, capped } = sensitivityGrid(
-    value0,
-    Number(view.from) || 0,
-    Number(view.to) || 0,
-    Number(view.step),
-    asValues,
-  );
+  const from = Number(view.from) || 0;
+  const to = Number(view.to) || 0;
+  const step = Number(view.step);
+  const grid = sensitivityGrid(value0, from, to, step, asValues);
+  const { values, capped } = grid;
+  // What the grid had to correct, said next to the inputs instead of silently.
+  const stepFixed = grid.step !== step;
   const curves = chosen.map((m) => ({
     model: m,
     ...sensitivityCurve(m.artifact, base, input, values, value0),
@@ -145,12 +145,24 @@ export function SensitivitySection({
             <Input
               type="number"
               value={view[key]}
+              aria-invalid={
+                (key === "step" && stepFixed) ||
+                (key !== "step" && grid.reversed)
+              }
               onChange={(e) => setView({ [key]: e.target.value })}
               className="h-9 w-32"
             />
           </Field>
         ))}
       </Controls>
+      {(grid.reversed || stepFixed) && (
+        <p role="alert" className="text-warn text-sm">
+          {grid.reversed &&
+            `The minimum (${formatStat(from)}) is above the maximum (${formatStat(to)}); the curve runs from ${formatStat(to)} to ${formatStat(from)} ${unit}. `}
+          {stepFixed &&
+            `The step must be a positive number; a step of ${formatStat(grid.step)} ${unit} is used.`}
+        </p>
+      )}
       {base[input] === null && (
         <p className="text-warn text-sm">
           The baseline has no {meta.label.toLowerCase()}; the model&apos;s

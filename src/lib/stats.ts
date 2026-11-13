@@ -131,6 +131,83 @@ export function spearman(
   return pearson(ranks(a), ranks(b));
 }
 
+/**
+ * 1-based ranks, ties sharing their average rank, of `xs` over the rows where `keep` is 1, from
+ * `order` (xs's non-missing rows, ascending). Equals `ranks` of those rows' values, in one pass.
+ */
+function ranksWhere(
+  xs: readonly (number | null)[],
+  order: readonly number[],
+  keep: Uint8Array,
+) {
+  const rows = order.filter((k) => keep[k]);
+  const out = new Float64Array(xs.length);
+  for (let i = 0; i < rows.length;) {
+    let j = i;
+    while (j + 1 < rows.length && xs[rows[j + 1]!] === xs[rows[i]!]) j++;
+    for (let k = i; k <= j; k++) out[rows[k]!] = (i + j) / 2 + 1;
+    i = j + 1;
+  }
+  return out;
+}
+
+/**
+ * Pearson or Spearman correlation of every pair of columns over its pairwise-complete rows, with
+ * each pair's row count; the same values as `pearson` / `spearman` pair by pair. The matrix is
+ * symmetric, so each pair is computed once. For Spearman each column is sorted once and a pair's
+ * ranks come from one pass over that order, instead of sorting both columns for every pair.
+ */
+export function pairwiseCorrelations(
+  columns: readonly (readonly (number | null)[])[],
+  method: "pearson" | "spearman",
+) {
+  const size = columns[0]?.length ?? 0;
+  const orders =
+    method === "spearman"
+      ? columns.map((c) => {
+          const rows: number[] = [];
+          for (let k = 0; k < size; k++) if (c[k] !== null) rows.push(k);
+          return rows.sort((p, q) => c[p]! - c[q]!);
+        })
+      : [];
+  const matrix = columns.map(() =>
+    new Array<number | null>(columns.length).fill(1),
+  );
+  const n = columns.map((c) =>
+    new Array<number>(columns.length).fill(c.filter((x) => x !== null).length),
+  );
+  const keep = new Uint8Array(size);
+  for (let i = 0; i < columns.length; i++) {
+    for (let j = i + 1; j < columns.length; j++) {
+      const a = columns[i]!;
+      const b = columns[j]!;
+      let count = 0;
+      for (let k = 0; k < size; k++) {
+        keep[k] = a[k] !== null && b[k] !== null ? 1 : 0;
+        count += keep[k]!;
+      }
+      let r: number | null;
+      if (method === "pearson") r = pearson(a, b);
+      else {
+        const ra = ranksWhere(a, orders[i]!, keep);
+        const rb = ranksWhere(b, orders[j]!, keep);
+        const xa: number[] = [];
+        const xb: number[] = [];
+        for (let k = 0; k < size; k++) {
+          if (keep[k]) {
+            xa.push(ra[k]!);
+            xb.push(rb[k]!);
+          }
+        }
+        r = pearson(xa, xb);
+      }
+      matrix[i]![j] = matrix[j]![i] = r;
+      n[i]![j] = n[j]![i] = count;
+    }
+  }
+  return { matrix, n };
+}
+
 // ─── Distributions for p-values ──────────────────────────────────────────
 
 /** ln Γ(x), Lanczos approximation (x > 0). */
