@@ -21,35 +21,86 @@ merge `master` back into `dev`.
 Every spec function (§3–§7) is built, tested, and verified in the browser. A fresh clone set up
 from the README passes `npm run validate` (82 tests: 81 pass, 1 skipped) and `npm run test:py`
 (10), and serves the app. No credentials in any of the 114 commits. The gaps below are about the
-GitHub record, one missing §6.4 element, and polish.
+commit spread, one missing §6.4 element, search outside Explore, and pages that show numbers
+without saying what they mean.
 
-| Rubric area                      | Pts | State                                                          |
-| :------------------------------- | --: | :------------------------------------------------------------- |
-| 1.1 Weekly meetings              |  12 | People (table below)                                           |
-| 1.2 Commit history               |   3 | **At risk:** commits fall in 3 weeks (W41, W44, W46)           |
-| 1.2 Team participation           |   2 | **At risk:** Arnav has authored 1 commit                       |
-| 1.2 Branches, issues, repo       |   3 | OK (6 PRs, issues #6–#15, README current, no secrets)          |
-| 2 Data layer, analysis, TRACI    |  22 | Met; empty-selection handling is weak (P2)                     |
-| 2 Visualization                  |  10 | Met                                                            |
-| 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer)        |
-| 2 Sensitivity and scenarios      |   8 | **One gap:** no baseline-prediction reference line (§6.4)      |
-| 2 Integration and usability      |   5 | Met; input validation can be tightened (P2); hosted is 11/11   |
-| 2 Presentation and participation |   6 | **Not started** (#15, Final)                                   |
-| 3 Report                         |  20 | Met; cite CAMPD and the software (P2); contributions vs GitHub |
+| Rubric area                      | Pts | State                                                     |
+| :------------------------------- | --: | :-------------------------------------------------------- |
+| 1.1 Weekly meetings              |  12 | People (table below)                                      |
+| 1.2 Commit history               |   3 | **At risk:** commits fall in 3 weeks (W41, W44, W46)      |
+| 1.2 Team participation           |   2 | OK (Arnav shows on the contributor graph)                 |
+| 1.2 Branches, issues, repo       |   3 | OK (6 PRs, issues #6–#15, README current, no secrets)     |
+| 2 Data layer, analysis, TRACI    |  22 | Met; **results shown, rarely interpreted** (P1 UX)        |
+| 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)               |
+| 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer)   |
+| 2 Sensitivity and scenarios      |   8 | **One gap:** no baseline-prediction reference line (§6.4) |
+| 2 Integration and usability      |   5 | **Search ranks only on Explore** (P1); hosted is 11/11    |
+| 2 Presentation and participation |   6 | **Not started** (#15, Final)                              |
+| 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                     |
 
 ---
 
 ## P1 — costs points
 
-- [ ] **Arnav's own commits (1.2 participation, 2 pts).** GitHub shows Raaj as the author of
-      every Phase 2 commit; Arnav appears only in `Co-authored-by` trailers, which the
-      contributor graph does not count. Arnav should author real work from now on: the slides
-      (#15) and several P2 items below (suggested: the reference line, the empty-selection
-      message, the scenario tooltips). 🧪
-- [ ] **Contributions match the record.** The report credits Arnav with the Analyze and Predict
-      UI. Both confirm the wording, and Arnav can walk through `analyze-view.tsx`,
-      `compare-tab.tsx`, `predict-view.tsx`, `sensitivity.tsx`, and `chart.tsx` (rubric §5: a
-      claimed contribution one cannot explain may lower that person's score). 🧪
+- [ ] **Search: one global selection, so rankings work on every page.** Found 11/12 in the
+      browser. "top 10 facilities by CO2 in 2025" gives 10 facilities on Explore, but 1,311 on
+      Map and 3,989 unit-years on Analyze. Name searches ("Ghent") and filter searches ("coal
+      units in Kentucky", "SCR in Ohio") work on all three; only rankings fail.
+  - Cause: the parser (`describeSearch`) returns `{ filters, sort, tab }`, and the ranking metric
+    is in `sort`, which only Explore reads (its table sort). Map and Analyze call
+    `setFilters(r.filters)`, so the metric is lost; `topN` reaches the URL but
+    `getMapFacilities` never ranks, and `analysisRows` strips `topN`/`rankGroup` on purpose
+    (`src/server/analysis.ts:86`). The Top-N control under Advanced is dead on both pages for
+    the same reason, and its note ("ranks follow the table sort") mentions a table those pages
+    lack.
+  - Fix: make the ranking part of the selection instead of a table view. Add `rankBy` and
+    `rankDir` to `facilityFilterSchema` (filled by the parser and the Advanced control); one
+    server helper adds "row is in the top N" to the conditions, reusing `rankedFacilities` /
+    `rankedUnitYears` (facility metrics rank facilities, unit metrics rank unit-years); Explore,
+    Map, and Analyze all call it, and Explore's column sort goes back to being display order
+    only. One shared `onApply` merges the result onto each page's defaults, and one chip reads
+    "Top 10 by CO₂, 2025". Test: the same query gives the same facilities on all three pages.
+  - Also found: on Analyze a description search _replaces_ the default 2015–2025 range, so
+    "coal units in Kentucky" quietly includes 1996–2008 and partial 2026 (a name search keeps
+    the range).
+  - Also found: on What-if and Compare groups' facility picker, Enter without a highlighted
+    suggestion does nothing, even when "Ghent" matches the first suggestion exactly; pick the
+    first match, or say "choose a facility from the list".
+  - Parser misses that affect Explore too: "NOx rate" ranks by NOₓ mass, "highest heat rate"
+    by heat input, "units over 1000 MW" is not understood (capacity is not a parsed field).
+- [ ] **Pages show numbers without saying what they mean** (rubric 2: "interprets results
+      rather than merely displaying numbers"; "explain what each visualization shows and why it
+      is appropriate"). Explore's facility dialog is the model: every headline number has a
+      plain sub-label (heat rate "9.4 MMBtu/MWh", "≈ 1.7M homes"), and a short paragraph built
+      from the data says what they mean. Phase 2 pages have numbers and controls, and the
+      little explanation there is is hidden under "About this chart".
+  - Shared fixes, one place each: (1) a **reading line** under each chart title, computed from
+    the data, saying what the chart shows (e.g. "Gas emitted more CO₂ than coal in 2023 and 2024; coal fell 41 % from 2015 to 2025"); (2) a **glossary tooltip** (one dictionary, an ⓘ next to the term) for MAE,
+    RMSE, R², MAPE, IQR, P5–P95, Pearson/Spearman, log scale, kg CO₂ eq, standardized
+    coefficient, α, tree depth/leaf, bootstrap interval, ablation; (3) "About this chart" says
+    how to read the chart and why this chart type, not only the data source.
+  - **Models (worst):** no sentence says how good the models are or what 26 t means; say it
+    against a typical unit-year (median NOₓ), and state the persistence result (18.5 t beats
+    both) since that is the main finding. Column headers (Val., MAE, RMSE, R², MAPE, "no
+    same-year activity"), the interval small print, "α = 10", and "depth ≤ 20, leaves ≥ 20"
+    are undefined. Predicted-vs-actual needs "above the line = over-predicted; log scales so
+    small and large units both show". Ridge coefficients need a plain reading ("more heat
+    input → more NOₓ; SCR → the largest cut") instead of "standardized, log(1 + NOₓ)". The
+    "Model" picker sits mid-page and only drives the two charts under it; say so or move it.
+  - **Overview:** every "About this chart" says only "CO₂ emitted, as reported". Add the trend
+    reading, the top state, and the top facility's share.
+  - **Distribution:** say what mean ≫ median means (a few large units dominate); define
+    Q1–Q3, IQR, and P5–P95 in the table header; explain the Box plot and Log toggles and
+    "Tukey's far-out fences" in words.
+  - **Relationships:** "Pearson r = 0.7243" → "strong positive link (r = 0.72)"; explain
+    Log–log (each step is ×10, so small and large plants both show); say when to pick Spearman.
+  - **Compare groups:** already has a Result paragraph (good); explain the Statistic column
+    (t, U, F, H, df) or hide it behind the plain Question column.
+  - **TRACI impacts:** say what each category and "kg CO₂ eq / SO₂ eq / PM2.5 eq / O₃ eq"
+    mean; add the reading (largest contributor, and whether Per MWh changes the order).
+  - **What-if:** in the baseline card, say how far each model is from the actual (Ridge
+    −28 %); on the curve, say the slope ("+10 % heat input → +x t with Ridge, +y t with the
+    tree"); explain "% of baseline" vs the unit toggle.
 - [ ] **Commit steadily in W47 and W48 (1.2 history, 3 pts).** Nothing was committed in W42,
       W43, or W45; the rubric discounts a burst before the deadline. Spread the remaining items
       over both weeks and both members.
