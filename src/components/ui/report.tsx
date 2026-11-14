@@ -37,7 +37,7 @@ export function Field({
   const Tag = group ? "div" : "label";
   return (
     <Tag
-      className={cn("space-y-1", className)}
+      className={cn("block max-w-full min-w-0 space-y-1", className)}
       role={group ? "group" : undefined}
       aria-label={group ? label || undefined : undefined}
     >
