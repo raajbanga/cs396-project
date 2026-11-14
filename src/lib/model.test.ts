@@ -6,7 +6,12 @@ import {
   featureLabel,
   modelInputs,
   outOfRange,
+  percentChange,
   predict,
+  scenarioResults,
+  scenarios,
+  sensitivityCurve,
+  sensitivityGrid,
   type ModelArtifact,
   type ModelRaw,
 } from "./model";
@@ -87,4 +92,153 @@ void test("featureLabel: inputs, categories, and controls in words", () => {
   assert.equal(featureLabel("unit_type"), "Unit type");
   assert.equal(featureLabel("scr"), "SCR");
   assert.equal(featureLabel("unknown_thing"), "unknown_thing");
+});
+
+void test("percentChange: relative to the base, undefined from zero", () => {
+  assert.equal(percentChange(110, 100), 10.000000000000009);
+  assert.equal(percentChange(50, 100), -50);
+  assert.equal(percentChange(5, 0), null);
+});
+
+const close = (a: number, b: number) =>
+  Math.abs(a - b) < 1e-9 * Math.max(1, Math.abs(b));
+
+void test("sensitivityGrid: percentages of the baseline, the baseline included once", () => {
+  const { values, capped } = sensitivityGrid(200, -50, 50, 25, false);
+  assert.deepEqual(values, [100, 150, 200, 250, 300]);
+  assert.equal(capped, false);
+});
+
+void test("sensitivityGrid: values in the input's unit, with an off-grid baseline", () => {
+  const { values } = sensitivityGrid(7, 0, 20, 10, true);
+  assert.deepEqual(values, [0, 7, 10, 20]);
+});
+
+void test("sensitivityGrid: a reversed range and a negative step give the same grid", () => {
+  const fixed = sensitivityGrid(100, 50, -50, -25, false);
+  const plain = sensitivityGrid(100, -50, 50, 25, false);
+  assert.deepEqual(fixed.values, plain.values);
+  // Each correction is reported, so the page can say what it changed.
+  assert.equal(fixed.reversed, true);
+  assert.equal(fixed.step, 25);
+  assert.equal(plain.reversed, false);
+  assert.equal(plain.step, 25);
+  // A zero or missing step is read as a step of 1.
+  const zero = sensitivityGrid(100, 0, 10, 0, true);
+  assert.equal(zero.values.length, 12);
+  assert.equal(zero.step, 1);
+  assert.equal(sensitivityGrid(100, 0, 10, Number(""), true).step, 1);
+  assert.equal(sensitivityGrid(100, 0, 10, NaN, true).step, 1);
+});
+
+void test("sensitivityGrid: stops at the point limit and says so", () => {
+  const { values, capped } = sensitivityGrid(0, 0, 1000, 1, true, 50);
+  assert.equal(capped, true);
+  assert.ok(values.length <= 50 && values.at(-1)! < 1000);
+  assert.equal(sensitivityGrid(0, 0, 10, 1, true, 50).capped, false);
+});
+
+void test("sensitivityCurve: one input changes, the rest held; changes from the baseline", () => {
+  const base = modelInputs({ ...raw, prev_heat_input_mmbtu: 10_000_000 });
+  const value0 = base.heat_input_mmbtu!;
+  const { values } = sensitivityGrid(value0, -50, 50, 10, false);
+  const ridge = models.ridge!;
+  const { pred0, points } = sensitivityCurve(
+    ridge,
+    base,
+    "heat_input_mmbtu",
+    values,
+    value0,
+  );
+  assert.equal(pred0, predict(ridge, base));
+  for (const q of points) {
+    const expected = predict(ridge, { ...base, heat_input_mmbtu: q.value });
+    assert.equal(q.prediction, expected);
+    assert.ok(close(q.diff, expected - pred0));
+    assert.ok(close(q.diffPct!, ((expected - pred0) / pred0) * 100));
+    assert.ok(close(q.change!, (q.value / value0 - 1) * 100));
+  }
+  const at0 = points.find((q) => q.value === value0)!;
+  assert.equal(at0.diff, 0);
+  assert.equal(at0.change, 0);
+  // Ridge rises with heat input along the whole curve.
+  assert.ok(
+    points.every((q, i) => i === 0 || q.prediction > points[i - 1]!.prediction),
+  );
+});
+
+void test("sensitivityCurve: values past the training maximum are flagged", () => {
+  const base = modelInputs(raw);
+  const [, max] = models.tree!.ranges.numeric.heat_input_mmbtu;
+  const { points } = sensitivityCurve(
+    models.tree!,
+    base,
+    "heat_input_mmbtu",
+    [max / 2, max, max * 1.5],
+    base.heat_input_mmbtu!,
+  );
+  assert.deepEqual(
+    points.map((q) => q.outside),
+    [false, false, true],
+  );
+});
+
+void test("scenarios: each changes only what it names", () => {
+  const base = modelInputs(raw); // coal, with SCR
+  const list = scenarios(base, 10, -5);
+  assert.deepEqual(
+    list.map((s) => s.name),
+    [
+      "Baseline",
+      "Gross load +10 %",
+      "Heat input -5 %",
+      "Remove SCR",
+      "Fuel: Pipeline Natural Gas",
+      "High efficiency",
+    ],
+  );
+  const changed = (s: (typeof list)[number]) =>
+    Object.keys(base).filter(
+      (k) => s.inputs[k as keyof typeof base] !== base[k as keyof typeof base],
+    );
+  assert.deepEqual(list.map(changed), [
+    [],
+    ["gross_load_mwh"],
+    ["heat_input_mmbtu"],
+    ["scr"],
+    ["primary_fuel"],
+    ["heat_input_mmbtu"], // SCR was already on
+  ]);
+  assert.equal(list[1]!.inputs.gross_load_mwh, 2_200_000);
+  assert.equal(list[2]!.inputs.heat_input_mmbtu, 19_000_000);
+  // A gas unit without SCR gets the opposite fuel and control changes.
+  const gas = scenarios(
+    { ...base, primary_fuel: "Pipeline Natural Gas", scr: 0 },
+    10,
+    -5,
+  );
+  assert.equal(gas[3]!.name, "Add SCR");
+  assert.equal(gas[3]!.inputs.scr, 1);
+  assert.equal(gas[4]!.inputs.primary_fuel, "Coal");
+  assert.equal(gas[5]!.inputs.scr, 1);
+});
+
+void test("scenarioResults: predictions and changes against the baseline prediction", () => {
+  const base = modelInputs(raw);
+  const list = scenarios(base, 10, -5);
+  const results = scenarioResults(models.ridge!, base, list);
+  const pred0 = predict(models.ridge!, base);
+  assert.equal(results[0]!.diff, 0);
+  assert.equal(results[0]!.diffPct, 0);
+  for (const r of results) {
+    assert.equal(r.prediction, predict(models.ridge!, r.scenario.inputs));
+    assert.ok(close(r.diffPct!, ((r.prediction - pred0) / pred0) * 100));
+  }
+  // Less heat input lowers Ridge's prediction.
+  assert.ok(results[2]!.diff < 0);
+  // An unseen fuel is an out-of-range warning.
+  const unseen = scenarioResults(models.ridge!, base, [
+    { ...list[0]!, inputs: { ...base, primary_fuel: "Plasma" } },
+  ]);
+  assert.deepEqual(unseen[0]!.warnings, ["primary_fuel"]);
 });

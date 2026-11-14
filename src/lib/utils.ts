@@ -12,13 +12,30 @@ export type SortValue = string | number | Date | null | undefined;
 const isMissing = (v: SortValue) =>
   v === null || v === undefined || v === "" || v === "—";
 
-/** Dates and formatted numbers ("1,234.5") as numbers; anything else unchanged. */
-const sortable = (v: SortValue) =>
-  v instanceof Date
-    ? v.getTime()
-    : typeof v === "string" && /^-?[\d,]*\.?\d+$/.test(v.trim())
-      ? Number(v.replace(/,/g, ""))
-      : v;
+const SCALE = { K: 1e3, M: 1e6, B: 1e9, T: 1e12 } as const;
+const NUMBER_TEXT = /^(-?[\d,]*\.?\d+)([KMBT])?$/;
+
+/** Dates and formatted numbers ("1,234.5", "19.5B") as numbers; anything else unchanged. */
+const sortable = (v: SortValue) => {
+  if (v instanceof Date) return v.getTime();
+  const m = typeof v === "string" ? NUMBER_TEXT.exec(v.trim()) : null;
+  return m
+    ? Number(m[1]!.replace(/,/g, "")) *
+        (m[2] ? SCALE[m[2] as keyof typeof SCALE] : 1)
+    : v;
+};
+
+const compact = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumSignificantDigits: 3,
+});
+
+/**
+ * Large numbers in short form, "19.5B", "497K", "1.6M"; under 10,000 they're written out
+ * ("9,193"), where the short form saves nothing. Downloads keep full precision.
+ */
+export const shortNumber = (value: number) =>
+  Math.abs(value) >= 10_000 ? compact.format(value) : null;
 
 /** Whether a value sorts as a number (so its column starts highest-first). */
 export const isNumericValue = (v: SortValue) => typeof sortable(v) === "number";
@@ -62,9 +79,9 @@ export function formatQuantity(
 ) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   if (value === 0) return fallback;
-  const num = value.toLocaleString(undefined, {
-    maximumFractionDigits: digits,
-  });
+  const num =
+    shortNumber(value) ??
+    value.toLocaleString(undefined, { maximumFractionDigits: digits });
   return unit ? `${num} ${unit}` : num;
 }
 
@@ -74,7 +91,7 @@ export const formatNumber = (value: number | null | undefined, digits = 0) =>
 
 /** "1 unit", "3 units", "2 facilities": the count with its noun; `many` defaults to `one` + "s". */
 export const plural = (n: number, one: string, many = `${one}s`) =>
-  `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  `${shortNumber(n) ?? n.toLocaleString()} ${n === 1 ? one : many}`;
 
 /** Display names for `datasets.source`. */
 const DATASET_SOURCE_LABELS: Record<string, string> = {

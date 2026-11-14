@@ -5,98 +5,165 @@ Spec: [`report/spec/phase2instr.pdf`](report/spec/phase2instr.pdf) · Rubric:
 [`report/spec/phase2rubric.pdf`](report/spec/phase2rubric.pdf) · Report:
 [`report/phase2/phase2-report.tex`](report/phase2/phase2-report.tex).
 
-Legend: `[ ]` todo · `[~]` in progress · `[x]` done · `[-]` dropped (say why) · 🧪 needs a local
-machine. Put initials after a task when you pick it up (`— RB` / `— AB`). **P1** costs real points
-if not fixed · **P2** should fix · **P3** polish. Finished items move to **Done** as one line.
+Legend: `[ ]` todo · `[x]` done · 🧪 needs a person or a local machine. Put initials on a task
+when you pick it up (`— RB` / `— AB`). **P1** costs rubric points · **P2** refinement · **P3**
+optional.
 
-Workflow: commit straight to `dev` under your own git identity (short subject, bullet body, `Co-authored-by` trailer); merge
-`dev` into `master` by PR with a merge commit (not squash) when it should go live. `master` and
-`dev` are in sync as of 11/11 (#5), and production deploys again.
-
----
-
-## Status (11/11)
-
-The professor's critique (Analyze and Predict heavy, a sub-page data dump, a different site) is
-addressed: Analyze has 5 question tabs on one tab level, Predict has Models and What-if, and
-search, filters, layout, exports, colors, loading/error states, and Phase 1 ↔ Phase 2 links are
-shared site-wide (details under Done). Format, lint, typecheck, `npm test` (63 pass), and
-`npm run build` pass; production deploy succeeds.
-
-Rubric 1.2 (GitHub record) cleanup is done (11/11): no commit is authored by Claude (the 9
-Phase 2 commits of 10/30 were re-authored as Raaj, keeping their AI co-author trailers; trees
-unchanged), `master` and `dev` share history, stale branches are gone, README and docs use the
-current tab names, and open work is in issues #6–#15 split by area. What 1.2 still needs is
-Arnav's own commits (below).
-
-Rubric areas still at risk (the 11/02 audit scored the app ≈ 47/54, report ≈ 18.5/20; not
-re-graded since):
-
-- **1 Presentation (6 pts):** not started (#15, Final section).
-- **2 Prediction (9) / report Evaluation (4):** only a weak median baseline (#6); no uncertainty
-  on model metrics.
-- **3 Results (5):** the report's charts figure covers 3 of 7 chart types (#12); the PDF needs a
-  rebuild after the 11/11 figure update (#13).
+Workflow: commit to `dev` under your own git identity (short subject, bullet body,
+`Co-authored-by` trailer), push, and merge `dev` into `master` when it should go live. If the
+merge is a squash, keep the `Fixes #…` lines in the squash message so the issues close, then
+merge `master` back into `dev`.
 
 ---
 
-## P1 — fix before submission
+## Rubric audit (11/12)
 
-- [ ] **Arnav: reset your clone, then commit your issues under your own git identity.** History
-      was rewritten on 11/11 (hashes from 10/30 on changed; files did not). Run
-      `git fetch origin && git checkout dev && git reset --hard origin/dev` (after saving any
-      local work), and the same for `master`. Then #8, #9, #10, and #15 are yours; close each
-      from a commit (`Fixes #n`). Don't rewrite history again.
+Every spec function (§3–§7) is built, tested, and verified in the browser. A fresh clone set up
+from the README passes `npm run validate` (82 tests: 81 pass, 1 skipped) and `npm run test:py`
+(10), and serves the app. No credentials in any of the 114 commits. The gaps below are about the
+commit spread, one missing §6.4 element, search outside Explore, and pages that show numbers
+without saying what they mean.
 
-## P2 — should fix
+| Rubric area                      | Pts | State                                                   |
+| :------------------------------- | --: | :------------------------------------------------------ |
+| 1.1 Weekly meetings              |  12 | People (table below)                                    |
+| 1.2 Commit history               |   3 | **At risk:** commits fall in 3 weeks (W41, W44, W46)    |
+| 1.2 Team participation           |   2 | OK (Arnav shows on the contributor graph)               |
+| 1.2 Branches, issues, repo       |   3 | OK (6 PRs, issues #6–#15, README current, no secrets)   |
+| 2 Data layer, analysis, TRACI    |  22 | Met; **results shown, rarely interpreted** (P1 UX)      |
+| 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)             |
+| 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer) |
+| 2 Sensitivity and scenarios      |   8 | Baseline input and prediction lines in place (§6.4)     |
+| 2 Integration and usability      |   5 | Search ranks on every page (11/13); hosted is 11/11     |
+| 2 Presentation and participation |   6 | **Not started** (#15, Final)                            |
+| 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                   |
 
-### Code
+---
 
-- [ ] (#6) Add a persistence baseline (last year's NOₓ, or prior-year rate × this year's heat input)
-      next to the median baseline. The median baseline is easy to beat, and graders will ask how
-      much the models add over "same as last year". Report the result honestly in Q4.
-- [ ] (#7) Tree tuning picked depth 16, the top of the grid. Extend the grid (20, 24, unlimited) and
-      say so in the report.
-- [ ] (#8) Sensitivity: show an inline message for min > max or a zero step instead of silently
-      fixing them. (The 401-point cap now warns.)
-- [ ] (#9) Spearman heat map takes 1.8 s (measured 11/02). Rank each column once when it has no
-      missing values; update the report's Performance table and Known issues.
-- [ ] (#10) `downloadBundle` revokes the object URL right after `a.click()`, which can cancel downloads
-      in Safari. Revoke in a `setTimeout`.
-- [ ] (#11) Tests: export metadata has every §7 field; OVAT and % change logic moved from the What-if
-      components into `src/lib/model.ts` and unit-tested; `findVariable` rejects unknown keys.
+## P1 — costs points
 
-### Report and docs
+- [x] **Search: one global selection, so rankings work on every page.** — RB (11/13)
+  - [x] Rankings (11/13). Top N is now part of the filters (`topN`, `topBy`, `topDir`,
+        `topLevel`, `rankGroup`): `topSelection` in `facilities.ts` keeps the first N facilities
+        (their matching unit-years added up) or unit-years, and Explore, Map, Analyze, and every
+        download apply it. "top 10 facilities by CO2 in 2025" gives 10 facilities on all three
+        pages (38 unit-years); Explore's column sort is display order only. Advanced has Keep /
+        Of / By / Order / Group on every page, one chip reads "Top 10 facilities by CO₂", and old
+        `topN` links rank by their table sort. Test: `src/server/top-selection.test.ts`.
+  - [x] On Analyze a description search keeps the 2015–2025 range unless it names years ("in
+        2025" becomes 2025–2025).
+  - [x] What-if and Compare groups' facility pickers: Enter picks the highlighted or first match
+        (waiting for the list if needed), and says "No facility matches" otherwise. What-if no
+        longer shows the old plant's name beside the new ID while loading.
+  - [x] Parser: "NOx rate" ranks by NOₓ rate (lb/MMBtu, as on Analyze), "heat rate" and "carbon
+        intensity" by those rates, and "units over 1000 MW" / "between 100 and 300 MW" filter on
+        a new Capacity range (Advanced). "heat rate over 10" reports "over 10" as not
+        understood: rates rank but have no min/max filter.
+  - Note: a search that names no years ranks over all years on Explore and Map, but over
+    2015–2025 on Analyze (its default range), so the top N can differ there; naming a year
+    ("in 2024") gives the same rows everywhere.
+- [ ] **Pages show numbers without saying what they mean** (rubric 2: "interprets results
+      rather than merely displaying numbers"; "explain what each visualization shows and why it
+      is appropriate"). Explore's facility dialog is the model: every headline number has a
+      plain sub-label (heat rate "9.4 MMBtu/MWh", "≈ 1.7M homes"), and a short paragraph built
+      from the data says what they mean. Phase 2 pages have numbers and controls, and the
+      little explanation there is is hidden under "About this chart".
+  - **Done 11/13:** every Analyze tab and Models opens with plain sentences built from the data
+    (`src/lib/takeaways.ts`, tested): Overview (selection, total, yearly trend, top fuel's
+    share, top facility's share), Distribution (typical range, mean vs median, top/bottom
+    group, outliers), Relationships (strength in words; strongest and most opposed pairs),
+    Compare (its Result, same style), Models (error in tons and %, gain over baseline, R²),
+    What-if curve (each model's range). Big tables fold under "Show details"-style sections;
+    numbers ≥ 10,000 show short (19.5B). Also done: glossary on table headers (`src/lib/glossary.ts`), TRACI reading (who leads,
+    what "kg CO₂ eq" means), the persistence result on Models, scenario reading (largest change,
+    biggest model disagreement), coefficients/importance in words, quick State/Fuel filters.
+    Still open: definitions for terms inside sentences and subtitles (only headers have them).
+  - Shared fixes, one place each: (1) a **reading line** under each chart title, computed from
+    the data, saying what the chart shows (e.g. "Gas emitted more CO₂ than coal in 2023 and 2024; coal fell 41 % from 2015 to 2025"); (2) a **glossary tooltip** (one dictionary, an ⓘ next to the term) for MAE,
+    RMSE, R², MAPE, IQR, P5–P95, Pearson/Spearman, log scale, kg CO₂ eq, standardized
+    coefficient, α, tree depth/leaf, bootstrap interval, ablation; (3) "About this chart" says
+    how to read the chart and why this chart type, not only the data source.
+  - **Models (worst):** no sentence says how good the models are or what 26 t means; say it
+    against a typical unit-year (median NOₓ), and state the persistence result (18.5 t beats
+    both) since that is the main finding. Column headers (Val., MAE, RMSE, R², MAPE, "no
+    same-year activity"), the interval small print, "α = 10", and "depth ≤ 20, leaves ≥ 20"
+    are undefined. Predicted-vs-actual needs "above the line = over-predicted; log scales so
+    small and large units both show". Ridge coefficients need a plain reading ("more heat
+    input → more NOₓ; SCR → the largest cut") instead of "standardized, log(1 + NOₓ)". The
+    "Model" picker sits mid-page and only drives the two charts under it; say so or move it.
+  - **Overview:** every "About this chart" says only "CO₂ emitted, as reported". Add the trend
+    reading, the top state, and the top facility's share.
+  - **Distribution:** say what mean ≫ median means (a few large units dominate); define
+    Q1–Q3, IQR, and P5–P95 in the table header; explain the Box plot and Log toggles and
+    "Tukey's far-out fences" in words.
+  - **Relationships:** "Pearson r = 0.7243" → "strong positive link (r = 0.72)"; explain
+    Log–log (each step is ×10, so small and large plants both show); say when to pick Spearman.
+  - **Compare groups:** already has a Result paragraph (good); explain the Statistic column
+    (t, U, F, H, df) or hide it behind the plain Question column.
+  - **TRACI impacts:** say what each category and "kg CO₂ eq / SO₂ eq / PM2.5 eq / O₃ eq"
+    mean; add the reading (largest contributor, and whether Per MWh changes the order).
+  - **What-if:** in the baseline card, say how far each model is from the actual (Ridge
+    −28 %); on the curve, say the slope ("+10 % heat input → +x t with Ridge, +y t with the
+    tree"); explain "% of baseline" vs the unit toggle.
+- [ ] **Commit steadily in W47 and W48 (1.2 history, 3 pts).** Nothing was committed in W42,
+      W43, or W45; the rubric discounts a burst before the deadline. Spread the remaining items
+      over both weeks and both members.
+- [x] **§6.4 baseline-prediction reference line.** One dashed horizontal line per model at its
+      baseline prediction, in the model's color, plus the vertical one at the baseline input
+      (11/13, with the chart rework). Re-take the sensitivity figure for the report.
+- [x] **Charts on Recharts (shadcn charts), decluttered** (11/13). Plotly is gone; eight shared
+      pieces in `src/components/charts/` (lines, bar list, columns, histogram, box plot, scatter,
+      heat grid, state map) and one `ChartFrame` replace 14 hand-built configs. Quiet style:
+      horizontal gridlines only, no boxes, values written on bars, color only for fuel, model,
+      or sign (earthy palette in `globals.css`, also the Map's fuel colors). Lost: Plotly's
+      drag-zoom; PNG export is kept (SVG → canvas). Re-take report figures.
+- [ ] **Merge `dev` into `master` and redeploy before the demo.** The hosted build is still 11/11
+      (no intervals, persistence, or the 11/12 fixes).
+- [ ] (#15) Slides and demo script (Final section).
 
-- [ ] Re-verify every "passes / green" claim (§Testing: `npm run validate`).
-- [ ] (#12) Fix drifts: row cache is 5 minutes in code, "60 seconds" in the report (pick one); parity
-      fixture is 124 KB, not 100 KB.
-- [ ] (#12) Charts coverage: add one composite figure (histogram, scatter, ranking, state map) so all of
-      §4.4 is visible.
-- [ ] (#13) Integration: one sentence and one slide on why Next.js instead of Flask (the rubric says
-      "existing Flask application"; the spec allows React).
-- [ ] Proofread on paper; both confirm the contributions section. 🧪
-- [ ] (#14) Update `pipeline_version` `5d5e7d0` → a current commit in `ml/models/metrics.json` and the
-      `models` table (the next `ml:train` writes a new one).
-- [ ] (#13) Rebuild the PDF (`npm run report`; Tectonic's bundle server was unreachable
-      11/11), check figure placement, and commit the final `report/phase2/phase2-report.pdf`.
+## P2 — refinements
 
-### Local checks 🧪
+App:
 
-- [ ] Python 3.9 venv (README's documented minimum): `pip install -r requirements.txt`, then
-      `npm run test:py`. If it passes, say so in the README and report §4.2.
-- [ ] Hosted build: charts render, ZIP downloads work, Upload refuses writes.
-- [ ] ZIP downloads in Safari and Chrome (PNG, CSV, `metadata.json`); every tab in dark mode.
-- [ ] If scripts or migrations fail: `echo $DATABASE_URL` (a shell value overrides `.env`). If lint
-      or types fail where they passed before: `npm ci`, then delete `.next/`.
+- [ ] **Empty selection on Analyze.** Filters that match nothing (or a reversed year range, which
+      the selectors allow) show "0 unit-years" over empty charts with −1…6 axes; Compare groups
+      says "None has no CO₂ mass value" and shows an empty tests table. Show one message with
+      "Clear filters" in place of the tab, disable its downloads, and stop or explain a reversed
+      year range.
+- [ ] **Impossible What-if inputs.** A scenario change below −100 % or a sensitivity range below 0
+      gives negative heat input or load; the models return 0 t with only the out-of-range
+      warning. Say the value is impossible (as #8 does for the step).
+- [ ] **Scenario tooltips show the inputs** (§6.4: "input values, predictions, absolute and
+      percentage changes"): e.g. "heat input 25,064,832 MMBtu (−5 %)".
+- [ ] **"High efficiency" follows the heat-input field.** With a positive heat-input change it
+      raises fuel use; use the field's value only when it is negative, or a fixed −5 %, and say
+      which.
+- [ ] **Model predictions export (§7).** The Predicted-vs-actual download holds the 3,000-point
+      plot sample for one model; export all 7,755 test unit-years with each model's prediction.
+- [ ] **`facilities.getFacility` returns `undefined`** for an unknown ID (e.g.
+      `/predict?facility=99999999`): the dialog says "No facility", but React Query logs an error
+      and the dev overlay shows "1 Issue". Return `null`.
+
+Report and repository:
+
+- [ ] **Citations (report Organization, 3 pts).** CAMPD is only a URL in §References; add it to
+      `report/shared/refs.bib` and cite it in §Data and Methods. Also cite pandas, NumPy,
+      Next.js/React, and SQLite (`gaffney2022sqlite` exists).
+- [ ] **Issues for the work above** (1.2 "issues and documentation"), assigned to who does it;
+      reassign #8–#10 to Raaj, who did them.
+- [ ] Re-take any figure whose view changes (sensitivity after the reference line), rebuild the
+      PDF, and re-check the report against the app.
+- [ ] Proofread on paper (34 pages). 🧪
+
+Checks:
+
+- [ ] Hosted build after the merge: charts, ZIP downloads, Upload refuses writes. 🧪
+- [ ] ZIP downloads in Safari (Chrome checked 11/12; #10's delayed revoke is untested there). 🧪
 
 ## P3 — optional
 
-- [ ] Pin exact Python versions (constraints file) so `ml:train` reproduces the committed models.
-- [ ] Memoize chart `data`/`layout` so `Plotly.react` doesn't run on every parent render.
 - [ ] OVAT over a categorical input (fuel, a control flag) as a bar chart.
 - [ ] TRACI impacts of the predicted NOₓ on What-if (§6.4, optional).
-- [ ] `saved_analyses` table + Save/Load analysis (§4.1 alternative to URLs).
 - [ ] Residual plot on the Models tab; display CAS numbers with dashes.
 
 ---
@@ -108,84 +175,67 @@ plan. Both members attend and speak.
 
 | Week | Milestone (spec §10)              | What to show                                            |
 | :--- | :-------------------------------- | :------------------------------------------------------ |
-| 1    | Analytical data layer             | Overview tab, derived indicators, TRACI import (done)   |
-| 2    | Descriptive and TRACI analysis    | Distribution, Compare groups, TRACI impacts (done)      |
+| 1    | Analytical data layer             | Overview tab, derived indicators, TRACI import          |
+| 2    | Descriptive and TRACI analysis    | Distribution, Compare groups, TRACI impacts             |
 | 3    | Interactive visualization         | The 11/11 restructure; shared search; Phase 1 ↔ 2 links |
-| 4    | Prediction models                 | Models tab; persistence baseline                        |
-| 5    | Sensitivity and scenario analysis | What-if (Ridge vs tree on SCR); report figures re-taken |
+| 4    | Prediction models                 | Models tab with intervals; persistence beats the models |
+| 5    | Sensitivity and scenario analysis | What-if (Ridge vs tree on SCR); input messages          |
 | 6    | Integration, testing, final       | Slides, rehearsed demo, final report PDF                |
-
----
-
-## Done (summary)
-
-All spec functions are built, tested, and on `dev` and `master`; see git history for detail.
-
-- **Data layer (§3, §4.1, §4.3):** filters incl. emissions program, counts, missing-value table,
-  URL round-trip, 29 variables (rates pooled, NULL-safe), `traci_factors` (migration 0009).
-- **Statistics and comparison (§4.2, §4.5):** full stat set, grouped, Tukey outliers; 2–8 groups
-  with CIs, Welch/MWU/ANOVA/KW, plain-language caveats; checked against NumPy/SciPy.
-- **TRACI (§4.6):** exact substance mapping, 4 categories, per-MWh, disclaimer; Ghent 2024 worked
-  example re-checked 11/02 (12,744,620 kg SO₂ eq). Each category ranks its own top 15 (11/11).
-- **Charts (§4.4):** trend, bars, histogram/box, scatter (SVG fallback without WebGL),
-  correlation, rankings, state map.
-- **Prediction (§5):** NOₓ target, leakage rules + ablation, chronological split, baseline /
-  Ridge / tree (test R² 0.49 / 0.83 / 0.95), parity test, pytest. Exports give the fit years
-  (2016–2023) and the tuning split separately (11/11).
-- **Sensitivity and scenarios (§6):** OVAT curve with baseline marks and shaded out-of-range,
-  five named scenarios, range warnings, non-causal captions; Ridge | Tree | Both (11/11).
-- **Exports (§7):** ZIP (CSV + PNG + `metadata.json`) on every chart and table,
-  `/api/export?type=analysis`.
-- **11/11 UI restructure (professor's critique):** Analyze = Overview / Distribution /
-  Relationships / Compare groups / TRACI impacts, one tab level, results first, long text under
-  "About this chart", tables collapsed; Predict = Models / What-if with a baseline card. Old
-  URLs map to the new tabs. One `FacilitySearch` with suggestions on Explore, Analyze, Map
-  (centers the globe/map on the pick), Predict, and Compare; one filter bar; "Download all" /
-  "Download" labels; fuel and model colors kept apart; one loading/error pattern plus
-  `app/error.tsx`; "Analyze these", "Analyze", and "Predict" links from Explore's dialogs.
-- **Deploy:** `master` back to zod 3 via `git merge -s ours`; production deploys (11/11, #5).
-- **Report, 11/11:** all 10 figures re-taken from the new tabs; §4, traceability, tests, and
-  contributions use the new tab names; a paragraph on the redesign.
-- **GitHub record, 11/11:** Claude-authored commits re-authored; issues #6–#15 assigned.
-- **Report:** 32 pages in the Phase 1 structure; numbers re-checked 10/31 and spot-checked 11/02.
-
----
-
-## Locked decisions
-
-| Decision          | Choice                                                                                  | Why                                                                           |
-| :---------------- | :-------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
-| Compute stack     | Stats, indicators, TRACI in TS on the server; models trained in Python, replayed in TS. | Keeps pandas/sklearn, works on the read-only Vercel deploy, instant what-ifs. |
-| Prediction target | Annual NOₓ mass (short tons) per unit-year, regression.                                 | Every spec scenario (+10 % load, −5 % heat input, control change) changes it. |
-| Charts            | Plotly.js behind `<Chart>`, lazy-loaded.                                                | Spec recommendation; zoom, tooltips, heat maps, PNG export built in.          |
-| Web stack         | Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                 | Spec allows it ("React is optional"); justify it in the talk.                 |
-| Modeling years    | Tune: train 2016–2021, validate 2022–2023. Final fit 2016–2023, test 2024–2025.         | §5.4 chronological split; 2016 is the first year with a prior-year input.     |
-| Analyze layout    | One tab per question, one tab level, results before controls.                           | Professor's critique (11/11); matches Explore and Map.                        |
-
-## Risks
-
-- **Fuel and unit type are per unit, not per year** (in the report's limitations).
-- **Models disagree on SCR:** the tree barely responds; Ridge cuts Ghent 2 by ~59 %. Feature it
-  (What-if, Both).
-- **State map needs `cdn.plot.ly`**, and the build needs Google Fonts. Check the demo network.
-- **Rubric says "Flask":** prepare the justification before the demo.
 
 ---
 
 ## Final — presentation and demo (§12.5) · start only when asked
 
-- [ ] (#15) Slides in `report/phase2/slides/`: question → architecture → features → models vs
-      baseline → sensitivity/scenario → limitations → contributions.
+- [ ] (#15) Slides in `report/phase2/slides/`: question → architecture (and why not Flask) →
+      features → models vs baseline → sensitivity/scenario → limitations → contributions.
 - [ ] `report/phase2/slides/slides-outline.md`: demo script with steps, inputs, expected numbers,
-      timings, covering each §12.5 item:
+      and timings, covering each §12.5 item:
   - [ ] The analytical question (Q1–Q4).
   - [ ] Build a dataset (filters or a description search), show statistics (Distribution).
   - [ ] Interpret ≥ 2 visualizations: CO₂ trend by fuel on Overview (crossings 2023/2025);
         NOₓ-rate box plot by fuel on Distribution; backup: Pearson vs Spearman on Relationships.
   - [ ] TRACI impacts for Ghent 2024 (matches the worked example).
-  - [ ] Models vs baseline (Models tab).
+  - [ ] Models vs baseline (Models tab), the intervals, and the persistence result.
   - [ ] What-if for Ghent unit 2 with Both: sensitivity curve + scenarios with an out-of-range
         warning.
   - [ ] Limitations.
-- [ ] Both members speak; two timed rehearsals; pre-demo checklist (`git restore db.sqlite`,
-      prod build, warm pages, network check).
+- [ ] One sentence per chart type on what it shows and why it fits (rubric: "explain what each
+      visualization shows and why it is appropriate").
+- [ ] Both members speak and can answer: why not Flask; why not last year's value; association
+      vs causation; what TRACI results do not mean; who built what.
+- [ ] Two timed rehearsals; pre-demo checklist (`git restore db.sqlite`, prod build, warm
+      pages, network for `cdn.plot.ly` and Google Fonts).
+
+---
+
+## Decisions
+
+| Decision          | Choice                                                                                  | Why                                                                           |
+| :---------------- | :-------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
+| Compute stack     | Stats, indicators, TRACI in TS on the server; models trained in Python, replayed in TS. | Keeps pandas/sklearn, works on the read-only Vercel deploy, instant what-ifs. |
+| Prediction target | Annual NOₓ mass (short tons) per unit-year, regression.                                 | Every spec scenario (+10 % load, −5 % heat input, control change) changes it. |
+| Charts            | Recharts (shadcn charts) behind `ChartFrame` + `src/components/charts/`.                | Matches the shadcn UI; quieter; small; tooltips and PNG export kept, no zoom. |
+| Web stack         | Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                 | Spec allows it ("React is optional"); justified in the report.                |
+| Modeling years    | Tune: train 2016–2021, validate 2022–2023. Final fit 2016–2023, test 2024–2025.         | §5.4 chronological split; 2016 is the first year with a prior-year input.     |
+| Analyze layout    | One tab per question, one tab level, results before controls.                           | Professor's critique (11/11); matches Explore and Map.                        |
+
+## Risks and prepared answers
+
+- **Persistence beats the models** (18.5 t vs tree 26.3 t): "why not just use last year?" It is
+  the better forecast (Q4); the models are for responses to load, controls, and fuel, which
+  persistence cannot express, and those responses are associations, not causal effects.
+- **Models disagree on SCR:** the tree barely responds; Ridge cuts Ghent 2 by ~59 %. Show it
+  with Both on What-if.
+- **Rubric says "Flask":** the report's Architecture and Technical choices paragraphs have the
+  argument (extend Phase 1 rather than rewrite it; the spec allows React).
+- **Fuel and unit type are per unit, not per year** (in the report's limitations).
+- **The state map needs `cdn.plot.ly`**, and the build needs Google Fonts. Check the demo network.
+
+## Done
+
+All spec functions (§3–§7) are on `dev`; git history and the closed issues have the detail.
+Highlights: the 11/11 UI restructure after the professor's critique; persistence reference,
+bootstrap intervals, and the extended tree grid (#6, #7, #14); export-metadata and What-if tests
+(#11); report Q4, Figure 3, and Flask paragraph (#12, #13); What-if input messages, Spearman
+0.3 s, Safari-safe downloads (#8–#10); Python 3.9 reproduces the models; dark mode and Chrome
+ZIP downloads checked on every tab.

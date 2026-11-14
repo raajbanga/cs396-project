@@ -1,8 +1,10 @@
 """Phase 2 prediction module: annual NOx mass (short tons) per unit-year.
 
 Trains a baseline and two models on a chronological split of db.sqlite, prints and saves their
-metrics, and registers them in the `models` table with everything the web app needs to predict
-without Python (preprocessing, coefficients or tree arrays, training ranges).
+metrics (with bootstrap confidence intervals on the test years) next to a persistence reference
+("same NOx rate as last year", reported but not registered), and registers the models in the
+`models` table with everything the web app needs to predict without Python (preprocessing,
+coefficients or tree arrays, training ranges).
 
     epaDataVENV/bin/python ml/train.py          # or: npm run ml:train
 
@@ -58,6 +60,10 @@ CONTROLS = {
     "overfire_air": r"overfire|ofa",
 }
 MIN_CATEGORY_ROWS = 30
+RIDGE_ALPHAS = [0.01, 0.1, 1, 10, 100]
+TREE_DEPTHS = [4, 6, 8, 10, 12, 16, 20, 24, None]  # None: grow until the leaf-size limit
+TREE_LEAVES = [5, 20, 50]
+BOOTSTRAP_SAMPLES = 1000
 
 QUERY = """
 SELECT a.unit_internal_id, a.year, a.facility_id, f.name AS facility_name, u.unit_id,
@@ -175,6 +181,26 @@ class Baseline:
         return keys.map(self.table).fillna(self.overall).to_numpy()
 
 
+class Persistence:
+    """"Same as last year": the previous year's NOx rate (lb/MMBtu) times this year's heat input.
+
+    Where either is missing (a unit's first year, or no heat input the year before), it falls back
+    to the median baseline. Without same-year activity (the ablation), it predicts last year's
+    tons instead, since this year's heat input is then unknown.
+    """
+
+    def fit(self, inputs: pd.DataFrame, y: np.ndarray):
+        self.fallback = Baseline().fit(inputs, y)
+        return self
+
+    def predict(self, inputs: pd.DataFrame, last_year_tons: np.ndarray | None = None) -> np.ndarray:
+        if last_year_tons is None:
+            estimate = inputs["prior_nox_rate"] * inputs["heat_input_mmbtu"] / 2000
+        else:
+            estimate = pd.Series(last_year_tons, index=inputs.index)
+        return np.where(estimate.notna(), estimate, self.fallback.predict(inputs))
+
+
 def fit_ridge(X, y, alpha):
     return Ridge(alpha=alpha).fit(X, np.log1p(y))
 
@@ -193,25 +219,79 @@ def years(frame, span):
     return frame["year"].between(*span)
 
 
-def train_and_score(inputs, y, mask_fit, mask_eval, numeric):
-    """Tunes Ridge alpha and tree size on `mask_eval`, returning validation metrics and choices."""
+def train_and_score(inputs, y, mask_fit, mask_eval, numeric, last_year_tons):
+    """Tunes Ridge alpha and tree size on `mask_eval`, returning validation metrics and choices.
+
+    Without same-year activity in `numeric` (the ablation), persistence predicts `last_year_tons`.
+    """
     spec = fit_spec(inputs[mask_fit], numeric)
     X = design_matrix(inputs, spec)
     best = {}
-    for alpha in [0.01, 0.1, 1, 10, 100]:
+    for alpha in RIDGE_ALPHAS:
         m = fit_ridge(X[mask_fit], y[mask_fit], alpha)
         score = metrics(y[mask_eval], predict_ridge(m, X[mask_eval]))
         if "ridge" not in best or score["mae"] < best["ridge"][1]["mae"]:
             best["ridge"] = ({"alpha": alpha}, score)
-    for depth in [4, 6, 8, 10, 12, 16]:
-        for leaf in [5, 20, 50]:
+    for depth in TREE_DEPTHS:
+        for leaf in TREE_LEAVES:
             m = fit_tree(X[mask_fit], y[mask_fit], depth, leaf)
             score = metrics(y[mask_eval], m.predict(X[mask_eval]))
             if "tree" not in best or score["mae"] < best["tree"][1]["mae"]:
                 best["tree"] = ({"max_depth": depth, "min_samples_leaf": leaf}, score)
     base = Baseline().fit(inputs[mask_fit], y[mask_fit])
     best["baseline"] = ({}, metrics(y[mask_eval], base.predict(inputs[mask_eval])))
+    persist = Persistence().fit(inputs[mask_fit], y[mask_fit])
+    without_activity = "heat_input_mmbtu" not in numeric
+    persisted = persist.predict(
+        inputs[mask_eval], last_year_tons[mask_eval] if without_activity else None
+    )
+    best["persistence"] = ({}, metrics(y[mask_eval], persisted))
     return best
+
+
+def bootstrap(y, preds, clusters, reference, samples=BOOTSTRAP_SAMPLES, seed=0):
+    """95 % percentile intervals for test MAE, RMSE, and R², resampling units rather than rows.
+
+    The test years hold up to two unit-years per unit, which are not independent, so each
+    replicate draws units with replacement and keeps all of a drawn unit's years (a cluster
+    bootstrap). Also gives each model's MAE minus the `reference` model's MAE on the same
+    replicates, so the comparison carries its own interval.
+    """
+    rng = np.random.default_rng(seed)
+    _, unit = np.unique(clusters, return_inverse=True)
+    n_units = unit.max() + 1
+    # Weight of each row in each replicate: how many times its unit was drawn.
+    draws = rng.integers(0, n_units, size=(samples, n_units))
+    weights = np.zeros((samples, n_units))
+    np.add.at(weights, (np.repeat(np.arange(samples), n_units), draws.ravel()), 1)
+    w = weights[:, unit]
+    total = w.sum(axis=1)
+    y_mean = (w @ y) / total
+    ss_tot = (w * (y[None, :] - y_mean[:, None]) ** 2).sum(axis=1)
+
+    def replicate_mae(pred):
+        return (w @ np.abs(y - pred)) / total
+
+    def interval(values):
+        lo, hi = np.percentile(values, [2.5, 97.5])
+        return float(lo), float(hi)
+
+    ref_mae = replicate_mae(preds[reference])
+    out = {}
+    for kind, pred in preds.items():
+        mae = replicate_mae(pred)
+        sse = w @ (y - pred) ** 2
+        low, high, diff = {}, {}, {}
+        for name, values in {
+            "mae": mae,
+            "rmse": np.sqrt(sse / total),
+            "r2": 1 - sse / ss_tot,
+        }.items():
+            low[name], high[name] = interval(values)
+        diff["mae_diff"] = float(np.mean(np.abs(y - pred)) - np.mean(np.abs(y - preds[reference])))
+        diff["mae_diff_low"], diff["mae_diff_high"] = interval(mae - ref_mae)
+        out[kind] = {"test_ci_low": low, "test_ci_high": high, f"test_vs_{reference}": diff}
+    return out
 
 
 def tree_json(tree: DecisionTreeRegressor) -> dict:
@@ -226,11 +306,15 @@ def tree_json(tree: DecisionTreeRegressor) -> dict:
 
 
 def pipeline_version() -> str:
+    """The commit the training code comes from, marked when ml/train.py differs from it."""
     try:
-        sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
+        git = lambda *args: subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+        sha = git("rev-parse", "--short", "HEAD")
+        if git("status", "--porcelain", "--", "ml/train.py"):
+            sha += " + uncommitted ml/train.py"
     except Exception:
         sha = "unknown"
-    return f"git {sha}; scikit-learn {sklearn.__version__}; numpy {np.__version__}; pandas {pd.__version__}"
+    return f"git {sha}; Python {sys.version.split()[0]}; scikit-learn {sklearn.__version__}; numpy {np.__version__}; pandas {pd.__version__}"
 
 
 def span(s):
@@ -242,13 +326,16 @@ def main():
         raw = pd.read_sql_query(QUERY, conn, params=(TRAIN[0], TEST[1]))
     inputs = model_inputs(raw)
     y = raw[TARGET].to_numpy(dtype=float)
+    last_year_tons = raw["prev_nox_mass_tons"].to_numpy(dtype=float)
     train, val, test = (years(raw, s).to_numpy() for s in (TRAIN, VALIDATION, TEST))
     fit_rows = train | val
     print(f"rows: train {train.sum()}, validation {val.sum()}, test {test.sum()}")
 
     # 1. Tune on train -> validation (all features, then without same-year activity).
-    tuned = train_and_score(inputs, y, train, val, NUMERIC)
-    ablation = train_and_score(inputs, y, train, val, [n for n in NUMERIC if n not in ACTIVITY])
+    tuned = train_and_score(inputs, y, train, val, NUMERIC, last_year_tons)
+    ablation = train_and_score(
+        inputs, y, train, val, [n for n in NUMERIC if n not in ACTIVITY], last_year_tons
+    )
 
     # 2. Refit the chosen settings on train + validation; score once on the test years.
     spec = fit_spec(inputs[fit_rows], NUMERIC)
@@ -257,8 +344,10 @@ def main():
     ridge = fit_ridge(X[fit_rows], y[fit_rows], tuned["ridge"][0]["alpha"])
     tree = fit_tree(X[fit_rows], y[fit_rows], **tuned["tree"][0])
     base = Baseline().fit(inputs[fit_rows], y[fit_rows])
+    persist = Persistence().fit(inputs[fit_rows], y[fit_rows])
     preds = {
         "baseline": base.predict(inputs),
+        "persistence": persist.predict(inputs),
         "ridge": predict_ridge(ridge, X),
         "tree": tree.predict(X),
     }
@@ -290,7 +379,17 @@ def main():
 
     MODELS.mkdir(parents=True, exist_ok=True)
     FIXTURES.mkdir(parents=True, exist_ok=True)
-    report = {"tuned_on_validation": tuned, "ablation_without_activity": ablation, "models": {}}
+    report = {
+        "tuned_on_validation": tuned,
+        "ablation_without_activity": ablation,
+        "search": {"ridge_alpha": RIDGE_ALPHAS, "tree_max_depth": TREE_DEPTHS, "tree_min_samples_leaf": TREE_LEAVES},
+        "bootstrap": f"{BOOTSTRAP_SAMPLES} replicates resampling units of the test years, 95 % percentile intervals",
+        "models": {},
+    }
+    # Persistence is a reference, not a registered model: the app neither shows nor replays it.
+    intervals = bootstrap(
+        y[test], {k: p[test] for k, p in preds.items()}, raw["unit_internal_id"].to_numpy()[test], "persistence"
+    )
     rows = []
     for kind, (name, model, params) in definitions.items():
         model_metrics = {
@@ -298,6 +397,8 @@ def main():
             "test": metrics(y[test], preds[kind][test]),
             "train": metrics(y[fit_rows], preds[kind][fit_rows]),
             "validation_without_activity": ablation[kind][1],
+            "test_ci_low": intervals[kind]["test_ci_low"],
+            "test_ci_high": intervals[kind]["test_ci_high"],
         }
         artifact = {"kind": kind, "spec": spec, "featureNames": names, "ranges": ranges, **params}
         model_id = f"nox-{kind}"
@@ -308,16 +409,39 @@ def main():
         artifact["importance"] = importance
         (MODELS / f"{model_id}.json").write_text(json.dumps(artifact))
         joblib.dump({"model": model, "spec": spec}, MODELS / f"{model_id}.joblib")
-        report["models"][model_id] = {"settings": tuned[kind][0], **model_metrics}
+        report["models"][model_id] = {
+            "settings": tuned[kind][0],
+            **model_metrics,
+            "test_vs_persistence": intervals[kind]["test_vs_persistence"],
+        }
         rows.append(
             (
                 model_id, name, kind, common["target"], json.dumps(common["features"]),
                 json.dumps(tuned[kind][0]), common["train_years"], common["validation_years"],
-                common["test_years"], json.dumps(model_metrics), json.dumps(artifact),
+                common["test_years"],
+                # The persistence reference rides along so the app can state it beside each model.
+                json.dumps({
+                    **model_metrics,
+                    "persistence_test": metrics(y[test], preds["persistence"][test]),
+                    "test_vs_persistence": intervals[kind]["test_vs_persistence"],
+                }),
+                json.dumps(artifact),
                 f"ml/models/{model_id}.joblib", common["pipeline_version"],
                 int(datetime.now(timezone.utc).timestamp()),
             )
         )
+    report["reference_persistence"] = {
+        "description": (
+            "Last year's NOx rate (lb/MMBtu) x this year's heat input / 2000; the median baseline"
+            " where either is missing. Without same-year activity: last year's tons."
+        ),
+        "validation": tuned["persistence"][1],
+        "test": metrics(y[test], preds["persistence"][test]),
+        "train": metrics(y[fit_rows], preds["persistence"][fit_rows]),
+        "validation_without_activity": ablation["persistence"][1],
+        "test_ci_low": intervals["persistence"]["test_ci_low"],
+        "test_ci_high": intervals["persistence"]["test_ci_high"],
+    }
     report.update(common)
     (MODELS / "metrics.json").write_text(json.dumps(report, indent=2))
 
@@ -331,7 +455,7 @@ def main():
     fixture = [
         {
             "raw": {k: (None if pd.isna(raw.iloc[i][k]) else raw.iloc[i][k]) for k in raw_cols},
-            "predictions": {k: float(preds[k][i]) for k in preds},
+            "predictions": {k: float(preds[k][i]) for k in definitions},
         }
         for i in sample
     ]
@@ -345,9 +469,15 @@ def main():
             rows,
         )
 
-    for model_id, r in report["models"].items():
-        v, t = r["validation"], r["test"]
-        print(f"{model_id:14} {json.dumps(r['settings']):40} val MAE {v['mae']:8.1f} R2 {v['r2']:.3f} | test MAE {t['mae']:8.1f} RMSE {t['rmse']:8.1f} R2 {t['r2']:.3f} MAPE {t['mape']:.1f}%")
+    for model_id, r in [*report["models"].items(), ("persistence (ref)", report["reference_persistence"])]:
+        v, t, lo, hi = r["validation"], r["test"], r["test_ci_low"], r["test_ci_high"]
+        d = r.get("test_vs_persistence", {"mae_diff": 0, "mae_diff_low": 0, "mae_diff_high": 0})
+        print(
+            f"{model_id:18} {json.dumps(r.get('settings', {})):42} val MAE {v['mae']:8.1f} R2 {v['r2']:.3f}"
+            f" | test MAE {t['mae']:7.1f} [{lo['mae']:.1f}, {hi['mae']:.1f}] RMSE {t['rmse']:7.1f}"
+            f" R2 {t['r2']:.3f} [{lo['r2']:.3f}, {hi['r2']:.3f}] MAPE {t['mape']:.1f}%"
+            f" | MAE - persistence {d['mae_diff']:+.1f} [{d['mae_diff_low']:+.1f}, {d['mae_diff_high']:+.1f}]"
+        )
     for kind, (_, s) in ablation.items():
         print(f"ablation {kind:9} val MAE {s['mae']:8.1f} R2 {s['r2']:.3f}")
 

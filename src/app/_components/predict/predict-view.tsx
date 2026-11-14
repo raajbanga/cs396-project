@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportContext } from "~/components/ui/export-button";
+import { predictMetadata } from "~/lib/export-bundle";
 import { PageTitle } from "~/components/ui/page";
 import { DetailList, Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
@@ -15,7 +16,6 @@ import {
 } from "~/lib/analysis-state";
 import {
   featureLabel,
-  fitYears,
   MODEL_COLORS,
   predict,
   type ModelInputs,
@@ -64,28 +64,7 @@ export function PredictView({ initial }: { initial: View }) {
       : trained;
 
   return (
-    <ExportContext
-      value={{
-        page: "Predict",
-        ...source,
-        view,
-        models: chosen.map((m) => ({
-          id: m.id,
-          name: m.name,
-          target: m.target,
-          features: m.features,
-          settings: m.params,
-          fitYears: fitYears(m),
-          tuningTrainYears: m.trainYears,
-          tuningValidationYears: m.validationYears,
-          testYears: m.testYears,
-          metrics: m.metrics,
-          savedModel: m.artifactPath,
-          pipeline: m.pipelineVersion,
-          trainedAt: m.trainedAt,
-        })),
-      }}
-    >
+    <ExportContext value={predictMetadata(source, view, chosen)}>
       <div className="space-y-6">
         <PageTitle lead="Annual NOₓ per unit-year, predicted from operating data, unit attributes, controls, and the previous year. Check the models, then change one unit's inputs.">
           Predict
@@ -132,7 +111,10 @@ function WhatIf({ view, setView, chosen }: Omit<PredictTabProps, "baseline">) {
     year,
   });
   const unitList = units.data ?? [];
-  const facilityName = unitList[0]?.facilityName;
+  // The previous facility's units stay shown while the new ones load; don't pair its name with the new ID.
+  const facilityName = units.isPlaceholderData
+    ? undefined
+    : unitList[0]?.facilityName;
   // A new facility or year keeps the unit when it exists there, else takes the largest emitter.
   const firstUnit = unitList[0]?.unitId;
   const hasUnit = unitList.some((u) => u.unitId === view.uid);

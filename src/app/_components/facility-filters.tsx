@@ -1,24 +1,29 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, X } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 import { Field, FIELD_LABEL } from "~/components/ui/report";
-import { Select, toOptions } from "~/components/ui/select";
+import { Select, toOptions, type SelectOption } from "~/components/ui/select";
 import { TryExamples } from "~/components/ui/try-examples";
 import {
-  ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
+  describeRanking,
   isFilterActive,
+  RANK_METRICS,
   TOP_N_OPTIONS,
   RANGE_FIELDS,
   type FacilityFilters,
   type FilterChangeHandler,
 } from "~/lib/facility-filters";
 import { AUDIT_RULES, AUDIT_SEVERITIES } from "~/lib/emissions-metrics";
-import { cn } from "~/lib/utils";
+import { cn, formatNumber, shortNumber } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 import { FacilitySearch, type FacilitySuggestion } from "./facility-search";
 
@@ -129,7 +134,7 @@ const CHIP_LABELS: Partial<Record<keyof FacilityFilters, string>> = {
 
 const formatBound = (v: string) => {
   const n = Number(v.replace(/,/g, ""));
-  return Number.isFinite(n) ? n.toLocaleString() : v;
+  return Number.isFinite(n) ? (shortNumber(n) ?? n.toLocaleString()) : v;
 };
 
 /** One removable chip per active filter (range pairs and ranking combined), built from the filters themselves. */
@@ -170,7 +175,9 @@ function activeChips(filters: FacilityFilters, names: Record<string, string>) {
     const maxStrict = on(`${key}MaxStrict`);
     const bounds =
       min && max && !minStrict && !maxStrict
-        ? `${min}–${max}`
+        ? min === max
+          ? min
+          : `${min}–${max}`
         : [
             min && `${minStrict ? ">" : "≥"} ${min}`,
             max && `${maxStrict ? "<" : "≤"} ${max}`,
@@ -182,114 +189,100 @@ function activeChips(filters: FacilityFilters, names: Record<string, string>) {
       keys: [`${key}Min`, `${key}Max`, `${key}MinStrict`, `${key}MaxStrict`],
     });
   }
-  if (on("topN") || on("rankGroup")) {
+  const ranking = describeRanking(filters);
+  if (ranking) {
     chips.push({
-      label:
-        [on("topN") && `First ${filters.topN}`, on("rankGroup") && "per state"]
-          .filter(Boolean)
-          .join(" ") || "Ranked",
-      keys: ["topN", "rankGroup"],
+      label: ranking,
+      keys: ["topN", "topBy", "topDir", "topLevel", "rankGroup"],
     });
   }
   return chips;
 }
 
-function FilterChips({
-  filters,
-  onFilterChange,
-  result,
-  names,
-}: {
-  filters: FacilityFilters;
-  onFilterChange: FilterChangeHandler;
-  result?: DescribeResult | null;
-  names: Record<string, string>;
-}) {
-  const chips = activeChips(filters, names);
-  if (chips.length === 0 && !result) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 text-sm">
-      {result && <span className="text-fg-muted">interpreted as</span>}
-      {chips.map(({ label, keys }) => (
-        <Badge key={keys.join()} variant="outline" className="gap-1 pr-0.5">
-          {label}
-          <button
-            type="button"
-            onClick={() =>
-              keys.forEach((k) => onFilterChange(k, DEFAULT_FILTERS[k]))
-            }
-            className="text-fg-muted hover:text-fg cursor-pointer rounded-sm p-0.5"
-            aria-label={`Remove ${label}`}
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </Badge>
-      ))}
-      {result && chips.length === 0 && (
-        <span className="text-fg-muted">no filters</span>
-      )}
-      {result && result.unrecognized.length > 0 && (
-        <span className="text-warn">
-          Not understood: {result.unrecognized.join(", ")}
-        </span>
-      )}
-      {result && (
-        <span className="text-fg-muted" title={result.notes.join("\n")}>
-          ({result.via}
-          {result.notes.length > 0 && `; ${result.notes.join(" ")}`})
-        </span>
-      )}
-    </div>
-  );
-}
+/** Facility and unit IDs, typed exactly (the search box suggests facilities by name). */
+const ID_INPUTS = [
+  ["facilityId", "Facility ID", "e.g. 3", "numeric"],
+  ["unitId", "Unit ID", "e.g. 1, CT1", "text"],
+] as const;
 
-/** §8.1 basic fields: state, year, fuel, unit type, facility ID, unit ID. */
-function BasicFilters({
-  filters,
-  filterOptions,
-  onFilterChange,
-  yearRange,
-}: {
+/**
+ * The filters, grouped as the "+ Filter" menu lists them. Every chip opens its group's editor, so
+ * all of §8.1–8.3 stays one or two clicks away without a wall of fields on the page.
+ */
+const GROUPS = [
+  { id: "place", label: "Place", hint: "State, county, grid region" },
+  { id: "years", label: "Years", hint: "One year or a range" },
+  { id: "fuel", label: "Fuel", hint: "Primary and secondary fuel" },
+  {
+    id: "equipment",
+    label: "Unit and controls",
+    hint: "Unit type, status, pollution controls, program",
+  },
+  {
+    id: "amounts",
+    label: "Amounts",
+    hint: "CO₂, SO₂, NOₓ, heat input, load, capacity…",
+  },
+  { id: "rank", label: "Top N", hint: "Keep only the highest or lowest" },
+  {
+    id: "more",
+    label: "IDs and data checks",
+    hint: "Facility or unit ID, audit flags, record origin",
+  },
+] as const;
+type GroupId = (typeof GROUPS)[number]["id"];
+
+/** Which group's editor a filter key belongs to (and so which one its chip opens). */
+const groupOf = (key: keyof FacilityFilters): GroupId | null => {
+  if (["stateCode", "county", "nercRegion"].includes(key)) return "place";
+  if (key === "year" || key.startsWith("year")) return "years";
+  if (["primaryFuel", "secondaryFuel"].includes(key)) return "fuel";
+  if (
+    [
+      "unitType",
+      "operatingStatus",
+      "so2Control",
+      "noxControl",
+      "pmControl",
+      "programCode",
+    ].includes(key)
+  )
+    return "equipment";
+  if (["topN", "topBy", "topDir", "topLevel", "rankGroup"].includes(key))
+    return "rank";
+  if (
+    ["facilityId", "unitId", "auditFlag", "auditSeverity", "origin"].includes(
+      key,
+    )
+  )
+    return "more";
+  if (RANGE_FIELDS.some((f) => key.startsWith(f.key))) return "amounts";
+  return null;
+};
+
+interface EditorProps {
   filters: FacilityFilters;
   filterOptions?: FilterOptions;
   onFilterChange: FilterChangeHandler;
-  yearRange?: boolean;
-}) {
-  const years = [...(filterOptions?.years ?? [])].reverse();
-  const selects = [
-    ["stateCode", "State", toOptions(filterOptions?.states, "All states")],
-    ...(yearRange
-      ? []
-      : ([
-          ["year", "Year", toOptions(filterOptions?.years, "All years")],
-        ] as const)),
-    ["primaryFuel", "Fuel", toOptions(filterOptions?.fuels, "All fuels")],
-    [
-      "unitType",
-      "Unit type",
-      toOptions(filterOptions?.unitTypes, "All unit types"),
-    ],
-  ] as const;
+  view: FilterBarProps["itemLabel"];
+  analysis?: boolean;
+}
+
+/** Labelled selects, one per row: the shape of most group editors. */
+function Selects({
+  fields,
+  filters,
+  onFilterChange,
+}: {
+  fields: readonly (readonly [
+    keyof FacilityFilters,
+    string,
+    readonly SelectOption[],
+  ])[];
+} & Pick<EditorProps, "filters" | "onFilterChange">) {
   return (
     <>
-      {yearRange && (
-        <div className="space-y-1">
-          <span className={cn(FIELD_LABEL, "block")}>Reporting years</span>
-          <div className="flex items-center gap-1">
-            {(["yearMin", "yearMax"] as const).map((key, i) => (
-              <Select
-                key={key}
-                value={filters[key] || "ALL"}
-                onValueChange={(v) => onFilterChange(key, v === "ALL" ? "" : v)}
-                options={toOptions(years, i ? "Last" : "First")}
-                size="drawer"
-                className="min-w-0 px-2"
-              />
-            ))}
-          </div>
-        </div>
-      )}
-      {selects.map(([key, label, options]) => (
+      {fields.map(([key, label, options]) => (
         <Field key={key} label={label}>
           <Select
             value={filters[key]}
@@ -303,195 +296,403 @@ function BasicFilters({
   );
 }
 
-/** Facility and unit IDs, typed exactly (the search box suggests facilities by name). */
-const ID_INPUTS = [
-  ["facilityId", "Facility ID", "e.g. 3", "numeric"],
-  ["unitId", "Unit ID", "e.g. 1, CT1", "text"],
-] as const;
-
-/** §8.1 remaining fields, §8.2 min–max ranges, and §8.3 Top-N ranking; all AND together. */
-function AdvancedFilters({
+/** One §8.2 min–max pair; ≥ / ≤ toggle to strict > / <. */
+function RangeRow({
+  field: { key, label, unit },
   filters,
-  filterOptions,
+  onFilterChange,
+}: {
+  field: (typeof RANGE_FIELDS)[number];
+} & Pick<EditorProps, "filters" | "onFilterChange">) {
+  return (
+    <div className="space-y-1">
+      <span className={cn(FIELD_LABEL, "block")}>
+        {label} <span className="text-fg-muted font-normal">({unit})</span>
+      </span>
+      <div className="grid grid-cols-2 gap-2">
+        {(["Min", "Max"] as const).map((bound) => {
+          const strictKey = `${key}${bound}Strict` as const;
+          const strict = filters[strictKey] === "1";
+          const [inclusiveOp, strictOp] =
+            bound === "Min" ? ["≥", ">"] : ["≤", "<"];
+          return (
+            <div key={bound} className="flex min-w-0 items-center">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onFilterChange(strictKey, strict ? "" : "1")}
+                aria-pressed={strict}
+                aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"}: ${strict ? "strict" : "inclusive"}`}
+                title={
+                  strict
+                    ? "Strict (click for inclusive)"
+                    : "Inclusive (click for strict)"
+                }
+                className="aria-pressed:bg-surface-2 aria-pressed:text-fg w-6 shrink-0 font-mono"
+              >
+                {strict ? strictOp : inclusiveOp}
+              </Button>
+              <Input
+                value={filters[`${key}${bound}`]}
+                onChange={(e) =>
+                  onFilterChange(`${key}${bound}`, e.target.value)
+                }
+                placeholder={bound === "Min" ? "min" : "max"}
+                inputMode="decimal"
+                aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
+                className="h-8 min-w-0"
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** The §8.3 Top-N settings. */
+function TopN({
+  filters,
   onFilterChange,
   view,
   analysis,
-}: {
-  filters: FacilityFilters;
-  filterOptions?: FilterOptions;
-  onFilterChange: FilterChangeHandler;
-  view: FilterBarProps["itemLabel"];
-  analysis?: boolean;
-}) {
-  const counties = [
-    ...new Set(
-      (filterOptions?.counties ?? [])
-        .filter(
-          (c) =>
-            filters.stateCode === "ALL" || c.stateCode === filters.stateCode,
-        )
-        .map((c) => c.county),
-    ),
-  ];
-  const selects = [
-    ["county", "County", toOptions(counties, "All counties")],
-    [
-      "nercRegion",
-      "Grid region",
-      toOptions(filterOptions?.nercRegions, "All grids"),
-    ],
-    [
-      "secondaryFuel",
-      "Secondary fuel",
-      toOptions(filterOptions?.secondaryFuels, "Any"),
-    ],
-    ["so2Control", "SO₂ control", toOptions(filterOptions?.so2Controls, "Any")],
-    ["noxControl", "NOₓ control", toOptions(filterOptions?.noxControls, "Any")],
-    ["pmControl", "PM control", toOptions(filterOptions?.pmControls, "Any")],
-    ["programCode", "Program", toOptions(filterOptions?.programCodes, "Any")],
-    [
-      "operatingStatus",
-      "Operating status",
-      toOptions(filterOptions?.operatingStatuses, "Any"),
-    ],
-    [
-      "auditFlag",
-      "Audit flag",
-      [
-        { value: "ALL", label: "Any (or none)" },
-        ...AUDIT_RULES.map((r) => ({ value: r.flagType, label: r.label })),
-      ],
-    ],
-    ["auditSeverity", "Flag severity", toOptions(AUDIT_SEVERITIES, "Any")],
-    [
-      "origin",
-      "Record origin",
-      [
-        { value: "ALL", label: "Any" },
-        { value: "API", label: "EPA CAMPD API" },
-        { value: "UPLOAD", label: "File upload" },
-      ],
-    ],
-  ] as const;
-
+}: Omit<EditorProps, "filterOptions">) {
+  const off = filters.topN === "ALL";
   return (
-    <div className="border-edge space-y-5 border-y py-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {ID_INPUTS.map(([key, label, placeholder, inputMode]) => (
-          <Field key={key} label={label}>
-            <Input
-              value={filters[key]}
-              onChange={(e) => onFilterChange(key, e.target.value)}
-              placeholder={placeholder}
-              inputMode={inputMode}
-            />
-          </Field>
-        ))}
-        {selects.map(([key, label, options]) => (
-          <Field key={key} label={label}>
-            <Select
-              value={filters[key]}
-              onValueChange={(value) => onFilterChange(key, value)}
-              options={options}
-              size="drawer"
-            />
-          </Field>
-        ))}
-      </div>
-
-      <fieldset className="space-y-2">
-        <legend className={FIELD_LABEL}>
-          Ranges per unit-year (click ≥ / ≤ to switch to strict &gt; / &lt;)
-        </legend>
-        <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
-          {RANGE_FIELDS.filter((f) => !analysis || f.key !== "year").map(
-            ({ key, label, unit }) => (
-              <div key={key} className="flex items-center gap-1 text-sm">
-                <span className="text-fg-2 mr-1 w-32 shrink-0">
-                  {label} <span className="text-fg-muted">({unit})</span>
-                </span>
-                {(["Min", "Max"] as const).map((bound) => {
-                  const strictKey = `${key}${bound}Strict` as const;
-                  const strict = filters[strictKey] === "1";
-                  const [inclusiveOp, strictOp] =
-                    bound === "Min" ? ["≥", ">"] : ["≤", "<"];
-                  return (
-                    <div key={bound} className="flex min-w-0 items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() =>
-                          onFilterChange(strictKey, strict ? "" : "1")
-                        }
-                        aria-pressed={strict}
-                        aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"}: ${strict ? "strict" : "inclusive"}`}
-                        title={
-                          strict
-                            ? "Strict (click for inclusive)"
-                            : "Inclusive (click for strict)"
-                        }
-                        className="aria-pressed:bg-surface-2 aria-pressed:text-fg w-6 font-mono"
-                      >
-                        {strict ? strictOp : inclusiveOp}
-                      </Button>
-                      <Input
-                        value={filters[`${key}${bound}`]}
-                        onChange={(e) =>
-                          onFilterChange(`${key}${bound}`, e.target.value)
-                        }
-                        placeholder={bound === "Min" ? "min" : "max"}
-                        inputMode="decimal"
-                        aria-label={`${label} ${bound === "Min" ? "minimum" : "maximum"} (${unit})`}
-                        className="h-8 min-w-0"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            ),
-          )}
-        </div>
-      </fieldset>
-
-      {view !== "flags" && !analysis && (
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Ranking">
-            <Select
-              value={filters.topN}
-              onValueChange={(value) => onFilterChange("topN", value)}
-              options={[
-                { value: "ALL", label: "All rows" },
-                ...TOP_N_OPTIONS.map((n) => ({
-                  value: String(n),
-                  label: `First ${n}`,
-                })),
-              ]}
-              size="toolbar"
-              className="w-32"
-            />
-          </Field>
-          <Field label="Group">
-            <Select
-              value={filters.rankGroup}
-              onValueChange={(value) => onFilterChange("rankGroup", value)}
-              options={[
-                { value: "ALL", label: "Overall" },
-                { value: "state", label: "Per state" },
-              ]}
-              size="toolbar"
-              className="w-32"
-            />
-          </Field>
-          <p className="text-fg-muted max-w-xl pb-2 text-xs">
-            Ranks follow the table sort: sort a column descending for Top-N,
-            ascending for Bottom-N.{" "}
-            {view === "unit-years"
-              ? "Each row is one unit in one reporting year."
-              : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
-          </p>
-        </div>
+    <>
+      <Field label="Keep">
+        <Select
+          value={filters.topN}
+          onValueChange={(value) => onFilterChange("topN", value)}
+          options={[
+            { value: "ALL", label: "All rows" },
+            ...TOP_N_OPTIONS.map((n) => ({
+              value: String(n),
+              label: `The first ${n}`,
+            })),
+          ]}
+          size="drawer"
+        />
+      </Field>
+      {!off && (
+        <Selects
+          filters={filters}
+          onFilterChange={onFilterChange}
+          fields={[
+            [
+              "topLevel",
+              "Of",
+              [
+                { value: "facility", label: "Facilities" },
+                { value: "unit", label: "Unit-years" },
+              ],
+            ],
+            [
+              "topBy",
+              "Ranked by",
+              RANK_METRICS.map((m) => ({
+                value: m.key,
+                label: `${m.label} (${m.unit})`,
+              })),
+            ],
+            [
+              "topDir",
+              "Order",
+              [
+                { value: "desc", label: "Highest first" },
+                { value: "asc", label: "Lowest first" },
+              ],
+            ],
+            [
+              "rankGroup",
+              "Within",
+              [
+                { value: "ALL", label: "All selected" },
+                { value: "state", label: "Each state" },
+              ],
+            ],
+          ]}
+        />
       )}
+      <p className="text-fg-muted text-xs">
+        Applies after the other filters, on every page and in downloads.
+        {view === "unit-years" && !analysis
+          ? " Sorting the table only changes the order."
+          : ""}
+      </p>
+    </>
+  );
+}
+
+/** The fields of one filter group, as its popover shows them. */
+function GroupEditor({ group, ...props }: EditorProps & { group: GroupId }) {
+  const { filters, filterOptions: o, onFilterChange, analysis } = props;
+  const set = { filters, onFilterChange };
+  switch (group) {
+    case "place": {
+      const counties = [
+        ...new Set(
+          (o?.counties ?? [])
+            .filter(
+              (c) =>
+                filters.stateCode === "ALL" ||
+                c.stateCode === filters.stateCode,
+            )
+            .map((c) => c.county),
+        ),
+      ];
+      return (
+        <Selects
+          {...set}
+          fields={[
+            ["stateCode", "State", toOptions(o?.states, "All states")],
+            ["county", "County", toOptions(counties, "All counties")],
+            ["nercRegion", "Grid region", toOptions(o?.nercRegions, "All")],
+          ]}
+        />
+      );
+    }
+    case "years": {
+      const years = [...(o?.years ?? [])].reverse();
+      return analysis ? (
+        <div className="grid grid-cols-2 gap-2">
+          {(["yearMin", "yearMax"] as const).map((key, i) => (
+            <Field key={key} label={i ? "To" : "From"}>
+              <Select
+                value={filters[key] || "ALL"}
+                onValueChange={(v) => onFilterChange(key, v === "ALL" ? "" : v)}
+                options={toOptions(years, i ? "Last" : "First")}
+                size="drawer"
+              />
+            </Field>
+          ))}
+        </div>
+      ) : (
+        <>
+          <Selects
+            {...set}
+            fields={[["year", "Year", toOptions(o?.years, "All years")]]}
+          />
+          <RangeRow
+            {...set}
+            field={RANGE_FIELDS.find((f) => f.key === "year")!}
+          />
+        </>
+      );
+    }
+    case "fuel":
+      return (
+        <Selects
+          {...set}
+          fields={[
+            ["primaryFuel", "Primary fuel", toOptions(o?.fuels, "All fuels")],
+            [
+              "secondaryFuel",
+              "Secondary fuel",
+              toOptions(o?.secondaryFuels, "Any"),
+            ],
+          ]}
+        />
+      );
+    case "equipment":
+      return (
+        <Selects
+          {...set}
+          fields={[
+            [
+              "unitType",
+              "Unit type",
+              toOptions(o?.unitTypes, "All unit types"),
+            ],
+            [
+              "operatingStatus",
+              "Operating status",
+              toOptions(o?.operatingStatuses, "Any"),
+            ],
+            ["so2Control", "SO₂ control", toOptions(o?.so2Controls, "Any")],
+            ["noxControl", "NOₓ control", toOptions(o?.noxControls, "Any")],
+            ["pmControl", "PM control", toOptions(o?.pmControls, "Any")],
+            ["programCode", "Program", toOptions(o?.programCodes, "Any")],
+          ]}
+        />
+      );
+    case "amounts":
+      return (
+        <>
+          <p className="text-fg-muted text-xs">
+            Per unit-year. Click ≥ or ≤ to make a bound strict.
+          </p>
+          {RANGE_FIELDS.filter((f) => f.key !== "year").map((field) => (
+            <RangeRow key={field.key} {...set} field={field} />
+          ))}
+        </>
+      );
+    case "rank":
+      return <TopN {...props} />;
+    case "more":
+      return (
+        <>
+          {ID_INPUTS.map(([key, label, placeholder, inputMode]) => (
+            <Field key={key} label={label}>
+              <Input
+                value={filters[key]}
+                onChange={(e) => onFilterChange(key, e.target.value)}
+                placeholder={placeholder}
+                inputMode={inputMode}
+              />
+            </Field>
+          ))}
+          <Selects
+            {...set}
+            fields={[
+              [
+                "auditFlag",
+                "Audit flag",
+                [
+                  { value: "ALL", label: "Any (or none)" },
+                  ...AUDIT_RULES.map((r) => ({
+                    value: r.flagType,
+                    label: r.label,
+                  })),
+                ],
+              ],
+              [
+                "auditSeverity",
+                "Flag severity",
+                toOptions(AUDIT_SEVERITIES, "Any"),
+              ],
+              [
+                "origin",
+                "Record origin",
+                [
+                  { value: "ALL", label: "Any" },
+                  { value: "API", label: "EPA CAMPD API" },
+                  { value: "UPLOAD", label: "File upload" },
+                ],
+              ],
+            ]}
+          />
+        </>
+      );
+  }
+}
+
+const editorWidth = (group: GroupId) => (group === "amounts" ? "w-80" : "w-72");
+
+/** A popover body: the group's fields in a scrollable column. */
+function EditorBody({ group, ...props }: EditorProps & { group: GroupId }) {
+  return (
+    <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+      <GroupEditor group={group} {...props} />
     </div>
+  );
+}
+
+/** "+ Filter": the groups, then the chosen group's fields in the same popover. */
+function AddFilter(props: EditorProps) {
+  const [group, setGroup] = useState<GroupId | null>(null);
+  const shown = GROUPS.filter((g) => props.view !== "flags" || g.id !== "rank");
+  return (
+    <Popover onOpenChange={() => setGroup(null)}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-7 gap-1 px-2.5">
+          <Plus className="h-3.5 w-3.5" />
+          Filter
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className={group ? editorWidth(group) : "w-72 p-1"}>
+        {group ? (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setGroup(null)}
+              className="text-fg-muted hover:text-fg flex cursor-pointer items-center gap-1 text-xs"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              {GROUPS.find((g) => g.id === group)?.label}
+            </button>
+            <EditorBody group={group} {...props} />
+          </div>
+        ) : (
+          <ul>
+            {shown.map((g) => (
+              <li key={g.id}>
+                <button
+                  type="button"
+                  onClick={() => setGroup(g.id)}
+                  className="hover:bg-surface-2 flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-left"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="text-fg block text-sm">{g.label}</span>
+                    <span className="text-fg-muted block truncate text-xs">
+                      {g.hint}
+                    </span>
+                  </span>
+                  <ChevronRight className="text-fg-muted h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** An active filter: click it to change it in its group's editor; ✕ removes it. */
+function FilterChip({
+  label,
+  keys,
+  ...props
+}: EditorProps & { label: string; keys: (keyof FacilityFilters)[] }) {
+  const group = groupOf(keys[0]!);
+  const remove = () =>
+    keys.forEach((k) => props.onFilterChange(k, DEFAULT_FILTERS[k]));
+  return (
+    <span className="border-edge bg-surface text-fg-2 inline-flex h-7 items-center rounded-md border text-sm">
+      {group ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="hover:text-fg cursor-pointer rounded-l-md pr-1 pl-2.5"
+            >
+              {label}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className={editorWidth(group)}>
+            <EditorBody group={group} {...props} />
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <span className="pr-1 pl-2.5">{label}</span>
+      )}
+      <button
+        type="button"
+        onClick={remove}
+        className="text-fg-muted hover:text-fg cursor-pointer rounded-r-md px-1.5"
+        aria-label={`Remove ${label}`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </span>
+  );
+}
+
+/** What the description search made of the text: anything it didn't understand, and how. */
+function DescribeNote({ result }: { result: DescribeResult }) {
+  return (
+    <p className="text-fg-muted text-xs" title={result.notes.join("\n")}>
+      {result.unrecognized.length > 0 && (
+        <span className="text-warn">
+          Not understood: {result.unrecognized.join(", ")}.{" "}
+        </span>
+      )}
+      Read by the {result.via === "parser" ? "built-in parser" : result.via}
+      {result.notes.length > 0 &&
+        `; ${result.notes.join(" ").replace(/\.$/, "")}`}
+      .
+    </p>
   );
 }
 
@@ -511,14 +712,14 @@ interface FilterBarProps {
    * instead.
    */
   onPickFacility?: (facility: FacilitySuggestion) => void;
-  /** Analyze page: the year range among the basic fields, no Top-N ranking (analyses ignore it). */
+  /** Analyze page: a year range instead of a single year. */
   analysis?: boolean;
 }
 
 /**
- * The explorer's search form: one search box (description or name), the basic fields, an
- * Advanced panel that opens by itself when one of its filters is set, the active filters as
- * removable chips, and the matching count.
+ * The search form of every data page: one search box (description or name), then one line with
+ * the match count, the active filters as chips (click to edit, ✕ to remove), "+ Filter" for the
+ * rest, and the page's actions.
  */
 export function FacilityFilterBar({
   filters,
@@ -533,16 +734,6 @@ export function FacilityFilterBar({
   onPickFacility,
   analysis,
 }: FilterBarProps) {
-  const activeAdvancedCount = ADVANCED_FILTER_KEYS.filter(
-    (key) =>
-      isFilterActive(filters, key) &&
-      // A facility picked in the search box shows as a chip; it shouldn't open Advanced.
-      key !== "facilityId" &&
-      !(analysis && /^year|^topN|^rankGroup/.test(key)),
-  ).length;
-  // Until toggled by hand, Advanced is open exactly when one of its filters is set.
-  const [advancedToggled, setAdvancedToggled] = useState<boolean | null>(null);
-  const isAdvancedOpen = advancedToggled ?? activeAdvancedCount > 0;
   const hasActiveFilters = (
     Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
   ).some((key) => isFilterActive(filters, key));
@@ -558,9 +749,17 @@ export function FacilityFilterBar({
     onFilterChange("search", "");
     onFilterChange("facilityId", String(f.id));
   };
+  const editor: EditorProps = {
+    filters,
+    filterOptions,
+    onFilterChange,
+    view: itemLabel,
+    analysis,
+  };
+  const chips = activeChips(filters, names);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <form
         role="search"
         className="flex gap-2"
@@ -579,7 +778,7 @@ export function FacilityFilterBar({
           isLoading={describe?.isLoading}
           placeholder={
             describe
-              ? `Describe what you want, or type a name: “${DESCRIBE_EXAMPLES[0]}”`
+              ? `Search a plant, or describe what you want: “${DESCRIBE_EXAMPLES[0]}”`
               : "Search plant, operator, county, or ID"
           }
           aria-label={
@@ -604,9 +803,9 @@ export function FacilityFilterBar({
         )}
       </form>
 
+      {describe?.result && <DescribeNote result={describe.result} />}
       {describe && !describe.text && !hasActiveFilters && (
         <TryExamples
-          className="-mt-2"
           examples={DESCRIBE_EXAMPLES.map((ex) => ({
             label: ex,
             onSelect: () => describe.onTextChange(ex),
@@ -614,54 +813,19 @@ export function FacilityFilterBar({
         />
       )}
 
-      <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-3 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-        <BasicFilters
-          filters={filters}
-          filterOptions={filterOptions}
-          onFilterChange={onFilterChange}
-          yearRange={analysis}
-        />
-        <Button
-          variant="outline"
-          onClick={() => setAdvancedToggled(!isAdvancedOpen)}
-          aria-expanded={isAdvancedOpen}
-          className="col-span-2 sm:col-span-1"
-        >
-          Advanced
-          {activeAdvancedCount > 0 && (
-            <span className="text-primary tabular-nums">
-              {activeAdvancedCount}
-            </span>
-          )}
-          <ChevronDown
-            className={cn(
-              "text-fg-muted h-3.5 w-3.5",
-              isAdvancedOpen && "rotate-180",
-            )}
-          />
-        </Button>
-      </div>
-
-      {isAdvancedOpen && (
-        <AdvancedFilters
-          filters={filters}
-          filterOptions={filterOptions}
-          onFilterChange={onFilterChange}
-          view={itemLabel}
-          analysis={analysis}
-        />
-      )}
-
-      {/* One line: how many match, what filters produced them, and the page's actions. */}
+      {/* One line: how many match, the filters that produced them, and the page's actions. */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <p className="text-fg-2 text-sm whitespace-nowrap" aria-live="polite">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <p
+            className="text-fg-2 mr-1.5 text-sm whitespace-nowrap"
+            aria-live="polite"
+          >
             {isLoading ? (
               "Searching…"
             ) : (
               <>
                 <strong className="text-fg font-semibold tabular-nums">
-                  {totalMatching?.toLocaleString() ?? 0}
+                  {formatNumber(totalMatching)}
                 </strong>{" "}
                 {totalMatching === 1
                   ? itemLabel.replace(/s$/, "").replace(/ie$/, "y")
@@ -669,12 +833,34 @@ export function FacilityFilterBar({
               </>
             )}
           </p>
-          <FilterChips
-            filters={filters}
-            onFilterChange={onFilterChange}
-            result={describe?.result}
-            names={names}
-          />
+          {chips.map(({ label, keys }) => (
+            <FilterChip
+              key={keys.join()}
+              label={label}
+              keys={keys}
+              {...editor}
+            />
+          ))}
+          {/* The two most used filters stay one click away until set (then they're chips). */}
+          {(
+            [
+              ["stateCode", "State", filterOptions?.states],
+              ["primaryFuel", "Fuel", filterOptions?.fuels],
+            ] as const
+          ).map(
+            ([key, label, values]) =>
+              !isFilterActive(filters, key) && (
+                <Select
+                  key={key}
+                  value={filters[key]}
+                  onValueChange={(value) => onFilterChange(key, value)}
+                  options={toOptions(values, label)}
+                  aria-label={label}
+                  className="text-fg-2 h-7 w-auto border-dashed px-2.5"
+                />
+              ),
+          )}
+          <AddFilter {...editor} />
           {hasActiveFilters && (
             <Button
               variant="ghost"
@@ -682,7 +868,7 @@ export function FacilityFilterBar({
               onClick={onResetFilters}
               className="text-fg-muted h-7 px-2"
             >
-              Clear filters
+              Clear all
             </Button>
           )}
         </div>

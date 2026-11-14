@@ -2,11 +2,16 @@
 
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
-import { ReportTable, Section } from "~/components/ui/report";
-import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
+import { Disclosure, ReportTable, Section } from "~/components/ui/report";
+import { Takeaways } from "~/components/ui/takeaways";
 import { TryExamples } from "~/components/ui/try-examples";
 import { formatStat } from "~/lib/analysis";
 import { PERCENTILES, type Summary } from "~/lib/stats";
+import {
+  groupMedianSentence,
+  outlierSentence,
+  spreadSentences,
+} from "~/lib/takeaways";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { DistributionChart } from "./charts";
@@ -118,75 +123,81 @@ export function DistributionTab(props: TabProps) {
               : "space-y-6"
           }
         >
-          <KpiStrip className="lg:grid-cols-6">
-            <StatTile
-              label={`${combined} (${info.unit})`}
-              value={formatStat(o.value)}
-            />
-            <StatTile
-              label="Unit-years"
-              value={formatNumber(o.count)}
-              subtext={`${formatNumber(o.missing)} missing`}
-            />
-            <StatTile label="Mean" value={formatStat(o.mean)} />
-            <StatTile label="Median" value={formatStat(o.median)} />
-            <StatTile label="Standard deviation" value={formatStat(o.sd)} />
-            <StatTile
-              label="Middle half (Q1–Q3)"
-              value={`${formatStat(o.q1)} – ${formatStat(o.q3)}`}
-              subtext={`IQR ${formatStat(o.iqr)}`}
-            />
-          </KpiStrip>
+          <Takeaways
+            items={[
+              `${formatNumber(o.count)} unit-years have a value${o.missing ? ` (${formatNumber(o.missing)} don't report one)` : ""}; ${combined.toLowerCase()} ${formatStat(o.value)} ${info.unit}.`,
+              ...spreadSentences(o, info.unit),
+              by &&
+                groupMedianSentence(
+                  data.groups.map((g) => ({
+                    group: g.group,
+                    median: g.median,
+                  })),
+                  info.unit,
+                ),
+              unusual && outlierSentence(unusual, o.count, o.median),
+            ]}
+          />
 
           <DistributionChart {...props} />
 
-          <Section
+          <Disclosure
             title={
               by ? `Statistics by ${inSentence(groupName)}` : "All statistics"
             }
-            note={`${info.definition} ${by ? `${formatNumber(data.groups.length)} of ${formatNumber(data.totalGroups)} groups, ${by === "year" ? "in year order" : `largest ${combined.toLowerCase()} first`}. ` : ""}Missing values are left out, never counted as 0. Click a column to sort.`}
-            actions={
-              <ExportButton
-                name={`statistics-${view.variable}${by ? `-by-${by}` : ""}`}
-                title={`${info.label} statistics${by ? ` by ${inSentence(groupName)}` : ""}`}
-                table={{ head, rows }}
-                meta={{ variables: [info] }}
-              />
-            }
+            hint="Mean, median, spread, quartiles, and percentiles, with a download"
           >
-            <div className="max-h-[480px] overflow-y-auto">
-              <ReportTable
-                sortable
-                head={head}
-                rows={rows.map(([group, ...nums]) => [
-                  group,
-                  ...nums.map((n) => formatStat(n as number | null)),
-                ])}
-                sortKeys={rows.map((r) => r.map((c) => c))}
-              />
-            </div>
-          </Section>
+            <Section
+              title=""
+              note={`${info.definition} ${by ? `${formatNumber(data.groups.length)} of ${formatNumber(data.totalGroups)} groups, ${by === "year" ? "in year order" : `largest ${combined.toLowerCase()} first`}. ` : ""}Missing values are left out, never counted as 0. Click a column to sort.`}
+              actions={
+                <ExportButton
+                  name={`statistics-${view.variable}${by ? `-by-${by}` : ""}`}
+                  title={`${info.label} statistics${by ? ` by ${inSentence(groupName)}` : ""}`}
+                  table={{ head, rows }}
+                  meta={{ variables: [info] }}
+                />
+              }
+            >
+              <div className="max-h-[480px] overflow-y-auto">
+                <ReportTable
+                  sortable
+                  head={head}
+                  rows={rows.map(([group, ...nums]) => [
+                    group,
+                    ...nums.map((n) => formatStat(n as number | null)),
+                  ])}
+                  sortKeys={rows.map((r) => r.map((c) => c))}
+                />
+              </div>
+            </Section>
+          </Disclosure>
 
           {unusual && (
-            <Section
+            <Disclosure
               title="Unusual observations"
-              note={`${formatNumber(unusual.below)} unit-years below and ${formatNumber(unusual.above)} above Tukey's far-out fences (Q1 − 3 × IQR to Q3 + 3 × IQR: ${formatStat(unusual.low)} to ${formatStat(unusual.high)} ${info.unit}). They are reported values, not errors; the Audit flags tab on Explore lists records that break physical rules.`}
+              hint={`${formatNumber(unusual.above + unusual.below)} unit-years far from the rest`}
             >
-              {unusual.extreme.length > 0 && (
-                <ReportTable
-                  head={[
-                    "Most extreme unit-years",
-                    `${info.label} (${info.unit})`,
-                    "× median",
-                  ]}
-                  rows={unusual.extreme.map((u) => [
-                    u.label,
-                    formatStat(u.value),
-                    o.median ? `${formatStat(u.value / o.median)}×` : "—",
-                  ])}
-                />
-              )}
-            </Section>
+              <Section
+                title=""
+                note={`${formatNumber(unusual.below)} unit-years below and ${formatNumber(unusual.above)} above Tukey's far-out fences (Q1 − 3 × IQR to Q3 + 3 × IQR: ${formatStat(unusual.low)} to ${formatStat(unusual.high)} ${info.unit}). They are reported values, not errors; the Audit flags tab on Explore lists records that break physical rules.`}
+              >
+                {unusual.extreme.length > 0 && (
+                  <ReportTable
+                    head={[
+                      "Most extreme unit-years",
+                      `${info.label} (${info.unit})`,
+                      "× median",
+                    ]}
+                    rows={unusual.extreme.map((u) => [
+                      u.label,
+                      formatStat(u.value),
+                      o.median ? `${formatStat(u.value / o.median)}×` : "—",
+                    ])}
+                  />
+                )}
+              </Section>
+            </Disclosure>
           )}
         </div>
       )}

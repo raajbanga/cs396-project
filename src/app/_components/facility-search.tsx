@@ -9,6 +9,25 @@ import { api, type RouterOutputs } from "~/trpc/react";
 
 export type FacilitySuggestion = RouterOutputs["facilities"]["suggest"][number];
 
+/**
+ * The company to show under a suggestion: the operator (the owners are usually the same), or,
+ * when the match came from an owner or operator rather than the name, that one ("Owner:
+ * Allegheny Energy"), so the match makes sense. The stored text is "A (Owner)|B (Operator)".
+ */
+function companyLine(f: FacilitySuggestion, q: string) {
+  const parts = (f.ownerOperator ?? "")
+    .split("|")
+    .map((p) => /^(.*?)\s*\((Owner|Operator)\)\s*$/.exec(p.trim()))
+    .filter((m) => m !== null)
+    .map(([, name, role]) => ({ name: name!, role: role! }));
+  const needle = q.toLowerCase();
+  if (needle && !f.name.toLowerCase().includes(needle)) {
+    const hit = parts.find((p) => p.name.toLowerCase().includes(needle));
+    if (hit) return `${hit.role}: ${hit.name}`;
+  }
+  return (parts.find((p) => p.role === "Operator") ?? parts[0])?.name ?? "";
+}
+
 /** `value`, once it has stopped changing for `ms`. */
 function useDebounced<T>(value: T, ms = 200) {
   const [settled, setSettled] = useState(value);
@@ -22,7 +41,8 @@ function useDebounced<T>(value: T, ms = 200) {
 /**
  * The one search box of the app: type a plant name, operator, county, or ID and pick a suggestion
  * (arrow keys and Enter, or the mouse). Enter with no suggestion highlighted calls `onSubmit`, which
- * the explorer-style bars use for description search. Every page shares this box and the server's
+ * the explorer-style bars use for description search; without one (a facility picker), it picks the
+ * first match, waiting for the list if it is still loading. Every page shares this box and the server's
  * `facilities.suggest`, so search matches the same way everywhere.
  */
 export function FacilitySearch({
@@ -68,8 +88,25 @@ export function FacilitySearch({
   const pick = (f: FacilitySuggestion) => {
     setOpen(false);
     setActive(-1);
+    setNotice(null);
     onPick(f);
   };
+
+  // A picker's Enter before its list arrives: pick the first match once it does, or say there is none.
+  const [pendingEnter, setPendingEnter] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const listSettled =
+    q.length >= 2 && q === value.trim() && !isFetching && data !== undefined;
+  useEffect(() => {
+    if (!pendingEnter) return;
+    if (items[0]) {
+      setPendingEnter(false);
+      pick(items[0]);
+    } else if (listSettled) {
+      setPendingEnter(false);
+      setNotice(`No facility matches “${value.trim()}”.`);
+    }
+  }, [pendingEnter, items, listSettled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={cn("relative min-w-0", className)}>
@@ -94,6 +131,8 @@ export function FacilitySearch({
           onValueChange(e.target.value);
           setOpen(true);
           setActive(-1);
+          setNotice(null);
+          setPendingEnter(false);
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
@@ -117,9 +156,14 @@ export function FacilitySearch({
             const chosen = showList ? items[active] : undefined;
             e.preventDefault();
             if (chosen) pick(chosen);
-            else {
+            else if (onSubmit) {
               setOpen(false);
-              onSubmit?.();
+              onSubmit();
+            } else if (value.trim().length < 2) {
+              setNotice("Type two or more letters, then pick a facility.");
+            } else {
+              setOpen(true);
+              setPendingEnter(true);
             }
           } else if (e.key === "Escape") {
             setOpen(false);
@@ -137,6 +181,14 @@ export function FacilitySearch({
         >
           <X className="h-4 w-4" />
         </button>
+      )}
+      {notice && !showList && (
+        <p
+          role="status"
+          className="border-edge bg-surface text-warn absolute top-full right-0 left-0 z-40 mt-1 rounded-md border px-3 py-1.5 text-xs shadow-lg"
+        >
+          {notice}
+        </p>
       )}
       {showList && (
         <div className="border-edge bg-surface absolute top-full right-0 left-0 z-40 mt-1 overflow-hidden rounded-md border shadow-lg">
@@ -167,12 +219,20 @@ export function FacilitySearch({
                 />
                 <span className="min-w-0 flex-1">
                   <span className="text-fg block truncate font-medium">
-                    {f.name}
+                    {f.name}{" "}
+                    <span className="text-fg-muted font-normal tabular-nums">
+                      {f.id}
+                    </span>
                   </span>
                   <span className="text-fg-muted block truncate text-xs">
-                    #{f.id} · {f.stateCode}
-                    {f.county ? ` · ${f.county}` : ""}
-                    {f.ownerOperator ? ` · ${f.ownerOperator}` : ""}
+                    {[
+                      f.county
+                        ? `${f.county.replace(/ County$/, " Co.")}, ${f.stateCode}`
+                        : f.stateCode,
+                      companyLine(f, q),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </span>
                 <span className="text-fg-muted shrink-0 text-xs tabular-nums">
@@ -183,9 +243,9 @@ export function FacilitySearch({
               </li>
             ))}
           </ul>
-          {hint && (
+          {(hint ?? !onSubmit) && (
             <p className="border-edge text-fg-muted border-t px-3 py-1.5 text-xs">
-              {hint}
+              {hint ?? "Enter picks the highlighted facility, or the first."}
             </p>
           )}
         </div>

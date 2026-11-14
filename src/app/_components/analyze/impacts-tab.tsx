@@ -1,6 +1,9 @@
 "use client";
 
-import { Chart } from "~/components/ui/chart";
+import { BarList } from "~/components/charts/bars";
+import { ChartFrame, queryStatus } from "~/components/ui/chart";
+import { Takeaways } from "~/components/ui/takeaways";
+import { leadersSentence } from "~/lib/takeaways";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
 import { Disclosure, ReportTable, Section } from "~/components/ui/report";
@@ -80,6 +83,22 @@ export function ImpactsTab(props: TabProps) {
         />
       </Controls>
 
+      <Takeaways
+        items={[
+          leadersSentence(
+            impacts.flatMap((v, i) => {
+              const top = tops[i]?.data?.rows.find(
+                (r) => r.values[v.key] != null,
+              );
+              return top ? [{ category: v.label, group: top.group }] : [];
+            }),
+          ),
+          perMWh
+            ? "Per MWh of gross load: how much impact each unit of electricity carries, so small but dirty plants rise and large clean ones fall."
+            : "Each category has its own unit, the amount of a reference pollutant with the same effect: kg CO₂ eq for warming, SO₂ eq for acid rain, PM2.5 eq for fine particles that harm breathing, O₃ eq for smog. Categories can't be added together.",
+        ]}
+      />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {impacts.map((v, i) => {
           const q = tops[i]!;
@@ -87,40 +106,28 @@ export function ImpactsTab(props: TabProps) {
             (r) => r.values[v.key] != null,
           );
           return (
-            <Chart
+            <ChartFrame
               key={v.key}
               title={`${v.label} by ${groupName}`}
               subtitle={`${v.unit}; the ${Math.min(TOP, rows.length)} largest of ${formatNumber(q.data?.total)} groups.`}
               note={v.definition}
               filename={`impact-${v.key}-by-${by}`}
               meta={traciMeta}
-              isLoading={q.isLoading}
-              error={q.error}
-              onRetry={() => void q.refetch()}
-              height={340}
-              data={[
-                {
-                  type: "bar",
-                  orientation: "h",
-                  y: rows.map((r) => r.group),
-                  x: rows.map((r) => r.values[v.key] ?? null),
-                  hovertemplate: `%{y}: %{x:,.4~g} ${v.unit}<extra></extra>`,
-                },
-              ]}
-              layout={{
-                yaxis: {
-                  autorange: "reversed",
-                  automargin: true,
-                  type: "category",
-                },
-                xaxis: { title: { text: v.unit } },
-                margin: { l: 16, r: 16, t: 8, b: 48 },
-              }}
+              height={TOP * 26}
+              {...queryStatus(q)}
               table={{
                 head: [by, valueColumn(v)],
                 rows: rows.map((r) => [r.group, r.values[v.key]]),
               }}
-            />
+            >
+              <BarList
+                unit={v.unit}
+                rows={rows.slice(0, TOP).map((r) => ({
+                  label: r.group,
+                  value: r.values[v.key] ?? null,
+                }))}
+              />
+            </ChartFrame>
           );
         })}
       </div>

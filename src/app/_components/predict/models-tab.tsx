@@ -1,6 +1,10 @@
 "use client";
 
-import { Chart, pointsType } from "~/components/ui/chart";
+import { BarList } from "~/components/charts/bars";
+import { ScatterPlot } from "~/components/charts/scatter";
+import { ChartFrame, queryStatus } from "~/components/ui/chart";
+import { Takeaways } from "~/components/ui/takeaways";
+import { modelSentence } from "~/lib/takeaways";
 import { ExportButton } from "~/components/ui/export-button";
 import {
   Disclosure,
@@ -10,6 +14,7 @@ import {
 } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
+import { modelMetadata } from "~/lib/export-bundle";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
 import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
@@ -23,12 +28,26 @@ const KIND_ORDER = ["baseline", "ridge", "tree"];
 const metric = (m: Model, split: string, key: string) =>
   m.metrics[split]?.[key] ?? null;
 
+/** The bootstrap 95 % interval of a test metric, as [low, high], or null for older models. */
+const interval = (m: Model, key: string) => {
+  const lo = metric(m, "test_ci_low", key);
+  const hi = metric(m, "test_ci_high", key);
+  return lo === null || hi === null ? null : ([lo, hi] as const);
+};
+const formatInterval = (ci: readonly [number, number] | null) =>
+  ci ? `${formatStat(ci[0])}–${formatStat(ci[1])}` : "—";
+
+/** Test metrics exported with their intervals (the table shows them under the value). */
+const CI_METRICS = ["mae", "rmse", "r2"] as const;
+
 /** The comparison table's columns: which split and metric, and which direction is better. */
 const METRICS: {
   key: string;
   label: string;
   get: (m: Model) => number | null;
   lowerIsBetter?: boolean;
+  /** A test metric with a bootstrap interval, drawn under its value. */
+  ci?: (typeof CI_METRICS)[number];
   format: (v: number | null) => string;
 }[] = [
   {
@@ -46,6 +65,7 @@ const METRICS: {
   },
   {
     key: "test_mae",
+    ci: "mae",
     label: "Test MAE (t)",
     get: (m) => metric(m, "test", "mae"),
     lowerIsBetter: true,
@@ -53,6 +73,7 @@ const METRICS: {
   },
   {
     key: "test_rmse",
+    ci: "rmse",
     label: "Test RMSE (t)",
     get: (m) => metric(m, "test", "rmse"),
     lowerIsBetter: true,
@@ -60,6 +81,7 @@ const METRICS: {
   },
   {
     key: "test_r2",
+    ci: "r2",
     label: "Test R²",
     get: (m) => metric(m, "test", "r2"),
     format: formatStat,
@@ -79,12 +101,12 @@ const METRICS: {
   },
 ];
 
-/** Tuned settings in words: "α = 10", "depth 16, leaves ≥ 20". */
+/** Tuned settings in words: "α = 10", "depth ≤ 20, leaves ≥ 20". */
 const settings = (m: Model) => {
-  const p = m.params as Record<string, number>;
+  const p = m.params as Record<string, number | null>;
   if (m.kind === "ridge") return `α = ${p.alpha}`;
   if (m.kind === "tree")
-    return `depth ${p.max_depth}, leaves ≥ ${p.min_samples_leaf}`;
+    return `${p.max_depth === null ? "unlimited depth" : `depth ≤ ${p.max_depth}`}, leaves ≥ ${p.min_samples_leaf}`;
   return "median of training years";
 };
 
@@ -113,7 +135,6 @@ export function ModelsTab({
   });
   const points = tests.data ?? [];
   const fuels = [...new Set(points.map((p) => p.fuel))];
-  const maxActual = Math.max(1, ...points.map((p) => p.actual));
   const base = sorted.find((m) => m.kind === "baseline");
   const gains = sorted
     .filter((m) => m !== base && base)
@@ -129,83 +150,153 @@ export function ModelsTab({
     .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
     .slice(0, 15);
 
+  // The plain answer: how far off the best model is, in tons and relative to the actual value.
+  const best = sorted
+    .filter((m) => m !== base)
+    .sort(
+      (a, b) =>
+        (metric(a, "test", "mae") ?? Infinity) -
+        (metric(b, "test", "mae") ?? Infinity),
+    )[0];
+
+  const persistence = best ? metric(best, "persistence_test", "mae") : null;
+  // The importance chart in words: what pushes NOₓ up and down most (Ridge), or what the tree leans on.
+  const [first, second] = importance;
+  const cut = importance.find(([, v]) => v < 0);
+  const up = importance.find(([, v]) => v > 0);
+  const reading =
+    chosen.kind === "tree"
+      ? first &&
+        `The tree leans most on ${featureLabel(first[0]).toLowerCase()} (${(first[1] * 100).toFixed(0)} % of its error reduction)${second ? ` and ${featureLabel(second[0]).toLowerCase()} (${(second[1] * 100).toFixed(0)} %)` : ""}.`
+      : [
+          up && `${featureLabel(up[0])} raises predicted NOₓ the most`,
+          cut && `${featureLabel(cut[0])} lowers it the most`,
+        ]
+          .filter(Boolean)
+          .join("; ") + ".";
+
   return (
     <div className="space-y-8">
-      <Chart
-        title={`Test error, ${chosen.testYears}: lower is better`}
-        subtitle={`Mean absolute error per unit-year; against the baseline, ${gains.join(", ")} lower.`}
-        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median for every unit-year.`}
-        filename="test-mae"
-        height={220}
-        data={[
-          {
-            type: "bar",
-            orientation: "h",
-            y: sorted.map((m) => m.name),
-            x: sorted.map((m) => metric(m, "test", "mae")),
-            marker: { color: sorted.map((m) => MODEL_COLORS[m.kind]!) },
-            text: sorted.map(
-              (m) => `${formatStat(metric(m, "test", "mae"))} t`,
+      {best && (
+        <Takeaways
+          items={[
+            modelSentence(
+              {
+                name: best.name,
+                mae: metric(best, "test", "mae"),
+                r2: metric(best, "test", "r2"),
+              },
+              base ? metric(base, "test", "mae") : null,
+              metric(best, "test", "mape"),
             ),
-            textposition: "outside",
-            hovertemplate: "%{y}: %{x:,.4~g} t<extra></extra>",
-          },
-        ]}
-        layout={{
-          yaxis: { autorange: "reversed", automargin: true },
-          xaxis: { title: { text: "Test MAE (short tons NOₓ)" } },
-          margin: { l: 16, r: 48, t: 8, b: 48 },
-        }}
-        table={{
-          head: ["model", "test_mae_tons"],
-          rows: sorted.map((m) => [m.id, metric(m, "test", "mae")]),
-        }}
-      />
-
-      <Section
-        title="All metrics"
-        note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the last column refits without same-year heat input, load, and hours."
-        actions={
-          <ExportButton
-            name="model-comparison"
-            title="NOₓ model comparison"
-            table={{
-              head: ["model", "settings", ...METRICS.map((m) => m.key)],
-              rows: sorted.map((m) => [
-                m.id,
-                settings(m),
-                ...METRICS.map((c) => c.get(m)),
-              ]),
-            }}
-            meta={{ models: sorted.map(({ artifact: _a, ...m }) => m) }}
-          />
-        }
-      >
-        <ReportTable
-          head={["Model", "Settings", ...METRICS.map((m) => m.label)]}
-          rows={sorted.map((m) => [
-            <span key="n" className="text-fg font-medium">
-              {m.name}
-            </span>,
-            settings(m),
-            ...METRICS.map((c) => {
-              const v = c.get(m);
-              const values = sorted.map(c.get).filter((x) => x !== null);
-              const best = c.lowerIsBetter
-                ? Math.min(...values)
-                : Math.max(...values);
-              const text = c.format(v);
-              return v === best && values.length > 1 ? (
-                <span key={c.key} className="text-fg font-semibold">
-                  {text}
-                </span>
-              ) : (
-                text
-              );
-            }),
-          ])}
+            `Tested on ${chosen.testYears}, years none of the models saw while training.`,
+            persistence !== null &&
+              `A simple rule does better still: last year's NOₓ rate × this year's heat input is off by ${formatStat(persistence)} t on average. NOₓ mostly follows last year's rate times this year's fuel use, which the models only approximate.`,
+          ]}
         />
-      </Section>
+      )}
+      <ChartFrame
+        title={`Test error, ${chosen.testYears}: lower is better`}
+        subtitle={`Mean absolute error per unit-year in short tons NOₓ, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
+        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median of unit-years with the same fuel and unit type. Intervals come from resampling test units (a unit's two test years together).`}
+        filename="test-mae"
+        height={sorted.length * 26}
+        table={{
+          head: [
+            "model",
+            "test_mae_tons",
+            "test_mae_ci_low",
+            "test_mae_ci_high",
+          ],
+          rows: sorted.map((m) => [
+            m.id,
+            metric(m, "test", "mae"),
+            ...(interval(m, "mae") ?? [null, null]),
+          ]),
+        }}
+      >
+        <BarList
+          unit="t"
+          rows={sorted.map((m) => {
+            const [low, high] = interval(m, "mae") ?? [];
+            return {
+              label: m.name,
+              value: metric(m, "test", "mae"),
+              low,
+              high,
+              color: MODEL_COLORS[m.kind],
+            };
+          })}
+        />
+      </ChartFrame>
+
+      <Disclosure
+        title="All metrics"
+        hint="Validation and test error, R², MAPE, intervals, and the ablation, per model"
+      >
+        <Section
+          title=""
+          note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the ablation column refits without same-year heat input, load, and hours; small print under a test value is its 95 % bootstrap interval over test units."
+          actions={
+            <ExportButton
+              name="model-comparison"
+              title="NOₓ model comparison"
+              table={{
+                head: [
+                  "model",
+                  "settings",
+                  ...METRICS.map((m) => m.key),
+                  ...CI_METRICS.flatMap((k) => [
+                    `test_${k}_ci_low`,
+                    `test_${k}_ci_high`,
+                  ]),
+                ],
+                rows: sorted.map((m) => [
+                  m.id,
+                  settings(m),
+                  ...METRICS.map((c) => c.get(m)),
+                  ...CI_METRICS.flatMap((k) => interval(m, k) ?? [null, null]),
+                ]),
+              }}
+              meta={{ models: sorted.map(modelMetadata) }}
+            />
+          }
+        >
+          <ReportTable
+            head={["Model", "Settings", ...METRICS.map((m) => m.label)]}
+            rows={sorted.map((m) => [
+              <span key="n" className="text-fg font-medium">
+                {m.name}
+              </span>,
+              settings(m),
+              ...METRICS.map((c) => {
+                const v = c.get(m);
+                const values = sorted.map(c.get).filter((x) => x !== null);
+                const best = c.lowerIsBetter
+                  ? Math.min(...values)
+                  : Math.max(...values);
+                const text =
+                  v === best && values.length > 1 ? (
+                    <span className="text-fg font-semibold">{c.format(v)}</span>
+                  ) : (
+                    c.format(v)
+                  );
+                const ci = c.ci && interval(m, c.ci);
+                return ci ? (
+                  <span key={c.key} title="95 % bootstrap interval">
+                    {text}
+                    <span className="text-fg-muted block text-xs">
+                      {formatInterval(ci)}
+                    </span>
+                  </span>
+                ) : (
+                  <span key={c.key}>{text}</span>
+                );
+              }),
+            ])}
+          />
+        </Section>
+      </Disclosure>
 
       <Controls>
         <Field group label="Model">
@@ -218,53 +309,18 @@ export function ModelsTab({
       </Controls>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Chart
+        <ChartFrame
           title={`Predicted vs actual NOₓ, ${chosen.testYears}`}
-          subtitle={`${formatNumber(points.length)} test unit-years (an even sample), log scales; on the dashed line the prediction is exact.`}
-          note="Predictions below 0.01 t are drawn at 0.01 so they fit the log scale."
+          subtitle={`${formatNumber(points.length)} test unit-years (an even sample), log scales. On the dashed line the prediction is exact; above it, over-predicted.`}
+          note="Predictions below 0.01 t are drawn at 0.01 so they fit the log scale. Log scales let small and large units show on one chart."
+          legend={fuels.map((fuel) => ({
+            key: fuel,
+            label: fuel,
+            color: getFuelTheme(fuel).color,
+          }))}
           filename={`predicted-vs-actual-${chosen.id}`}
-          isLoading={tests.isLoading}
-          error={tests.error}
-          onRetry={() => void tests.refetch()}
-          height={440}
-          data={[
-            ...fuels.map((fuel) => {
-              const pts = points.filter((p) => p.fuel === fuel && p.actual > 0);
-              return {
-                type: pointsType(),
-                mode: "markers" as const,
-                name: fuel,
-                x: pts.map((p) => p.actual),
-                y: pts.map((p) =>
-                  Math.max(p.predicted[chosen.kind] ?? 0, 0.01),
-                ),
-                text: pts.map((p) => p.label),
-                marker: {
-                  size: 5,
-                  opacity: 0.55,
-                  color: getFuelTheme(fuel).color,
-                },
-                hovertemplate:
-                  "%{text}<br>actual %{x:,.4~g} t<br>predicted %{y:,.4~g} t<extra></extra>",
-              };
-            }),
-            {
-              type: "scatter",
-              mode: "lines",
-              name: "Exact",
-              x: [0.01, maxActual],
-              y: [0.01, maxActual],
-              line: { dash: "dash", width: 1, color: "gray" },
-              hoverinfo: "skip",
-            },
-          ]}
-          layout={{
-            xaxis: { title: { text: "Actual NOₓ (short tons)" }, type: "log" },
-            yaxis: {
-              title: { text: "Predicted NOₓ (short tons)" },
-              type: "log",
-            },
-          }}
+          height={420}
+          {...queryStatus(tests)}
           table={{
             head: [
               "unit_year",
@@ -279,9 +335,29 @@ export function ModelsTab({
               ...sorted.map((m) => p.predicted[m.kind]),
             ]),
           }}
-        />
+        >
+          <ScatterPlot
+            log
+            height={420}
+            // Clipped to the axes: the line where prediction equals actual.
+            diagonal={[1e-6, 1e9]}
+            x={{ title: "Actual NOₓ (short tons)", unit: "t" }}
+            y={{ title: "Predicted NOₓ (short tons)", unit: "t" }}
+            groups={fuels.map((fuel) => ({
+              label: fuel,
+              color: getFuelTheme(fuel).color,
+              points: points
+                .filter((p) => p.fuel === fuel && p.actual > 0)
+                .map((p) => ({
+                  x: p.actual,
+                  y: Math.max(p.predicted[chosen.kind] ?? 0, 0.01),
+                  label: p.label,
+                })),
+            }))}
+          />
+        </ChartFrame>
         {chosen.kind !== "baseline" && (
-          <Chart
+          <ChartFrame
             title={
               chosen.kind === "tree"
                 ? "Feature importance"
@@ -289,8 +365,8 @@ export function ModelsTab({
             }
             subtitle={
               chosen.kind === "tree"
-                ? "Share of the tree's error reduction per input; the 15 largest."
-                : "Effect on log(1 + NOₓ) per input; the 15 largest by size."
+                ? `${reading} Share of the tree's error reduction per input; the 15 largest.`
+                : `${reading} Right of the line: more NOₓ; left: less. The 15 largest effects.`
             }
             note={
               chosen.kind === "ridge"
@@ -298,26 +374,7 @@ export function ModelsTab({
                 : undefined
             }
             filename={`importance-${chosen.id}`}
-            height={440}
-            data={[
-              {
-                type: "bar",
-                orientation: "h",
-                y: importance.map(([k]) => featureLabel(k)),
-                x: importance.map(([, v]) => v),
-                marker: { color: MODEL_COLORS[chosen.kind] },
-                hovertemplate: "%{y}: %{x:.4f}<extra></extra>",
-              },
-            ]}
-            layout={{
-              yaxis: { autorange: "reversed", automargin: true },
-              xaxis: {
-                title: {
-                  text: chosen.kind === "tree" ? "Importance" : "Coefficient",
-                },
-              },
-              margin: { l: 16, r: 16, t: 8, b: 48 },
-            }}
+            height={importance.length * 26}
             table={{
               head: [
                 "feature",
@@ -328,7 +385,16 @@ export function ModelsTab({
                 v,
               ]),
             }}
-          />
+          >
+            <BarList
+              format={(v) => v.toFixed(chosen.kind === "tree" ? 3 : 2)}
+              color={MODEL_COLORS[chosen.kind]}
+              rows={importance.map(([k, v]) => ({
+                label: featureLabel(k),
+                value: v,
+              }))}
+            />
+          </ChartFrame>
         )}
       </div>
 

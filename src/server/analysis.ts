@@ -1,4 +1,3 @@
-import { TRPCError } from "@trpc/server";
 import { execSync } from "node:child_process";
 import { and, count, eq, max, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -21,8 +20,8 @@ import {
   kruskalWallis,
   mannWhitney,
   meanCi,
+  pairwiseCorrelations,
   pearson,
-  spearman,
   welchT,
 } from "~/lib/stats";
 import type { TraciFactor } from "~/lib/traci";
@@ -84,10 +83,6 @@ async function selectRows(filters: FilterInput): Promise<AnalysisRow[]> {
     .where(and(...unitYearConditions(filters)));
 }
 
-/** Ranking (Top N) is an Explore view, not a selection: analyses ignore it. */
-const selection = ({ topN: _n, rankGroup: _g, ...filters }: FilterInput) =>
-  filters;
-
 const CACHE_MS = 5 * 60_000;
 const cache = new Map<string, { at: number; rows: Promise<AnalysisRow[]> }>();
 
@@ -100,11 +95,12 @@ const dataVersion = async () =>
  * share one query and an import is visible at once.
  */
 export async function analysisRows(filters: FilterInput) {
-  const key = JSON.stringify([selection(filters), await dataVersion()]);
+  // A Top N is part of the selection (unitYearConditions), as on Explore and Map.
+  const key = JSON.stringify([filters, await dataVersion()]);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.rows;
   if (cache.size > 20) cache.clear();
-  const rows = selectRows(selection(filters));
+  const rows = selectRows(filters);
   cache.set(key, { at: Date.now(), rows });
   rows.catch(() => cache.delete(key));
   return rows;
@@ -115,16 +111,6 @@ export const loadFactors = (): Promise<TraciFactor[]> =>
 
 export async function loadVariables() {
   return buildVariables(await loadFactors());
-}
-
-export function findVariable(variables: Variable[], key: string) {
-  const v = variables.find((x) => x.key === key);
-  if (!v)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Unknown variable: ${key}`,
-    });
-  return v;
 }
 
 /** The app version and commit, read once (Vercel provides the commit; locally, git does). */
@@ -386,17 +372,9 @@ export function correlationMatrix(
   method: "pearson" | "spearman",
 ) {
   const columns = variables.map((v) => rows.map(v.value));
-  const fn = method === "pearson" ? pearson : spearman;
   return {
     keys: variables.map((v) => v.key),
-    matrix: columns.map((a, i) =>
-      columns.map((b, j) => (i === j ? 1 : fn(a, b))),
-    ),
-    n: columns.map((a) =>
-      columns.map(
-        (b) => a.filter((x, k) => x !== null && b[k] !== null).length,
-      ),
-    ),
+    ...pairwiseCorrelations(columns, method),
   };
 }
 

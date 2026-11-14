@@ -7,13 +7,16 @@ import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
   analysisSearchParams,
+  DEFAULT_ANALYSIS_FILTERS,
   DEFAULT_VIEW,
   type AnalysisView,
   type parseAnalysisParams,
 } from "~/lib/analysis-state";
 import { exportUrl } from "~/lib/csv";
 import { ExportContext } from "~/components/ui/export-button";
+import { analyzeMetadata } from "~/lib/export-bundle";
 import {
+  applyDescribed,
   DEFAULT_FILTERS,
   filterSearchParams,
   type FilterChangeHandler,
@@ -56,10 +59,16 @@ export function AnalyzeView({
   const setFilter: FilterChangeHandler = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value }));
   // The explorer's description search; analyses use its filters (sort and view don't apply).
+  // A search that names no years keeps the default 2015–2025 range.
   const { describe, reset: resetDescribe } = useDescribeSearch({
     initialText: initial.filters.search,
     onNameSearch: (text) => setFilter("search", text),
-    onApply: (r) => setFilters(r.filters),
+    onApply: (r) =>
+      setFilters(
+        applyDescribed(DEFAULT_ANALYSIS_FILTERS, r.filters, {
+          yearRange: true,
+        }),
+      ),
   });
 
   const [catalog] = api.analysis.catalog.useSuspenseQuery();
@@ -87,12 +96,7 @@ export function AnalyzeView({
 
   return (
     <ExportContext
-      value={{
-        page: "Analyze",
-        ...source,
-        filters: Object.fromEntries(filterQuery),
-        view,
-      }}
+      value={analyzeMetadata(source, Object.fromEntries(filterQuery), view)}
     >
       <div className="space-y-6">
         <PageTitle lead="Pick unit-years with the filters; each tab answers one question about them. Every view can be shared by its URL.">

@@ -162,44 +162,59 @@ void test("rubric §5 operators: at least / at most stay inclusive, strict years
   expect("years less than 2018", { yearMax: "2017" });
 });
 
+/** The filters a ranking sets: N, measure, order, and whether facilities or unit-years are ranked. */
+const top = (
+  n: number,
+  topBy: string,
+  topLevel: "facility" | "unit",
+  topDir: "desc" | "asc" = "desc",
+) => ({ topN: String(n), topBy, topDir, topLevel });
+
 void test("ranking: top-N, bottom-N, per state, singular = 1", () => {
   expect(
     "Top 10 facilities by CO2 emissions",
-    { topN: "10" },
+    top(10, "co2MassTons", "facility"),
     { tab: "explorer", sort: { by: "co2MassTons", dir: "desc" } },
   );
   expect(
     "top 20 units by gross generation",
-    { topN: "20" },
+    top(20, "grossGenerationMWh", "unit"),
     { tab: "units", sort: { by: "grossGenerationMWh", dir: "desc" } },
   );
   expect(
     "Units with the lowest SO2 emissions",
-    { topN: "10" },
+    top(10, "so2MassTons", "unit", "asc"),
     { sort: { by: "so2MassTons", dir: "asc" } },
   );
   expect(
     "Top CO2-emitting facility in each state",
-    { topN: "1", rankGroup: "state" },
+    { ...top(1, "co2MassTons", "facility"), rankGroup: "state" },
     { tab: "explorer", sort: { by: "co2MassTons", dir: "desc" } },
   );
   expect(
     "Top 10 coal units in Kentucky",
-    { topN: "10", primaryFuel: "Coal", stateCode: "KY" },
+    { ...top(10, "co2MassTons", "unit"), primaryFuel: "Coal", stateCode: "KY" },
     { tab: "units" },
   );
   expect(
     "Highest-generation natural-gas units",
-    { topN: "10", primaryFuel: "Natural Gas" },
+    { ...top(10, "grossGenerationMWh", "unit"), primaryFuel: "Natural Gas" },
     { sort: { by: "grossGenerationMWh", dir: "desc" } },
   );
-  expect("the 5 largest plants", { topN: "5" });
+  expect("the 5 largest plants", top(5, "co2MassTons", "facility"));
 });
 
-void test("facilities view switches to units when sorting by a non-CO2 metric", () => {
+void test("a facility ranking by a non-CO2 metric still ranks facilities", () => {
+  expect("plants with the highest NOx", top(10, "noxMassTons", "facility"), {
+    tab: "explorer",
+    sort: { by: "noxMassTons", dir: "desc" },
+  });
+});
+
+void test("a display sort on a non-CO2 metric switches to the units view", () => {
   expect(
-    "plants with the highest NOx",
-    { topN: "10" },
+    "coal plants NOx",
+    { primaryFuel: "Coal" },
     { tab: "units", sort: { by: "noxMassTons", dir: "desc" } },
   );
 });
@@ -310,4 +325,37 @@ void test("parseAmount handles separators, suffixes, and exponents", () => {
   assert.equal(parseAmount("1.2 million"), 1200000);
   assert.equal(parseAmount("5e5"), 500000);
   assert.equal(parseAmount("coal"), undefined);
+});
+
+void test("rates and capacity: rank by them, range on capacity", () => {
+  expect(
+    "top 10 units by NOx rate in 2024",
+    { year: "2024", ...top(10, "noxRate", "unit") },
+    { tab: "units", sort: { by: "noxRate", dir: "desc" } },
+  );
+  expect("highest heat rate coal plants", {
+    primaryFuel: "Coal",
+    ...top(10, "heatRate", "facility"),
+  });
+  expect("lowest carbon intensity facilities", {
+    ...top(10, "co2Intensity", "facility", "asc"),
+  });
+  expect("10 largest plants by capacity", top(10, "capacity", "facility"));
+  expect(
+    "units over 1000 MW",
+    { capacityMin: "1000", capacityMinStrict: "1" },
+    { tab: "units" },
+  );
+  expect("gas units between 100 and 300 MW in Texas", {
+    stateCode: "TX",
+    primaryFuel: "Natural Gas",
+    capacityMin: "100",
+    capacityMax: "300",
+  });
+  // A rate has no min/max filter: the bound is reported, not dropped silently.
+  expect(
+    "heat rate over 10",
+    {},
+    { unrecognized: ["over", "10"], sort: { by: "heatRate", dir: "desc" } },
+  );
 });

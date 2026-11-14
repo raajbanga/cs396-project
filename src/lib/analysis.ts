@@ -1,5 +1,6 @@
 import { getFuelTheme } from "~/lib/map-utils";
 import { SHORT_TON_KG, type TraciFactor } from "~/lib/traci";
+import { shortNumber } from "~/lib/utils";
 
 /**
  * The Analyze page's vocabulary (Phase 2 §4.1–§4.3, §4.6): the unit-year row every analysis reads,
@@ -397,6 +398,21 @@ export const buildVariables = (factors: readonly TraciFactor[]) => [
   ...impactVariables(factors),
 ];
 
+/** A request named a variable the catalogue does not have (a hand-edited link, an old TRACI key). */
+export class UnknownVariableError extends Error {
+  constructor(readonly key: string) {
+    super(`Unknown variable: ${key}`);
+    this.name = "UnknownVariableError";
+  }
+}
+
+/** The variable with this key; an unknown key throws instead of analysing nothing. */
+export function findVariable(variables: readonly Variable[], key: string) {
+  const v = variables.find((x) => x.key === key);
+  if (!v) throw new UnknownVariableError(key);
+  return v;
+}
+
 export const variableInfo = ({
   value: _v,
   ratio: _r,
@@ -448,7 +464,7 @@ export function groupRows(rows: readonly AnalysisRow[], key: DimensionKey) {
 export function formatStat(v: number | null | undefined) {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
-  if (abs >= 1000) return Math.round(v).toLocaleString();
+  if (abs >= 1000) return shortNumber(v) ?? Math.round(v).toLocaleString();
   if (abs === 0) return "0";
   return Number(v.toPrecision(4)).toLocaleString(undefined, {
     maximumFractionDigits: 6,

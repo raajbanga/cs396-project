@@ -1,7 +1,8 @@
 "use client";
 
-import type { Data, Shape } from "plotly.js";
-import { Chart } from "~/components/ui/chart";
+import { Lines } from "~/components/charts/lines";
+import { Takeaways } from "~/components/ui/takeaways";
+import { ChartFrame } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
 import {
   Disclosure,
@@ -12,40 +13,15 @@ import {
 import { Select } from "~/components/ui/select";
 import { formatPct, formatStat } from "~/lib/analysis";
 import {
+  MAX_SENSITIVITY_POINTS,
   MODEL_COLORS,
   NUMERIC_INPUTS,
-  outOfRange,
-  predict,
+  sensitivityCurve,
+  sensitivityGrid,
   type NumericInput,
 } from "~/lib/model";
 import { Controls, Toggle } from "../analyze/shared";
 import { rangeWarning, type PredictTabProps } from "./predict-view";
-
-const MAX_POINTS = 401;
-
-/** A dashed reference line at x (vertical) or y (horizontal). */
-const refLine = (axis: "x" | "y", at: number): Partial<Shape> => ({
-  type: "line",
-  xref: axis === "x" ? "x" : "paper",
-  yref: axis === "y" ? "y" : "paper",
-  ...(axis === "x"
-    ? { x0: at, x1: at, y0: 0, y1: 1 }
-    : { x0: 0, x1: 1, y0: at, y1: at }),
-  line: { dash: "dash", width: 1, color: "gray" },
-});
-
-/** A shaded band over [x0, x1]: inputs outside the training data. */
-const outsideBand = (x0: number, x1: number): Partial<Shape> => ({
-  type: "rect",
-  xref: "x",
-  yref: "paper",
-  x0,
-  x1,
-  y0: 0,
-  y1: 1,
-  fillcolor: "rgba(120, 113, 108, 0.14)",
-  line: { width: 0 },
-});
 
 /** Three significant figures, for range defaults in an input's own unit. */
 const round3 = (x: number) => Number(x.toPrecision(3));
@@ -76,37 +52,23 @@ export function SensitivitySection({
   // The grid of input values, always including the baseline itself.
   const from = Number(view.from) || 0;
   const to = Number(view.to) || 0;
-  const step = Math.abs(Number(view.step)) || 1;
-  const toValue = (x: number) => (asValues ? x : value0 * (1 + x / 100));
-  const grid = [value0];
-  for (
-    let x = Math.min(from, to);
-    x <= Math.max(from, to) + step * 1e-9 && grid.length < MAX_POINTS;
-    x += step
-  ) {
-    grid.push(toValue(x));
-  }
-  const capped = grid.length >= MAX_POINTS;
-  const values = [...new Set(grid)].sort((a, b) => a - b);
-  const curves = chosen.map((m) => {
-    const pred0 = predict(m.artifact, base);
-    return {
-      model: m,
-      pred0,
-      points: values.map((value) => {
-        const inputs = { ...base, [input]: value };
-        const prediction = predict(m.artifact, inputs);
-        return {
-          value,
-          change: value0 ? (value / value0 - 1) * 100 : null,
-          prediction,
-          diff: prediction - pred0,
-          diffPct: pred0 ? ((prediction - pred0) / pred0) * 100 : null,
-          outside: outOfRange(m.artifact, inputs).includes(input),
-        };
-      }),
-    };
-  });
+  const step = Number(view.step);
+  const grid = sensitivityGrid(value0, from, to, step, asValues);
+  const { values, capped } = grid;
+  // What the grid had to correct, said next to the inputs instead of silently.
+  const stepFixed = grid.step !== step;
+  const curves = chosen.map((m) => ({
+    model: m,
+    ...sensitivityCurve(m.artifact, base, input, values, value0),
+  }));
+  // "Over this range, Ridge goes from 1.95K to 3.83K t (2.97K at the baseline); …"
+  const reading = `Over this range, ${curves
+    .map(({ model: m, points, pred0 }) => {
+      const first = points[0]?.prediction ?? null;
+      const last = points.at(-1)?.prediction ?? null;
+      return `${m.kind === "tree" ? "the tree" : m.kind === "ridge" ? "Ridge" : m.name} goes from ${formatStat(first)} to ${formatStat(last)} t (${formatStat(pred0)} at the baseline)`;
+    })
+    .join("; ")}.`;
   const lo = values[0] ?? value0;
   const hi = values.at(-1) ?? value0;
   const outside = curves[0]!.points.filter((q) => q.outside).length;
@@ -168,12 +130,24 @@ export function SensitivitySection({
             <Input
               type="number"
               value={view[key]}
+              aria-invalid={
+                (key === "step" && stepFixed) ||
+                (key !== "step" && grid.reversed)
+              }
               onChange={(e) => setView({ [key]: e.target.value })}
               className="h-9 w-32"
             />
           </Field>
         ))}
       </Controls>
+      {(grid.reversed || stepFixed) && (
+        <p role="alert" className="text-warn text-sm">
+          {grid.reversed &&
+            `The minimum (${formatStat(from)}) is above the maximum (${formatStat(to)}); the curve runs from ${formatStat(to)} to ${formatStat(from)} ${unit}. `}
+          {stepFixed &&
+            `The step must be a positive number; a step of ${formatStat(grid.step)} ${unit} is used.`}
+        </p>
+      )}
       {base[input] === null && (
         <p className="text-warn text-sm">
           The baseline has no {meta.label.toLowerCase()}; the model&apos;s
@@ -185,63 +159,23 @@ export function SensitivitySection({
           {outside > 0 &&
             `${rangeWarning([input])} (${outside} of ${values.length} points, shaded.) `}
           {capped &&
-            `The curve stops at ${MAX_POINTS} points; use a larger step to cover the whole range.`}
+            `The curve stops at ${MAX_SENSITIVITY_POINTS} points; use a larger step to cover the whole range.`}
         </p>
       )}
 
-      <Chart
+      <Takeaways items={[reading]} />
+
+      <ChartFrame
         title={`Predicted NOₓ as ${meta.label.toLowerCase()} changes`}
-        subtitle={`${baseline.label}; diamonds mark the baseline, shading is outside the training data.`}
+        subtitle={`Dots and dashed lines mark the baseline; shading is outside the training data. ${baseline.label}, short tons.`}
         note={`Training data range: ${formatStat(min)}–${formatStat(max)} ${meta.unit}. This shows how each model responds, not a measured real-world effect.`}
+        legend={curves.map(({ model: m }) => ({
+          key: m.kind,
+          label: m.name,
+          color: MODEL_COLORS[m.kind]!,
+        }))}
         filename={`sensitivity-${input}`}
-        data={curves.flatMap(({ model: m, points, pred0 }): Data[] => [
-          {
-            type: "scatter",
-            mode: "lines+markers",
-            name: m.name,
-            x: points.map((q) => q.value),
-            y: points.map((q) => q.prediction),
-            line: { width: 2, color: MODEL_COLORS[m.kind] },
-            marker: {
-              color: MODEL_COLORS[m.kind],
-              size: 5,
-              opacity: points.map((q) => (q.outside ? 0.35 : 1)) as never,
-            },
-            customdata: points.map((q) => [
-              formatPct(q.change),
-              formatStat(q.diff),
-              formatPct(q.diffPct),
-            ]) as never,
-            hovertemplate: `${meta.label} %{x:,.4~g} ${meta.unit} (%{customdata[0]})<br>NOₓ %{y:,.4~g} t<br>change %{customdata[1]} t (%{customdata[2]})<extra>${m.name}</extra>`,
-          },
-          {
-            type: "scatter",
-            mode: "markers",
-            name: `${m.name} baseline`,
-            showlegend: false,
-            x: [value0],
-            y: [pred0],
-            marker: {
-              size: 12,
-              symbol: "diamond",
-              color: MODEL_COLORS[m.kind],
-              line: { width: 1.5, color: "white" },
-            },
-            hovertemplate: `Baseline<br>${meta.label} %{x:,.4~g} ${meta.unit}<br>NOₓ %{y:,.4~g} t<extra>${m.name}</extra>`,
-          },
-        ])}
-        layout={{
-          shapes: [
-            refLine("x", value0),
-            ...(lo < min ? [outsideBand(lo, min)] : []),
-            ...(hi > max ? [outsideBand(max, hi)] : []),
-          ],
-          xaxis: { title: { text: `${meta.label} (${meta.unit})` } },
-          yaxis: {
-            title: { text: "Predicted NOₓ (short tons)" },
-            rangemode: "tozero",
-          },
-        }}
+        height={340}
         table={{
           head: [
             "model",
@@ -264,7 +198,57 @@ export function SensitivitySection({
             ]),
           ),
         }}
-      />
+      >
+        <Lines
+          height={340}
+          xTitle={`${meta.label} (${meta.unit})`}
+          unit="t"
+          data={values.map((x, i) => ({
+            x,
+            ...Object.fromEntries(
+              curves.map(({ model: m, points }) => [
+                m.kind,
+                points[i]?.prediction ?? null,
+              ]),
+            ),
+          }))}
+          series={curves.map(({ model: m }) => ({
+            key: m.kind,
+            label: m.name,
+            color: MODEL_COLORS[m.kind]!,
+          }))}
+          refLines={[
+            { axis: "x", value: value0 },
+            ...curves.map(({ model: m, pred0 }) => ({
+              axis: "y" as const,
+              value: pred0,
+              color: MODEL_COLORS[m.kind],
+            })),
+          ]}
+          bands={[
+            ...(lo < min ? [{ from: lo, to: min }] : []),
+            ...(hi > max ? [{ from: max, to: hi }] : []),
+          ]}
+          markers={curves.map(({ model: m, pred0 }) => ({
+            x: value0,
+            y: pred0,
+            color: MODEL_COLORS[m.kind]!,
+          }))}
+          tooltipRows={(row, s) => {
+            const point = curves
+              .find((c) => c.model.kind === s.key)
+              ?.points.find((q) => q.value === row.x);
+            return point
+              ? [
+                  {
+                    label: "Change",
+                    value: `${formatStat(point.diff)} t (${formatPct(point.diffPct)})`,
+                  },
+                ]
+              : [];
+          }}
+        />
+      </ChartFrame>
 
       <Disclosure title="Show values" hint={`${values.length} points`}>
         <ReportTable
