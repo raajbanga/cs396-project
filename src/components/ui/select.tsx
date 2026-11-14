@@ -14,7 +14,7 @@ const TRIGGER_SIZES = {
 const SCROLL_BUTTON =
   "text-fg-muted flex cursor-default items-center justify-center py-1";
 
-interface SelectOption {
+export interface SelectOption {
   value: string;
   label: ReactNode;
   /** Options sharing a group are listed under its heading, in first-seen order. */

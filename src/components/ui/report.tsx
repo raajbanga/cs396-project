@@ -85,9 +85,9 @@ const cellText = (c: ReactNode): string | null =>
         ? cellText(c.props.children)
         : null;
 
-/** Formatted numbers as tables show them: "1,234", "-0.5", "+12.3 %", "3.1 – 4.2", "< 0.001". */
+/** Formatted numbers as tables show them: "1,234", "19.5B", "-0.5", "+12.3 %", "3.1 – 4.2", "< 0.001". */
 const NUMERIC_TEXT =
-  /^[<>≤≥]?\s*[-+−]?[\d,]*\.?\d+(e[-+]?\d+)?\s*[%×]?(\s*–\s*[-+−]?[\d,]*\.?\d+)?$/i;
+  /^[<>≤≥]?\s*[-+−]?[\d,]*\.?\d+(e[-+]?\d+)?[KMBT]?\s*[%×]?(\s*–\s*[-+−]?[\d,]*\.?\d+[KMBT]?)?$/i;
 const BLANK = /^(—|-|baseline|)$/;
 
 /**

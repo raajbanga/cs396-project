@@ -26,7 +26,7 @@ import {
   type Granularity,
 } from "~/lib/campd-reporting-period";
 import type { SortDirection } from "~/lib/facility-filters";
-import { cn, sortRows } from "~/lib/utils";
+import { cn, formatNumber, formatQuantity, sortRows } from "~/lib/utils";
 import { api, type RouterOutputs } from "~/trpc/react";
 
 interface GranularPlant {
@@ -217,13 +217,17 @@ export function GranularEmissionsWindow({
         <KpiStrip className="lg:grid-cols-4">
           <StatTile
             label="Gross load"
-            value={`${summary.grossGenerationMWh.toLocaleString()} MWh`}
-            subtext={`${summary.operatingHours.toLocaleString()} operating hours`}
+            value={formatQuantity(summary.grossGenerationMWh, "MWh", {
+              fallback: "0 MWh",
+            })}
+            subtext={`${formatNumber(summary.operatingHours)} operating hours`}
           />
           <StatTile
             label="CO₂"
-            value={`${summary.co2MassTons.toLocaleString()} t`}
-            subtext={`${summary.heatInputMMBtu.toLocaleString()} MMBtu heat input`}
+            value={formatQuantity(summary.co2MassTons, "t", {
+              fallback: "0 t",
+            })}
+            subtext={`${formatNumber(summary.heatInputMMBtu)} MMBtu heat input`}
           />
           <StatTile
             label="CO₂ rate"
@@ -291,7 +295,7 @@ export function GranularEmissionsWindow({
                       )}
                     </TableCell>
                     <TableCell className="text-fg-2 px-2 py-1 text-right whitespace-nowrap">
-                      {item.operatingHours.toLocaleString()}
+                      {formatNumber(item.operatingHours)}
                     </TableCell>
                     {(
                       [
@@ -302,7 +306,7 @@ export function GranularEmissionsWindow({
                     ).map(({ value, max }, i) => (
                       <TableCell key={i} className="px-2 py-1 text-right">
                         <span className={max ? "text-fg" : "text-fg-2"}>
-                          {value.toLocaleString()}
+                          {formatNumber(value)}
                         </span>
                         {max && (
                           <ProgressBar

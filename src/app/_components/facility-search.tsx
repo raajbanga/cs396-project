@@ -9,6 +9,25 @@ import { api, type RouterOutputs } from "~/trpc/react";
 
 export type FacilitySuggestion = RouterOutputs["facilities"]["suggest"][number];
 
+/**
+ * The company to show under a suggestion: the operator (the owners are usually the same), or,
+ * when the match came from an owner or operator rather than the name, that one ("Owner:
+ * Allegheny Energy"), so the match makes sense. The stored text is "A (Owner)|B (Operator)".
+ */
+function companyLine(f: FacilitySuggestion, q: string) {
+  const parts = (f.ownerOperator ?? "")
+    .split("|")
+    .map((p) => /^(.*?)\s*\((Owner|Operator)\)\s*$/.exec(p.trim()))
+    .filter((m) => m !== null)
+    .map(([, name, role]) => ({ name: name!, role: role! }));
+  const needle = q.toLowerCase();
+  if (needle && !f.name.toLowerCase().includes(needle)) {
+    const hit = parts.find((p) => p.name.toLowerCase().includes(needle));
+    if (hit) return `${hit.role}: ${hit.name}`;
+  }
+  return (parts.find((p) => p.role === "Operator") ?? parts[0])?.name ?? "";
+}
+
 /** `value`, once it has stopped changing for `ms`. */
 function useDebounced<T>(value: T, ms = 200) {
   const [settled, setSettled] = useState(value);
@@ -200,12 +219,20 @@ export function FacilitySearch({
                 />
                 <span className="min-w-0 flex-1">
                   <span className="text-fg block truncate font-medium">
-                    {f.name}
+                    {f.name}{" "}
+                    <span className="text-fg-muted font-normal tabular-nums">
+                      {f.id}
+                    </span>
                   </span>
                   <span className="text-fg-muted block truncate text-xs">
-                    #{f.id} · {f.stateCode}
-                    {f.county ? ` · ${f.county}` : ""}
-                    {f.ownerOperator ? ` · ${f.ownerOperator}` : ""}
+                    {[
+                      f.county
+                        ? `${f.county.replace(/ County$/, " Co.")}, ${f.stateCode}`
+                        : f.stateCode,
+                      companyLine(f, q),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </span>
                 <span className="text-fg-muted shrink-0 text-xs tabular-nums">
