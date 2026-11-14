@@ -24,42 +24,31 @@ Every spec function (§3–§7) is built, tested (98 tests), and live: `master` 
 the Recharts charts, the filter-chip search, plain-language readings, and the phone-layout fixes.
 History was regrouped into 28 feature commits on 11/13 (same final tree).
 
-What's left in the product is a few spec details (§6.4 tooltips, §7 predictions export and
-pipeline version), robustness for empty or impossible inputs, and the last explanation gap.
+11/14: the spec gaps and robustness items below are done (104 tests); only optional product
+work remains before the report and slides.
 
 ---
 
-## 1. Product: spec gaps
+## 1. Product: spec gaps — done 11/14
 
-- [ ] **Scenario tooltips show inputs and absolute change** (§6.4: "labels or tooltips showing
-      input values, predictions, absolute changes, and percentage changes"). They show the
-      prediction and % change only. Add the changed input ("heat input 25.1M MMBtu, −5 %") and
-      the change in tons. Check the sensitivity curve's tooltip has the same four.
-- [ ] **Export every model's test predictions** (§7: "model evaluation results and
-      predictions"). Predicted-vs-actual downloads the 3,000-point plot sample for one model;
-      export all 7,755 test unit-years with each model's prediction and the error.
-- [ ] **Update `pipeline_version` in the model metadata** (§7 "software or pipeline version";
-      #14), so exports name the pipeline that trained the models.
-- [ ] **Plain-language definitions inside sentences and subtitles** (§1.9 "explain methods,
-      assumptions, results, and limitations clearly"; §4.5 "assumptions and conclusions in plain
-      language"). Table headers already explain MAE, R², IQR, MAPE… on hover
-      (`src/lib/glossary.ts`). Still undefined where they appear in text: log scale,
-      Pearson/Spearman, kg CO₂ eq, standardized coefficient, α, tree depth/leaves, bootstrap
-      interval, ablation, and the Box plot / Log / "% of baseline" toggles.
+- [x] Scenario tooltips list the changed inputs (value and baseline) and each model's prediction,
+      change in tons, and % (§6.4); sensitivity tooltips sign positive changes.
+- [x] "All test predictions" exports all 7,755 test unit-years with every model's prediction
+      and error (§7).
+- [x] `pipeline_version` retrained to a current commit; models unchanged (§7, #14).
+- [x] Jargon explained where it appears: glossary terms in sentences, subtitles, and notes get
+      a dotted underline and a definition on hover (first mention per block); toggles explain
+      each choice on hover.
+- [x] R² charted beside the test error (95 % intervals) and shown as a percentage everywhere.
 
-## 2. Product: robustness
+## 2. Product: robustness — done 11/14
 
-- [ ] **Empty selection on Analyze.** Filters that match nothing (or a reversed year range,
-      which the selectors allow) show "0 unit-years" over empty charts; Compare says "None has no
-      CO₂ mass value". Show one message with "Clear filters" instead of the tab, disable its
-      downloads, and block or explain a reversed range.
-- [ ] **Impossible What-if inputs.** A scenario change below −100 % or a sensitivity range below 0
-      gives negative heat input or load, and the models return 0 t with only the out-of-range
-      warning. Say the value is impossible (as #8 does for the step).
-- [ ] **"High efficiency" scenario follows the heat-input field**, so a positive heat-input change
-      raises fuel use. Use the field only when it is negative (or a fixed −5 %) and say which.
-- [ ] **`facilities.getFacility` returns `undefined`** for an unknown ID
-      (`/predict?facility=99999999`); React Query logs an error. Return `null`.
+- [x] Empty selection on Analyze: one message with "Clear filters"; a backwards year range says
+      so, with "Swap years"; "Download all" disabled.
+- [x] Impossible What-if inputs: negative sensitivity values dropped and counted; scenario
+      changes below −100 % capped, with a message.
+- [x] "High efficiency" always cuts heat input (the field's cut, else 5 %), and says which.
+- [x] `getFacility` / `getUnit` return `null` for an unknown ID.
 
 ## 3. Product: optional (only if time allows)
 
@@ -71,7 +60,7 @@ pipeline version), robustness for empty or impossible inputs, and the last expla
 ## 4. Checks and repository
 
 - [ ] **Close issues #6–#14.** Done in code (persistence #6, tree grid #7, step message #8,
-      Spearman #9, Safari revoke #10, tests #11, report #12/#13); #14 stays open until §1 is done.
+      Spearman #9, Safari revoke #10, tests #11, report #12/#13); #14 closes with the next merge.
       The 11/13 squash had no `Fixes` lines.
 - [ ] **Commit steadily in W47 and W48, both members** (rubric 1.2 history, 3 pts). Since the
       11/13 history regroup every commit is authored by Raaj with Arnav as co-author, and
