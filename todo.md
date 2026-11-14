@@ -34,7 +34,7 @@ without saying what they mean.
 | 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)               |
 | 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer)   |
 | 2 Sensitivity and scenarios      |   8 | **One gap:** no baseline-prediction reference line (§6.4) |
-| 2 Integration and usability      |   5 | **Search ranks only on Explore** (P1); hosted is 11/11    |
+| 2 Integration and usability      |   5 | Search ranks on every page (11/13); hosted is 11/11       |
 | 2 Presentation and participation |   6 | **Not started** (#15, Final)                              |
 | 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                     |
 
@@ -42,32 +42,26 @@ without saying what they mean.
 
 ## P1 — costs points
 
-- [ ] **Search: one global selection, so rankings work on every page.** Found 11/12 in the
-      browser. "top 10 facilities by CO2 in 2025" gives 10 facilities on Explore, but 1,311 on
-      Map and 3,989 unit-years on Analyze. Name searches ("Ghent") and filter searches ("coal
-      units in Kentucky", "SCR in Ohio") work on all three; only rankings fail.
-  - Cause: the parser (`describeSearch`) returns `{ filters, sort, tab }`, and the ranking metric
-    is in `sort`, which only Explore reads (its table sort). Map and Analyze call
-    `setFilters(r.filters)`, so the metric is lost; `topN` reaches the URL but
-    `getMapFacilities` never ranks, and `analysisRows` strips `topN`/`rankGroup` on purpose
-    (`src/server/analysis.ts:86`). The Top-N control under Advanced is dead on both pages for
-    the same reason, and its note ("ranks follow the table sort") mentions a table those pages
-    lack.
-  - Fix: make the ranking part of the selection instead of a table view. Add `rankBy` and
-    `rankDir` to `facilityFilterSchema` (filled by the parser and the Advanced control); one
-    server helper adds "row is in the top N" to the conditions, reusing `rankedFacilities` /
-    `rankedUnitYears` (facility metrics rank facilities, unit metrics rank unit-years); Explore,
-    Map, and Analyze all call it, and Explore's column sort goes back to being display order
-    only. One shared `onApply` merges the result onto each page's defaults, and one chip reads
-    "Top 10 by CO₂, 2025". Test: the same query gives the same facilities on all three pages.
-  - Also found: on Analyze a description search _replaces_ the default 2015–2025 range, so
-    "coal units in Kentucky" quietly includes 1996–2008 and partial 2026 (a name search keeps
-    the range).
-  - Also found: on What-if and Compare groups' facility picker, Enter without a highlighted
-    suggestion does nothing, even when "Ghent" matches the first suggestion exactly; pick the
-    first match, or say "choose a facility from the list".
-  - Parser misses that affect Explore too: "NOx rate" ranks by NOₓ mass, "highest heat rate"
-    by heat input, "units over 1000 MW" is not understood (capacity is not a parsed field).
+- [x] **Search: one global selection, so rankings work on every page.** — RB (11/13)
+  - [x] Rankings (11/13). Top N is now part of the filters (`topN`, `topBy`, `topDir`,
+        `topLevel`, `rankGroup`): `topSelection` in `facilities.ts` keeps the first N facilities
+        (their matching unit-years added up) or unit-years, and Explore, Map, Analyze, and every
+        download apply it. "top 10 facilities by CO2 in 2025" gives 10 facilities on all three
+        pages (38 unit-years); Explore's column sort is display order only. Advanced has Keep /
+        Of / By / Order / Group on every page, one chip reads "Top 10 facilities by CO₂", and old
+        `topN` links rank by their table sort. Test: `src/server/top-selection.test.ts`.
+  - [x] On Analyze a description search keeps the 2015–2025 range unless it names years ("in
+        2025" becomes 2025–2025).
+  - [x] What-if and Compare groups' facility pickers: Enter picks the highlighted or first match
+        (waiting for the list if needed), and says "No facility matches" otherwise. What-if no
+        longer shows the old plant's name beside the new ID while loading.
+  - [x] Parser: "NOx rate" ranks by NOₓ rate (lb/MMBtu, as on Analyze), "heat rate" and "carbon
+        intensity" by those rates, and "units over 1000 MW" / "between 100 and 300 MW" filter on
+        a new Capacity range (Advanced). "heat rate over 10" reports "over 10" as not
+        understood: rates rank but have no min/max filter.
+  - Note: a search that names no years ranks over all years on Explore and Map, but over
+    2015–2025 on Analyze (its default range), so the top N can differ there; naming a year
+    ("in 2024") gives the same rows everywhere.
 - [ ] **Pages show numbers without saying what they mean** (rubric 2: "interprets results
       rather than merely displaying numbers"; "explain what each visualization shows and why it
       is appropriate"). Explore's facility dialog is the model: every headline number has a

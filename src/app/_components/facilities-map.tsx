@@ -8,6 +8,7 @@ import { SourceBadge } from "~/components/ui/badge";
 import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
+  applyDescribed,
   DEFAULT_FILTERS,
   filterSearchParams,
   type ExplorerState,
@@ -94,7 +95,7 @@ export function MapPage({ initialState }: { initialState: ExplorerState }) {
   const { describe, reset: resetDescribe } = useDescribeSearch({
     initialText: initialState.filters.search,
     onNameSearch: (text) => setFilter("search", text),
-    onApply: (r) => setFilters(r.filters),
+    onApply: (r) => setFilters(applyDescribed(DEFAULT_FILTERS, r.filters)),
   });
   const onInspectFacility = useCallback(
     (id: number) => inspect({ kind: "facility", id }),

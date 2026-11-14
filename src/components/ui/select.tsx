@@ -28,6 +28,7 @@ export function Select({
   placeholder,
   size = "toolbar",
   className,
+  disabled,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -35,6 +36,7 @@ export function Select({
   placeholder?: string;
   size?: keyof typeof TRIGGER_SIZES;
   className?: string;
+  disabled?: boolean;
 }) {
   // A value set elsewhere (a shared URL, a parsed description) still shows when it isn't a listed option.
   const shown =
@@ -42,7 +44,11 @@ export function Select({
       ? [...options, { value, label: value }]
       : options;
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
+    <SelectPrimitive.Root
+      value={value}
+      onValueChange={onValueChange}
+      disabled={disabled}
+    >
       <SelectPrimitive.Trigger
         className={cn(
           "border-edge bg-surface text-fg hover:bg-surface-2 focus-visible:border-primary flex w-full cursor-pointer items-center justify-between rounded-md border text-left transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",

@@ -21,6 +21,7 @@ import {
 } from "./emissions-metrics";
 import {
   activeCampdFilters,
+  applyDescribed,
   campdRetrievalSchema,
   ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
@@ -28,6 +29,7 @@ import {
   DEFAULT_TABLE_STATE,
   DEFAULT_UNIT_TABLE_STATE,
   describeCampdFilters,
+  describeRanking,
   explorerSearchParams,
   filterSearchParams,
   isFilterActive,
@@ -280,6 +282,9 @@ void test("explorer state round-trips through URL query params", () => {
       year: "2025",
       co2MassTonsMin: "500000",
       topN: "10",
+      topBy: "noxMassTons",
+      topDir: "asc",
+      topLevel: "unit",
       rankGroup: "state",
     },
     table: DEFAULT_TABLE_STATE,
@@ -295,13 +300,60 @@ void test("explorer state round-trips through URL query params", () => {
   const qs = explorerSearchParams(state);
   assert.equal(
     qs,
-    "tab=units&q=coal+units+in+KY&stateCode=KY&primaryFuel=Coal&year=2025&topN=10&rankGroup=state&co2MassTonsMin=500000&sort=noxMassTons&dir=asc&page=3&size=25",
+    "tab=units&q=coal+units+in+KY&stateCode=KY&primaryFuel=Coal&year=2025&topN=10&topBy=noxMassTons&topDir=asc&topLevel=unit&rankGroup=state&co2MassTonsMin=500000&sort=noxMassTons&dir=asc&page=3&size=25",
   );
   assert.deepEqual(
     parseExplorerParams(Object.fromEntries(new URLSearchParams(qs))),
     state,
   );
   assert.equal(explorerSearchParams(parseExplorerParams({})), "");
+});
+
+void test("an old Top-N link ranks by its table sort", () => {
+  const { filters } = parseExplorerParams({
+    tab: "units",
+    topN: "10",
+    sort: "noxMassTons",
+    dir: "asc",
+  });
+  assert.equal(describeRanking(filters), "Lowest 10 unit-years by NOₓ");
+  const facilities = parseExplorerParams({
+    topN: "5",
+    sort: "co2",
+    dir: "desc",
+  });
+  assert.equal(describeRanking(facilities.filters), "Top 5 facilities by CO₂");
+});
+
+void test("ranking settings count only while Top N is set", () => {
+  const off = { ...DEFAULT_FILTERS, topBy: "noxMassTons", rankGroup: "state" };
+  assert.equal(isFilterActive(off, "topBy"), false);
+  assert.equal(isFilterActive(off, "rankGroup"), false);
+  assert.equal(filterSearchParams(off).toString(), "");
+  assert.equal(describeRanking(off), undefined);
+  const on = { ...off, topN: "1" };
+  assert.equal(isFilterActive(on, "topBy"), true);
+  assert.equal(describeRanking(on), "Top 1 facility by NOₓ per state");
+});
+
+void test("a description search keeps the page's years unless it names some", () => {
+  const page = { ...DEFAULT_FILTERS, yearMin: "2015", yearMax: "2025" };
+  assert.deepEqual(
+    applyDescribed(page, { ...DEFAULT_FILTERS, stateCode: "KY" }),
+    { ...page, stateCode: "KY" },
+  );
+  assert.deepEqual(applyDescribed(page, { ...DEFAULT_FILTERS, year: "2024" }), {
+    ...DEFAULT_FILTERS,
+    year: "2024",
+  });
+  assert.deepEqual(
+    applyDescribed(
+      page,
+      { ...DEFAULT_FILTERS, year: "2024" },
+      { yearRange: true },
+    ),
+    { ...DEFAULT_FILTERS, yearMin: "2024", yearMax: "2024" },
+  );
 });
 
 void test("a strict flag is kept in the URL only while its bound is set", () => {

@@ -27,12 +27,14 @@ import {
   campdRetrievalSchema,
   DEFAULT_FILTERS,
   facilityFilterSchema,
+  isRankMetric,
   multiValueOptions,
   SORT_FIELDS,
   RANGE_FIELDS,
   UNIT_SORT_FIELDS,
   type FacilityFilters,
   type FilterInput,
+  type RankMetric,
   type SortDirection,
   type SortField,
   type UnitSortField,
@@ -141,53 +143,46 @@ const pagingSchema = {
 
 /**
  * §8.3 ranking: ROW_NUMBER() over the sort order (NULLs last, `tiebreak` for a stable order),
- * restarting per state when rankGroup is "state". Rows are paged in rank order.
+ * restarting per state when a Top N ranks per state. Rows are paged in rank order.
  */
 const rankOver = (
   sortExpr: SQL | SQLiteColumn,
   dir: SortDirection,
   tiebreak: SQLiteColumn,
-  rankGroup?: string,
+  byState: boolean,
 ) =>
   sql<number>`ROW_NUMBER() OVER (${
-    rankGroup === "state" ? sql`PARTITION BY ${facilities.stateCode} ` : sql``
+    byState ? sql`PARTITION BY ${facilities.stateCode} ` : sql``
   }ORDER BY ${sortExpr} IS NULL, ${sortExpr} ${sql.raw(dir.toUpperCase())}, ${tiebreak})`.as(
     "rank",
   );
 
-/** Keeps the top N ranks (overall or per state) and returns rank order, grouped by state when ranking per state. */
-function rankWindow(
-  ranked: { rank: SQL.Aliased<number>; stateCode: SQLiteColumn },
-  { topN, rankGroup }: FilterInput,
-) {
-  const n = Number(topN);
-  return {
-    where: Number.isInteger(n) && n > 0 ? lte(ranked.rank, n) : undefined,
-    orderBy:
-      rankGroup === "state"
-        ? [asc(ranked.stateCode), asc(ranked.rank)]
-        : [asc(ranked.rank)],
-  };
-}
+/** Whether a Top N ranks within each state (the grouping means nothing without a Top N). */
+const perState = ({ topN, rankGroup }: FilterInput) =>
+  rankGroup === "state" && Number(topN) > 0;
 
-/** A ranked view's rows in rank order and its row count, for paging (`pageOf`) or a full CSV. */
+/**
+ * A ranked view's rows in rank order (grouped by state when a Top N ranks per state) and its row
+ * count, for paging (`pageOf`) or a full CSV. The rank is only the row's position in the table's
+ * sort: which rows a Top N keeps is part of the filter (`topSelection`).
+ */
 function rankedView<
   T extends Parameters<ReturnType<typeof Database.select>["from"]>[0] & {
     rank: SQL.Aliased<number>;
     stateCode: SQLiteColumn;
   },
 >(database: typeof Database, ranked: T, input: FilterInput) {
-  const { where, orderBy } = rankWindow(ranked, input);
+  const orderBy = perState(input)
+    ? [asc(ranked.stateCode), asc(ranked.rank)]
+    : [asc(ranked.rank)];
   return {
     ranked,
-    where,
     rows: () =>
       database
         .select()
         .from(ranked)
-        .where(where)
         .orderBy(...orderBy),
-    total: () => database.select({ total: count() }).from(ranked).where(where),
+    total: () => database.select({ total: count() }).from(ranked),
   };
 }
 
@@ -270,6 +265,17 @@ function unitConditions(f: FilterInput): SQL[] {
   for (const [col, value] of containsFilters) {
     if (active(value)) conditions.push(contains(col, value));
   }
+  const capMin = toNumber(f.capacityMin);
+  const capMax = toNumber(f.capacityMax);
+  const capacity = units.nameplateCapacityMW;
+  if (capMin !== undefined)
+    conditions.push(
+      f.capacityMinStrict ? gt(capacity, capMin) : gte(capacity, capMin),
+    );
+  if (capMax !== undefined)
+    conditions.push(
+      f.capacityMaxStrict ? lt(capacity, capMax) : lte(capacity, capMax),
+    );
   // Prefix match: "Retired" must not catch "Operating (Retired 04/15/2016)".
   if (active(f.operatingStatus)) {
     conditions.push(
@@ -323,6 +329,7 @@ function recordConditions(f: FilterInput): SQL[] {
     );
   }
   for (const { key } of RANGE_FIELDS) {
+    if (key === "capacity") continue; // a unit attribute (unitConditions)
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
     const column = annualRecords[key];
@@ -340,11 +347,92 @@ function recordConditions(f: FilterInput): SQL[] {
   return conditions;
 }
 
+/** The filters without their Top N: what a ranking ranks. */
+const unranked = (f: FilterInput): FilterInput => ({ ...f, topN: "ALL" });
+
+/** A facility's ranking value over its matching unit-years (one GROUP BY facility). */
+const facilityRankValue = (metric: RankMetric): SQL => {
+  /** Σ numerator × scale / Σ denominator over the unit-years that report both (denominator > 0). */
+  const ratio = (num: SQLiteColumn, den: SQLiteColumn, scale: number) =>
+    sql`SUM(CASE WHEN ${den} > 0 AND ${num} IS NOT NULL THEN ${num} END) * ${scale} / NULLIF(SUM(CASE WHEN ${den} > 0 AND ${num} IS NOT NULL THEN ${den} END), 0)`;
+  const { co2MassTons, grossGenerationMWh, heatInputMMBtu, noxMassTons } =
+    annualRecords;
+  switch (metric) {
+    case "capacity":
+      return sql`MAX(${facilityMetrics().totalCapacityMW})`;
+    case "co2Intensity":
+      return ratio(co2MassTons, grossGenerationMWh, 2000);
+    case "heatRate":
+      return ratio(heatInputMMBtu, grossGenerationMWh, 1);
+    case "noxRate":
+      return ratio(noxMassTons, heatInputMMBtu, 2000);
+    default:
+      return sql`SUM(${annualRecords[metric]})`;
+  }
+};
+
+/** A unit-year's ranking value: its column, or NOₓ rate (lb/MMBtu) computed like Analyze's. */
+const unitRankValue = (metric: RankMetric): SQL | SQLiteColumn =>
+  metric === "noxRate"
+    ? sql`CASE WHEN ${annualRecords.heatInputMMBtu} > 0 THEN ${annualRecords.noxMassTons} * 2000.0 / ${annualRecords.heatInputMMBtu} END`
+    : UNIT_SORT_COLUMNS[metric];
+
+/**
+ * §8.3 Top N as part of the selection, so Explore, Map, Analyze, and every download keep the same
+ * rows: the first N facilities (their unit-years added up) or unit-years by `topBy`, highest or
+ * lowest first, overall or per state, among the rows matching the other filters. Returns the kept
+ * IDs as a subquery with columns "id" (facility or unit-year) and "facility_id"; undefined
+ * without Top N. Hand-qualified SQL: it runs inside single-table selects too.
+ */
+function topSelection(f: FilterInput) {
+  const n = Number(f.topN);
+  if (!Number.isInteger(n) || n <= 0) return undefined;
+  const metric: RankMetric =
+    f.topBy && isRankMetric(f.topBy) ? f.topBy : "co2MassTons";
+  const dir = sql.raw(f.topDir === "asc" ? "ASC" : "DESC");
+  const level = f.topLevel === "unit" ? "unit" : "facility";
+  const where = and(...unitYearConditions(unranked(f)));
+  const joined = sql`FROM "annual_records"
+    INNER JOIN "units" ON "annual_records"."unit_internal_id" = "units"."id"
+    INNER JOIN "facilities" ON "annual_records"."facility_id" = "facilities"."id"
+    WHERE ${where ?? sql`1`}`;
+  const partition = perState(f) ? sql`PARTITION BY "state_code" ` : sql``;
+  const rows =
+    level === "unit"
+      ? sql`SELECT "annual_records"."id" AS "id", "annual_records"."facility_id" AS "facility_id",
+          "facilities"."state_code" AS "state_code", ${unitRankValue(metric)} AS "value" ${joined}`
+      : sql`SELECT "annual_records"."facility_id" AS "id", "annual_records"."facility_id" AS "facility_id",
+          MAX("facilities"."state_code") AS "state_code", ${facilityRankValue(metric)} AS "value" ${joined}
+          GROUP BY "annual_records"."facility_id"`;
+  const kept = sql`SELECT "id", "facility_id" FROM (
+    SELECT "id", "facility_id", ROW_NUMBER() OVER (${partition}ORDER BY "value" IS NULL, "value" ${dir}, "id") AS "top_rank"
+    FROM (${rows})
+  ) WHERE "top_rank" <= ${n}`;
+  return { level, kept } as const;
+}
+
+/** Top N on unit-year rows: the kept unit-years, or the unit-years of the kept facilities. */
+function topUnitYearCondition(f: FilterInput): SQL[] {
+  const top = topSelection(f);
+  if (!top) return [];
+  return top.level === "unit"
+    ? [sql`"annual_records"."id" IN (SELECT "id" FROM (${top.kept}))`]
+    : [sql`"annual_records"."facility_id" IN (SELECT "id" FROM (${top.kept}))`];
+}
+
+/** Top N on facility rows: the kept facilities, or those with a kept unit-year. */
+function topFacilityCondition(f: FilterInput): SQL[] {
+  const top = topSelection(f);
+  if (!top) return [];
+  return [sql`"facilities"."id" IN (SELECT "facility_id" FROM (${top.kept}))`];
+}
+
 /** Unit-year filter over annual_records ⨝ units ⨝ facilities (Units view, exports, Analyze). */
 export const unitYearConditions = (f: FilterInput): SQL[] => [
   ...facilityConditions(f),
   ...unitConditions(f),
   ...recordConditions(f),
+  ...topUnitYearCondition(f),
 ];
 
 /**
@@ -368,6 +456,7 @@ function filterConditions(f: FilterInput = {}): SQL[] {
       sql`${facilities.id} IN (SELECT ${units.facilityId} FROM ${units} WHERE ${and(...unit)})`,
     );
   }
+  conditions.push(...topFacilityCondition(f));
   return conditions;
 }
 
@@ -414,7 +503,7 @@ export function rankedFacilities(
         facilitySortColumns(year)[sortBy],
         sortDir,
         facilities.id,
-        input.rankGroup,
+        perState(input),
       ),
     })
     .from(facilities)
@@ -475,7 +564,7 @@ export function rankedUnitYears(
         UNIT_SORT_COLUMNS[sortBy],
         sortDir,
         annualRecords.id,
-        input.rankGroup,
+        perState(input),
       ),
     })
     .from(annualRecords)
