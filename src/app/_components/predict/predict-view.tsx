@@ -111,7 +111,10 @@ function WhatIf({ view, setView, chosen }: Omit<PredictTabProps, "baseline">) {
     year,
   });
   const unitList = units.data ?? [];
-  const facilityName = unitList[0]?.facilityName;
+  // The previous facility's units stay shown while the new ones load; don't pair its name with the new ID.
+  const facilityName = units.isPlaceholderData
+    ? undefined
+    : unitList[0]?.facilityName;
   // A new facility or year keeps the unit when it exists there, else takes the largest emitter.
   const firstUnit = unitList[0]?.unitId;
   const hasUnit = unitList.some((u) => u.unitId === view.uid);

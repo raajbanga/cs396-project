@@ -52,9 +52,9 @@ without saying what they mean.
         `topN` links rank by their table sort. Test: `src/server/top-selection.test.ts`.
   - [x] On Analyze a description search keeps the 2015–2025 range unless it names years ("in
         2025" becomes 2025–2025).
-  - Also found: on What-if and Compare groups' facility picker, Enter without a highlighted
-    suggestion does nothing, even when "Ghent" matches the first suggestion exactly; pick the
-    first match, or say "choose a facility from the list".
+  - [x] What-if and Compare groups' facility pickers: Enter picks the highlighted or first match
+        (waiting for the list if needed), and says "No facility matches" otherwise. What-if no
+        longer shows the old plant's name beside the new ID while loading.
   - Parser misses that affect Explore too: "NOx rate" ranks by NOₓ mass, "highest heat rate"
     by heat input, "units over 1000 MW" is not understood (capacity is not a parsed field).
 - [ ] **Pages show numbers without saying what they mean** (rubric 2: "interprets results
