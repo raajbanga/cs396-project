@@ -29,11 +29,18 @@ export function ScenariosSection({
   chosen,
   baseline,
 }: PredictTabProps) {
+  // Below −100 % would make load or heat input negative, which no unit can have.
+  const load = Number(view.load) || 0;
+  const heat = Number(view.heat) || 0;
   const list = scenarios(
     baseline.inputs,
-    Number(view.load) || 0,
-    Number(view.heat) || 0,
+    Math.max(-100, load),
+    Math.max(-100, heat),
   );
+  const impossible = [
+    load < -100 && "gross load",
+    heat < -100 && "heat input",
+  ].filter(Boolean);
   const results = chosen.flatMap((m) =>
     scenarioResults(m.artifact, baseline.inputs, list).map((r) => ({
       model: m,
@@ -48,6 +55,7 @@ export function ScenariosSection({
           <Input
             type="number"
             value={view.load}
+            aria-invalid={load < -100}
             onChange={(e) => setView({ load: e.target.value })}
             className="h-9 w-32"
           />
@@ -56,11 +64,18 @@ export function ScenariosSection({
           <Input
             type="number"
             value={view.heat}
+            aria-invalid={heat < -100}
             onChange={(e) => setView({ heat: e.target.value })}
             className="h-9 w-32"
           />
         </Field>
       </Controls>
+      {impossible.length > 0 && (
+        <p role="alert" className="text-warn text-sm">
+          A change below −100 % would make {impossible.join(" and ")} negative,
+          which is impossible; −100 % (none at all) is used instead.
+        </p>
+      )}
 
       <Takeaways
         items={scenarioSentences(

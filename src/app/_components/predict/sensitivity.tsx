@@ -118,6 +118,10 @@ export function SensitivitySection({
           onChange={setUnits}
           off="% of baseline"
           on={meta.unit}
+          titles={[
+            "Set the range as percentages of this unit's actual value (-50 to 50 means half to one and a half times it).",
+            `Set the range in ${meta.unit} directly.`,
+          ]}
         />
         {(
           [
@@ -132,7 +136,8 @@ export function SensitivitySection({
               value={view[key]}
               aria-invalid={
                 (key === "step" && stepFixed) ||
-                (key !== "step" && grid.reversed)
+                (key !== "step" && grid.reversed) ||
+                (key === "from" && grid.negative > 0)
               }
               onChange={(e) => setView({ [key]: e.target.value })}
               className="h-9 w-32"
@@ -140,12 +145,14 @@ export function SensitivitySection({
           </Field>
         ))}
       </Controls>
-      {(grid.reversed || stepFixed) && (
+      {(grid.reversed || stepFixed || grid.negative > 0) && (
         <p role="alert" className="text-warn text-sm">
           {grid.reversed &&
             `The minimum (${formatStat(from)}) is above the maximum (${formatStat(to)}); the curve runs from ${formatStat(to)} to ${formatStat(from)} ${unit}. `}
           {stepFixed &&
-            `The step must be a positive number; a step of ${formatStat(grid.step)} ${unit} is used.`}
+            `The step must be a positive number; a step of ${formatStat(grid.step)} ${unit} is used. `}
+          {grid.negative > 0 &&
+            `${meta.label} can't be below 0, so the curve starts at 0 (${grid.negative} impossible ${grid.negative === 1 ? "point" : "points"} left out).`}
         </p>
       )}
       {base[input] === null && (

@@ -303,11 +303,29 @@ export function DistributionChart(props: TabProps) {
             value={box ? "box" : "histogram"}
             onChange={(v) => setView({ box: v === "box" ? "1" : "0" })}
             options={[
-              { value: "histogram", label: "Histogram" },
-              { value: "box", label: "Box plot" },
+              {
+                value: "histogram",
+                label: "Histogram",
+                title: "How many unit-years fall in each range of values.",
+              },
+              {
+                value: "box",
+                label: "Box plot",
+                title:
+                  "Per group: the box is the middle half of the values, the line the median, and the whiskers the usual range; dots beyond are unusual.",
+              },
             ]}
           />
-          <Toggle {...bind(props, "log")} label="" off="Linear" on="Log" />
+          <Toggle
+            {...bind(props, "log")}
+            label=""
+            off="Linear"
+            on="Log"
+            titles={[
+              "Equal steps on the axis are equal amounts.",
+              "Each step is 10× the last, so small and very large values both show.",
+            ]}
+          />
         </>
       }
       legend={box ? undefined : groups.map((g) => ({ key: g.label, ...g }))}
@@ -368,6 +386,10 @@ export function ScatterChart(props: TabProps) {
           onChange={(v) => setView({ log: v })}
           off="Linear"
           on="Log–log"
+          titles={[
+            "Equal steps on each axis are equal amounts.",
+            "Each step on both axes is 10× the last, so small and large plants both show.",
+          ]}
         />
       </Controls>
       <ChartFrame
@@ -441,8 +463,18 @@ export function CorrelationChart({
             value={method}
             onChange={(m) => setView({ method: m })}
             options={[
-              { value: "pearson", label: "Pearson" },
-              { value: "spearman", label: "Spearman" },
+              {
+                value: "pearson",
+                label: "Pearson",
+                title:
+                  "Straight-line link. Pick it when values are roughly evenly spread.",
+              },
+              {
+                value: "spearman",
+                label: "Spearman",
+                title:
+                  "Rank link: does one rise as the other does? Pick it when a few very large values dominate.",
+              },
             ]}
           />
         </Field>

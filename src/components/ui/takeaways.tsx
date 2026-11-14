@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { renderGloss } from "~/components/ui/glossed-text";
+import { glossSegments } from "~/lib/glossary";
 import { cn } from "~/lib/utils";
 
 /**
@@ -14,6 +16,12 @@ export function Takeaways({
 }) {
   const shown = items.filter(Boolean);
   if (!shown.length) return null;
+  // Glossed in one pass with one set, so each term is underlined at its first mention in the
+  // block only (computed here, not in children, so a re-render gives the same result).
+  const seen = new Set<string>();
+  const parts = shown.map((item) =>
+    typeof item === "string" ? renderGloss(glossSegments(item, seen)) : item,
+  );
   return (
     <div
       className={cn(
@@ -21,8 +29,8 @@ export function Takeaways({
         className,
       )}
     >
-      {shown.map((item, i) => (
-        <p key={i}>{item}</p>
+      {parts.map((part, i) => (
+        <p key={i}>{part}</p>
       ))}
     </div>
   );

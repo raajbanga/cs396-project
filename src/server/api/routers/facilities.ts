@@ -897,45 +897,51 @@ export const facilitiesRouter = createTRPCRouter({
   getFacility: publicProcedure
     .input(z.object({ id: z.number() }))
     .query(({ ctx, input }) =>
-      ctx.db.query.facilities.findFirst({
-        where: eq(facilities.id, input.id),
-        with: {
-          units: true,
-          annualRecords: {
-            orderBy: (rec, { desc }) => [desc(rec.year)],
-            with: {
-              unit: true,
-              auditLogs: true,
-              dataset: {
-                columns: { name: true, source: true, importedAt: true },
+      ctx.db.query.facilities
+        .findFirst({
+          where: eq(facilities.id, input.id),
+          with: {
+            units: true,
+            annualRecords: {
+              orderBy: (rec, { desc }) => [desc(rec.year)],
+              with: {
+                unit: true,
+                auditLogs: true,
+                dataset: {
+                  columns: { name: true, source: true, importedAt: true },
+                },
+                supersededUpload: { columns: { originalFilename: true } },
               },
-              supersededUpload: { columns: { originalFilename: true } },
             },
           },
-        },
-      }),
+        })
+        // null, not undefined, for an unknown ID: React Query treats undefined data as an error.
+        .then((row) => row ?? null),
     ),
 
   /** Unit detail (§8.4): identification, fuels + controls, and every reporting year with its source dataset. */
   getUnit: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(({ ctx, input }) =>
-      ctx.db.query.units.findFirst({
-        where: eq(units.id, input.id),
-        with: {
-          facility: true,
-          annualRecords: {
-            orderBy: (rec, { desc }) => [desc(rec.year)],
-            with: {
-              auditLogs: true,
-              dataset: {
-                columns: { name: true, source: true, importedAt: true },
+      ctx.db.query.units
+        .findFirst({
+          where: eq(units.id, input.id),
+          with: {
+            facility: true,
+            annualRecords: {
+              orderBy: (rec, { desc }) => [desc(rec.year)],
+              with: {
+                auditLogs: true,
+                dataset: {
+                  columns: { name: true, source: true, importedAt: true },
+                },
+                supersededUpload: { columns: { originalFilename: true } },
               },
-              supersededUpload: { columns: { originalFilename: true } },
             },
           },
-        },
-      }),
+        })
+        // null, not undefined, for an unknown ID: React Query treats undefined data as an error.
+        .then((row) => row ?? null),
     ),
 
   /** Compare dock: 2–4 entries, each a whole facility (`ids`) or a single unit (`unitIds`, §8.3 unit compare). */

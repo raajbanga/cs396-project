@@ -80,6 +80,10 @@ export function ImpactsTab(props: TabProps) {
           label="Result"
           off="Total"
           on="Per MWh of gross load"
+          titles={[
+            "The total potential impact over the selected years.",
+            "Impact per MWh of electricity, so plants of different sizes compare fairly.",
+          ]}
         />
       </Controls>
 

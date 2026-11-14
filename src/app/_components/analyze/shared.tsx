@@ -142,12 +142,15 @@ export function Toggle({
   onChange,
   off,
   on,
+  titles,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   off: string;
   on: string;
+  /** What each choice means, shown on hover. */
+  titles?: [string, string];
 }) {
   return (
     <Field group label={label}>
@@ -155,8 +158,8 @@ export function Toggle({
         value={value === "1" ? "1" : "0"}
         onChange={(v) => onChange(v === "1" ? "1" : "")}
         options={[
-          { value: "0", label: off },
-          { value: "1", label: on },
+          { value: "0", label: off, title: titles?.[0] },
+          { value: "1", label: on, title: titles?.[1] },
         ]}
       />
     </Field>

@@ -2,7 +2,8 @@
 
 import { useDeferredValue, useEffect, useState } from "react";
 import { SourceBadge } from "~/components/ui/badge";
-import { buttonClass } from "~/components/ui/button";
+import { Button, buttonClass } from "~/components/ui/button";
+import { EmptyState } from "~/components/ui/empty-state";
 import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
@@ -93,6 +94,15 @@ export function AnalyzeView({
   );
   const { Tab } = TABS[view.tab];
   if (unknown.length) return null;
+  // A reversed range matches nothing; say why instead of drawing empty charts.
+  const reversed =
+    Boolean(filters.yearMin && filters.yearMax) &&
+    Number(filters.yearMin) > Number(filters.yearMax);
+  const empty = reversed || summary.data?.records === 0;
+  const clearFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    resetDescribe();
+  };
 
   return (
     <ExportContext
@@ -116,10 +126,7 @@ export function AnalyzeView({
         <FacilityFilterBar
           filters={filters}
           onFilterChange={setFilter}
-          onResetFilters={() => {
-            setFilters(DEFAULT_FILTERS);
-            resetDescribe();
-          }}
+          onResetFilters={clearFilters}
           describe={describe}
           filterOptions={filterOptions}
           itemLabel="unit-years"
@@ -130,13 +137,19 @@ export function AnalyzeView({
             <>
               <SourceBadge kind="db" className="hidden md:inline-flex" />
               <a
+                aria-disabled={empty}
+                onClick={(e) => empty && e.preventDefault()}
                 href={exportUrl(
                   "analysis",
                   {},
                   filterQuery.toString() || "yearMin=",
                 )}
                 download
-                className={buttonClass({ variant: "outline", size: "sm" })}
+                className={buttonClass({
+                  variant: "outline",
+                  size: "sm",
+                  className: empty ? "pointer-events-none opacity-50" : "",
+                })}
                 title="Every selected unit-year with all variables, as CSV in a ZIP with metadata.json"
               >
                 Download all
@@ -145,13 +158,51 @@ export function AnalyzeView({
           }
         />
 
-        <Tab
-          filters={deferredFilters}
-          view={view}
-          setView={setView}
-          catalog={catalog}
-          summary={summary.data}
-        />
+        {empty ? (
+          <EmptyState
+            className="border-edge rounded-lg border border-dashed"
+            title={
+              reversed
+                ? `The year range runs backwards (${filters.yearMin} to ${filters.yearMax})`
+                : "No unit-years match these filters"
+            }
+            description={
+              reversed
+                ? "Swap the years to analyze that period, or clear the filters."
+                : "Remove a filter, or clear them all to start from every unit-year."
+            }
+            action={
+              <div className="flex justify-center gap-2">
+                {reversed && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setFilters({
+                        ...filters,
+                        yearMin: filters.yearMax,
+                        yearMax: filters.yearMin,
+                      })
+                    }
+                  >
+                    Swap years
+                  </Button>
+                )}
+                <Button size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              </div>
+            }
+          />
+        ) : (
+          <Tab
+            filters={deferredFilters}
+            view={view}
+            setView={setView}
+            catalog={catalog}
+            summary={summary.data}
+          />
+        )}
       </div>
     </ExportContext>
   );
