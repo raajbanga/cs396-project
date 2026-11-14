@@ -1,5 +1,6 @@
 import { getFuelTheme } from "~/lib/map-utils";
 import { SHORT_TON_KG, type TraciFactor } from "~/lib/traci";
+import { shortNumber } from "~/lib/utils";
 
 /**
  * The Analyze page's vocabulary (Phase 2 §4.1–§4.3, §4.6): the unit-year row every analysis reads,
@@ -463,7 +464,7 @@ export function groupRows(rows: readonly AnalysisRow[], key: DimensionKey) {
 export function formatStat(v: number | null | undefined) {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
-  if (abs >= 1000) return Math.round(v).toLocaleString();
+  if (abs >= 1000) return shortNumber(v) ?? Math.round(v).toLocaleString();
   if (abs === 0) return "0";
   return Number(v.toPrecision(4)).toLocaleString(undefined, {
     maximumFractionDigits: 6,
