@@ -58,6 +58,10 @@ export const DEFAULT_ANALYSIS_FILTERS: FacilityFilters = {
   ...DEFAULT_FILTERS,
   yearMin: "2015",
   yearMax: "2025",
+  // Unit-years listed but not run (0 hours) report no values at all; leave them out by default
+  // so they don't count as missing in every column. A removable chip, like the years.
+  operatingHoursMin: "0",
+  operatingHoursMinStrict: "1",
 };
 
 type Params = Record<string, string | string[] | undefined>;

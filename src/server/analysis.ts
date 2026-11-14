@@ -12,6 +12,7 @@ import {
   type AnalysisRow,
   type DimensionKey,
   type Variable,
+  missingReasons,
 } from "~/lib/analysis";
 import type { FilterInput } from "~/lib/facility-filters";
 import {
@@ -69,6 +70,9 @@ async function selectRows(filters: FilterInput): Promise<AnalysisRow[]> {
       prevCo2MassTons: prev.co2MassTons,
       prevSo2MassTons: prev.so2MassTons,
       prevNoxMassTons: prev.noxMassTons,
+      steamLoadKlb: annualRecords.steamLoadKlb,
+      programCode: annualRecords.programCode,
+      hasPrevYear: sql<boolean>`${prev.id} IS NOT NULL`.mapWith(Boolean),
     })
     .from(annualRecords)
     .innerJoin(units, eq(annualRecords.unitInternalId, units.id))
@@ -170,6 +174,7 @@ export function datasetSummary(rows: AnalysisRow[], variables: Variable[]) {
       key: v.key,
       missing: rows.reduce((n, r) => n + (v.value(r) === null ? 1 : 0), 0),
     })),
+    reasons: missingReasons(rows),
   };
 }
 

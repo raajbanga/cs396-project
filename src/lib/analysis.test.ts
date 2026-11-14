@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  missingReasons,
   aggregate,
   buildVariables,
   findVariable,
@@ -224,4 +225,22 @@ void test("findVariable: known keys resolve, unknown keys are rejected", () => {
         e.message === `Unknown variable: ${key}`,
     );
   }
+});
+
+void test("missingReasons counts each EPA reporting gap", () => {
+  const reasons = missingReasons([
+    row({ operatingHours: 0, co2MassTons: null }), // listed, didn't run
+    row({ operatingHours: 10, co2MassTons: null, programCode: "SIPNOX" }),
+    row({ operatingHours: 10, co2MassTons: null, programCode: "ARP" }), // not a program gap
+    row({ operatingHours: 10, grossGenerationMWh: null, steamLoadKlb: 50 }),
+    row({ operatingHours: 10, grossGenerationMWh: 0 }),
+    row({ operatingHours: 10, hasPrevYear: false }),
+  ]);
+  assert.deepEqual(reasons, {
+    idle: 1,
+    noCo2Program: 1,
+    noLoad: 2,
+    steamOnly: 1,
+    noPrevYear: 1,
+  });
 });

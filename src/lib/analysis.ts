@@ -32,6 +32,36 @@ export interface AnalysisRow {
   prevCo2MassTons: number | null;
   prevSo2MassTons: number | null;
   prevNoxMassTons: number | null;
+  /** For explaining missing values (not variables): steam sold, programs, a prior-year record. */
+  steamLoadKlb?: number | null;
+  programCode?: string | null;
+  hasPrevYear?: boolean;
+}
+
+/**
+ * Why values are missing in a selection, counted per cause (EPA reporting gaps, not errors):
+ * units listed for a year they didn't run; units outside the CO₂-reporting programs (Acid Rain,
+ * RGGI); steam-only units with no gross load, so no per-MWh rate; and unit-years without the
+ * previous year to compare against.
+ */
+export function missingReasons(rows: AnalysisRow[]) {
+  let idle = 0,
+    noCo2Program = 0,
+    noLoad = 0,
+    steamOnly = 0,
+    noPrevYear = 0;
+  for (const r of rows) {
+    const ran = (r.operatingHours ?? 0) > 0;
+    if (!ran) idle++;
+    if (ran && r.co2MassTons === null && !/ARP|RGGI/.test(r.programCode ?? ""))
+      noCo2Program++;
+    if (ran && !r.grossGenerationMWh) {
+      noLoad++;
+      if ((r.steamLoadKlb ?? 0) > 0) steamOnly++;
+    }
+    if (r.hasPrevYear === false) noPrevYear++;
+  }
+  return { idle, noCo2Program, noLoad, steamOnly, noPrevYear };
 }
 
 // ─── Dimensions ──────────────────────────────────────────────────────────
@@ -287,7 +317,7 @@ const DERIVED: Variable[] = [
 ];
 
 type NumericKey = {
-  [K in keyof AnalysisRow]: AnalysisRow[K] extends number | null ? K : never;
+  [K in keyof AnalysisRow]-?: AnalysisRow[K] extends number | null ? K : never;
 }[keyof AnalysisRow];
 
 const YEAR_OVER_YEAR: Variable[] = [
