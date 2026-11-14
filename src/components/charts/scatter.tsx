@@ -19,6 +19,7 @@ import {
   TooltipCard,
 } from "~/components/ui/chart";
 import { powersOfTen } from "./svg";
+import { useZoom, ZoomHint, type Zoom } from "./zoom";
 
 export interface PointGroup {
   label: string;
@@ -64,80 +65,105 @@ export function ScatterPlot({
   const linear = [(min: number) => Math.min(0, min), "auto"] as const;
   const xs = log && all.length ? decades(all.map((p) => p.x)) : undefined;
   const ys = log && all.length ? decades(all.map((p) => p.y)) : undefined;
+  const { zoom, reset, handlers, layer } = useZoom("xy");
+  // Zoomed: the dragged box, keeping the power-of-ten ticks inside it (or Recharts' own when
+  // fewer than two fit).
+  const axis = (
+    range: Zoom["x"] | undefined,
+    d: ReturnType<typeof decades> | undefined,
+  ) => {
+    if (!range) return { domain: d?.domain ?? linear, ticks: d?.ticks };
+    const inside = d?.ticks.filter((t) => t >= range[0] && t <= range[1]);
+    return {
+      domain: range,
+      ticks: inside && inside.length >= 2 ? inside : undefined,
+      allowDataOverflow: true,
+    };
+  };
   return (
     <div>
       {/* The y title reads across, above its axis, instead of rotated beside the ticks. */}
-      <p className="text-fg-muted mb-1 text-xs">↑ {y.title}</p>
-      <ChartContainer height={height - 20}>
-        <ScatterChart margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
-          <CartesianGrid vertical={false} {...gridProps} />
-          <XAxis
-            type="number"
-            dataKey="x"
-            scale={scale}
-            domain={xs?.domain ?? linear}
-            ticks={xs?.ticks}
-            {...axisProps}
-            label={xTitle(x.title)}
-          />
-          <YAxis
-            type="number"
-            dataKey="y"
-            scale={scale}
-            domain={ys?.domain ?? linear}
-            ticks={ys?.ticks}
-            width={56}
-            {...axisProps}
-          />
-          <ZAxis range={[14, 14]} />
-          {diagonal && (
-            <ReferenceLine
-              segment={[
-                { x: diagonal[0], y: diagonal[0] },
-                { x: diagonal[1], y: diagonal[1] },
-              ]}
-              stroke="var(--fg-muted)"
-              strokeDasharray="4 4"
-              ifOverflow="hidden"
+      <div className="mb-1 flex items-baseline justify-between gap-3">
+        <p className="text-fg-muted text-xs">↑ {y.title}</p>
+        <ZoomHint zoomed={zoom !== null} reset={reset} />
+      </div>
+      <div {...handlers} className="select-none">
+        <ChartContainer height={height - 20}>
+          <ScatterChart margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
+            <CartesianGrid vertical={false} {...gridProps} />
+            <XAxis
+              type="number"
+              dataKey="x"
+              scale={scale}
+              {...axis(zoom?.x, xs)}
+              {...axisProps}
+              label={xTitle(x.title)}
             />
-          )}
-          <Tooltip
-            cursor={{ stroke: "var(--edge)", strokeDasharray: "3 3" }}
-            content={({ active, payload }) => {
-              const p = payload?.[0]?.payload as
-                | (PointGroup["points"][number] & {
-                    group: string;
-                    color: string;
-                  })
-                | undefined;
-              return active && p ? (
-                <TooltipCard
-                  title={p.label}
-                  rows={[
-                    { label: x.title, value: `${formatValue(p.x)} ${x.unit}` },
-                    { label: y.title, value: `${formatValue(p.y)} ${y.unit}` },
-                  ]}
-                  footer={p.group}
-                />
-              ) : null;
-            }}
-          />
-          {groups.map((g) => (
-            <Scatter
-              key={g.label}
-              name={g.label}
-              data={g.points.map((p) => ({
-                ...p,
-                group: g.label,
-                color: g.color,
-              }))}
-              fill={g.color}
-              fillOpacity={0.55}
-              {...still}
+            <YAxis
+              type="number"
+              dataKey="y"
+              scale={scale}
+              {...axis(zoom?.y, ys)}
+              width={56}
+              {...axisProps}
             />
-          ))}
-        </ScatterChart>
-      </ChartContainer>
+            <ZAxis range={[14, 14]} />
+            {diagonal && (
+              <ReferenceLine
+                segment={[
+                  { x: diagonal[0], y: diagonal[0] },
+                  { x: diagonal[1], y: diagonal[1] },
+                ]}
+                stroke="var(--fg-muted)"
+                strokeDasharray="4 4"
+                ifOverflow="hidden"
+              />
+            )}
+            <Tooltip
+              cursor={{ stroke: "var(--edge)", strokeDasharray: "3 3" }}
+              content={({ active, payload }) => {
+                const p = payload?.[0]?.payload as
+                  | (PointGroup["points"][number] & {
+                      group: string;
+                      color: string;
+                    })
+                  | undefined;
+                return active && p ? (
+                  <TooltipCard
+                    title={p.label}
+                    rows={[
+                      {
+                        label: x.title,
+                        value: `${formatValue(p.x)} ${x.unit}`,
+                      },
+                      {
+                        label: y.title,
+                        value: `${formatValue(p.y)} ${y.unit}`,
+                      },
+                    ]}
+                    footer={p.group}
+                  />
+                ) : null;
+              }}
+            />
+            {groups.map((g) => (
+              <Scatter
+                key={g.label}
+                name={g.label}
+                data={g.points.map((p) => ({
+                  ...p,
+                  group: g.label,
+                  color: g.color,
+                }))}
+                fill={g.color}
+                fillOpacity={0.55}
+                {...still}
+              />
+            ))}
+            {layer}
+          </ScatterChart>
+        </ChartContainer>
+      </div>
     </div>
   );
 }
