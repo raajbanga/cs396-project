@@ -5,7 +5,11 @@ import { ScatterPlot } from "~/components/charts/scatter";
 import { ChartFrame, queryStatus } from "~/components/ui/chart";
 import { Takeaways } from "~/components/ui/takeaways";
 import { modelSentence } from "~/lib/takeaways";
-import { ExportButton } from "~/components/ui/export-button";
+import { ExportButton, ExportContext } from "~/components/ui/export-button";
+import { Button } from "~/components/ui/button";
+import { downloadBundle } from "~/lib/export-bundle";
+import { use, useState } from "react";
+import { Download } from "lucide-react";
 import {
   Disclosure,
   Field,
@@ -319,6 +323,9 @@ export function ModelsTab({
             color: getFuelTheme(fuel).color,
           }))}
           filename={`predicted-vs-actual-${chosen.id}`}
+          actions={
+            <AllPredictionsButton from={from!} to={to!} models={sorted} />
+          }
           height={420}
           {...queryStatus(tests)}
           table={{
@@ -429,5 +436,78 @@ export function ModelsTab({
         />
       </Disclosure>
     </div>
+  );
+}
+
+/**
+ * §7 "model evaluation results and predictions": every test unit-year with each model's
+ * prediction and error, as a ZIP with the page's metadata. The chart's own download holds only
+ * the plotted sample.
+ */
+function AllPredictionsButton({
+  from,
+  to,
+  models,
+}: {
+  from: number;
+  to: number;
+  models: Model[];
+}) {
+  const utils = api.useUtils();
+  const shared = use(ExportContext);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      disabled={busy}
+      title="Every test unit-year with each model's prediction and error, as CSV in a ZIP with metadata.json"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const rows = await utils.prediction.testPredictions.fetch({
+            from,
+            to,
+            all: true,
+          });
+          downloadBundle(
+            `test-predictions-${from}-${to}`,
+            {
+              head: [
+                "facility_id",
+                "unit_id",
+                "year",
+                "fuel_class",
+                "actual_nox_tons",
+                ...models.flatMap((m) => [
+                  `${m.kind}_predicted_tons`,
+                  `${m.kind}_error_tons`,
+                ]),
+              ],
+              rows: rows.map((r) => [
+                r.facilityId,
+                r.unitId,
+                r.year,
+                r.fuel,
+                r.actual,
+                ...models.flatMap((m) => {
+                  const p = r.predicted[m.kind] ?? null;
+                  return [p, p === null ? null : p - r.actual];
+                }),
+              ]),
+            },
+            {
+              ...shared,
+              title: `NOₓ test predictions, ${from}–${to} (every unit-year, every model)`,
+            },
+          );
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Download className="h-3.5 w-3.5" />
+      {busy ? "Preparing…" : "All test predictions"}
+    </Button>
   );
 }
