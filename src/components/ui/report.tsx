@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import type { SortDirection } from "~/lib/facility-filters";
+import { define } from "~/lib/glossary";
 import { cn, isNumericValue, sortRows, type SortValue } from "~/lib/utils";
 
 /** Caption above a form control or group of controls. */
@@ -62,7 +63,10 @@ export function Section({
     <section className="space-y-2.5">
       <div className="flex items-end gap-3">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <h2 className="text-fg text-base font-semibold">{title}</h2>
+          {/* Inside a Disclosure the disclosure's title stands in for it. */}
+          {title && (
+            <h2 className="text-fg text-base font-semibold">{title}</h2>
+          )}
           {note && <p className="text-fg-muted max-w-3xl text-xs">{note}</p>}
         </div>
         {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
@@ -89,6 +93,21 @@ const cellText = (c: ReactNode): string | null =>
 const NUMERIC_TEXT =
   /^[<>≤≥]?\s*[-+−]?[\d,]*\.?\d+(e[-+]?\d+)?[KMBT]?\s*[%×]?(\s*–\s*[-+−]?[\d,]*\.?\d+[KMBT]?)?$/i;
 const BLANK = /^(—|-|baseline|)$/;
+
+/** A header with a plain definition on hover (dotted underline), when the glossary has one. */
+function Glossed({ term }: { term: string }) {
+  const definition = define(term);
+  return definition ? (
+    <span
+      title={definition}
+      className="decoration-fg-muted/60 cursor-help underline decoration-dotted underline-offset-4"
+    >
+      {term}
+    </span>
+  ) : (
+    term
+  );
+}
 
 /**
  * Compact monospace table for validation reports, histories, and record lists. With `sortable`,
@@ -149,7 +168,7 @@ export function ReportTable({
               canSort(j) ? (
                 <SortableTableHead
                   key={j}
-                  label={h}
+                  label={<Glossed term={h} />}
                   sort={String(j)}
                   {...localSortProps(sort, setSort, (f) => numeric(Number(f)))}
                   className={cn(
@@ -165,7 +184,7 @@ export function ReportTable({
                     alignRight[j] && "text-right",
                   )}
                 >
-                  {h}
+                  <Glossed term={h} />
                 </TableHead>
               ),
             )}

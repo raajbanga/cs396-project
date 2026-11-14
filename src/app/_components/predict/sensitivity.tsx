@@ -60,6 +60,14 @@ export function SensitivitySection({
     model: m,
     ...sensitivityCurve(m.artifact, base, input, values, value0),
   }));
+  // "Over this range, Ridge goes from 1.95K to 3.83K t (2.97K at the baseline); …"
+  const reading = `Over this range, ${curves
+    .map(({ model: m, points, pred0 }) => {
+      const first = points[0]?.prediction ?? null;
+      const last = points.at(-1)?.prediction ?? null;
+      return `${m.kind === "tree" ? "the tree" : m.kind === "ridge" ? "Ridge" : m.name} goes from ${formatStat(first)} to ${formatStat(last)} t (${formatStat(pred0)} at the baseline)`;
+    })
+    .join("; ")}.`;
   const lo = values[0] ?? value0;
   const hi = values.at(-1) ?? value0;
   const outside = curves[0]!.points.filter((q) => q.outside).length;
@@ -156,7 +164,7 @@ export function SensitivitySection({
 
       <ChartFrame
         title={`Predicted NOₓ as ${meta.label.toLowerCase()} changes`}
-        subtitle={`${baseline.label}, short tons. Dots and dashed lines mark the baseline input and each model's baseline prediction; shading is outside the training data.`}
+        subtitle={`${reading} Dots and dashed lines mark the baseline; shading is outside the training data. ${baseline.label}, short tons.`}
         note={`Training data range: ${formatStat(min)}–${formatStat(max)} ${meta.unit}. This shows how each model responds, not a measured real-world effect.`}
         legend={curves.map(({ model: m }) => ({
           key: m.kind,

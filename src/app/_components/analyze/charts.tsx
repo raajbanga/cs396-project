@@ -14,7 +14,7 @@ import {
 } from "~/components/ui/chart";
 import { Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
-import { formatStat } from "~/lib/analysis";
+import { correlationSentence, strongestPairs } from "~/lib/takeaways";
 import { getFuelTheme } from "~/lib/map-utils";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
@@ -372,7 +372,7 @@ export function ScatterChart(props: TabProps) {
       </Controls>
       <ChartFrame
         title={`${y?.label} against ${x?.label}`}
-        subtitle={`${formatNumber(q.data?.total)} unit-years with both values; Pearson r = ${formatStat(q.data?.r)}.`}
+        subtitle={`${correlationSentence(q.data?.r, x?.label ?? "", y?.label ?? "") ?? ""} ${formatNumber(q.data?.total)} unit-years with both values.`}
         note={[
           q.data &&
             q.data.total > points.length &&
@@ -421,10 +421,19 @@ export function CorrelationChart({
   const infos = CORRELATION_VARIABLES.map((k) => findInfo(catalog, k));
   const labels = infos.map((v, i) => v?.label ?? CORRELATION_VARIABLES[i]!);
   const matrix = q.data?.matrix ?? [];
+  const pairs = strongestPairs(labels, matrix);
   return (
     <ChartFrame
       title={`${method === "pearson" ? "Pearson" : "Spearman"} correlation between variables`}
-      subtitle="Rust: rise together (up to 1). Slate: one falls as the other rises (down to −1). Pale: no link."
+      subtitle={[
+        pairs.strongest.length &&
+          `Strongest: ${pairs.strongest.map((p) => `${p.a} with ${p.b} (${p.r.toFixed(2)})`).join("; ")}.`,
+        pairs.negative &&
+          `Most opposed: ${pairs.negative.a} with ${pairs.negative.b} (${pairs.negative.r.toFixed(2)}).`,
+        "Rust: rise together; slate: one falls as the other rises; pale: no link.",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       note="Each cell uses the unit-years that report both variables (n on hover). Pearson measures straight-line association; Spearman uses ranks, so a few huge plants matter less. Correlation is association, not cause."
       actions={
         <Field group label="Method">
