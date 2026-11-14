@@ -43,10 +43,11 @@ export const fitYears = (m: { trainYears: string; validationYears: string }) =>
   `${m.trainYears.split("-")[0]}-${m.validationYears.split("-").at(-1)}`;
 
 /** Model colors: kept apart from the fuel colors (amber coal, green gas, blue hydro, rose oil). */
+/** Each model's chart color (globals.css palette): the baseline stays neutral. */
 export const MODEL_COLORS: Record<string, string> = {
-  baseline: "#78716c",
-  ridge: "#6366f1",
-  tree: "#c026d3",
+  baseline: "var(--chart-sand)",
+  ridge: "var(--chart-slate)",
+  tree: "var(--chart-plum)",
 };
 
 export const NUMERIC_INPUTS = {

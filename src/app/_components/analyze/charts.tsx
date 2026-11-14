@@ -1,7 +1,17 @@
 "use client";
 
-import type { Data } from "plotly.js";
-import { Chart, pointsType } from "~/components/ui/chart";
+import { BarList } from "~/components/charts/bars";
+import { BoxPlot, Histogram } from "~/components/charts/distribution";
+import { HeatGrid } from "~/components/charts/heat-grid";
+import { Lines } from "~/components/charts/lines";
+import { ScatterPlot } from "~/components/charts/scatter";
+import { StateMap } from "~/components/charts/state-map";
+import {
+  ChartFrame,
+  queryStatus,
+  seriesColor,
+  type Series,
+} from "~/components/ui/chart";
 import { Field } from "~/components/ui/report";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { formatStat } from "~/lib/analysis";
@@ -44,9 +54,9 @@ const CORRELATION_VARIABLES = [
   "capacityFactor",
 ];
 
-/** Fuel classes keep the colors they have on the Map page; other groups use the chart palette. */
-const groupColor = (dimension: string | undefined, group: string) =>
-  dimension === "fuelClass" ? getFuelTheme(group).color : undefined;
+/** Fuel classes keep the colors they have on the Map page; other groups take the palette in order. */
+const groupColor = (dimension: string | undefined, group: string, i: number) =>
+  dimension === "fuelClass" ? getFuelTheme(group).color : seriesColor(i);
 
 /** "; the 8 largest of 15 groups" when a chart shows only part of its groups. */
 const shownOf = (shown: number, total = 0, noun = "groups") =>
@@ -54,16 +64,9 @@ const shownOf = (shown: number, total = 0, noun = "groups") =>
     ? `; the ${shown} largest of ${formatNumber(total)} ${noun}`
     : "";
 
-/** A query's state as Chart props: loading, error, and retry. */
-const status = (q: {
-  isLoading: boolean;
-  error: { message: string } | null;
-  refetch: () => unknown;
-}) => ({
-  isLoading: q.isLoading,
-  error: q.error,
-  onRetry: () => void q.refetch(),
-});
+/** "Total per year, short tons." */
+const per = (info: ReturnType<typeof findInfo>, what: string) =>
+  `${combinedLabel(info)} ${what}, ${info?.unit}`;
 
 /** Line chart of the variable per year, one line per group. */
 export function TrendChart(props: TabProps) {
@@ -79,10 +82,26 @@ export function TrendChart(props: TabProps) {
   });
   const rows = q.data?.rows ?? [];
   const names = [...new Set(rows.map((r) => r.series ?? "All"))];
+  const series: Series[] = names.map((name, i) => ({
+    key: `s${i}`,
+    label: name,
+    color: seriesBy ? groupColor(seriesBy, name, i) : "var(--chart-slate)",
+  }));
+  const years = [...new Set(rows.map((r) => Number(r.group)))].sort();
+  const data = years.map((x) => ({
+    x,
+    ...Object.fromEntries(
+      names.map((name, i) => [
+        `s${i}`,
+        rows.find((r) => Number(r.group) === x && (r.series ?? "All") === name)
+          ?.values[view.variable] ?? null,
+      ]),
+    ),
+  }));
   return (
-    <Chart
+    <ChartFrame
       title={`${info?.label} by year${seriesBy ? ` and ${inSentence(dimensionLabel(catalog, seriesBy))}` : ""}`}
-      subtitle={`${combinedLabel(info)} per year${seriesBy ? shownOf(8, q.data?.total) : ""}.`}
+      subtitle={`${per(info, "per year")}${seriesBy ? shownOf(8, q.data?.total) : ""}.`}
       note={info?.definition}
       actions={
         <DimensionField
@@ -93,27 +112,11 @@ export function TrendChart(props: TabProps) {
           className="h-8 w-40"
         />
       }
+      legend={series}
       filename={`trend-${view.variable}`}
       meta={{ variables: [info] }}
-      {...status(q)}
-      data={names.map((name): Data => {
-        const points = rows.filter((r) => (r.series ?? "All") === name);
-        const color = groupColor(seriesBy, name);
-        return {
-          type: "scatter",
-          mode: "lines+markers",
-          name,
-          line: { color, width: 2 },
-          marker: { color, size: 6 },
-          x: points.map((r) => Number(r.group)),
-          y: points.map((r) => r.values[view.variable] ?? null),
-          hovertemplate: `%{x}: %{y:,.4~g} ${info?.unit}<extra>${name}</extra>`,
-        };
-      })}
-      layout={{
-        xaxis: { title: { text: "Reporting year" }, dtick: 1 },
-        yaxis: { title: { text: variableLabel(info) }, rangemode: "tozero" },
-      }}
+      height={320}
+      {...queryStatus(q)}
       table={{
         head: ["year", "group", valueColumn(info), "unit_years"],
         rows: rows.map((r) => [
@@ -123,11 +126,19 @@ export function TrendChart(props: TabProps) {
           r.n,
         ]),
       }}
-    />
+    >
+      <Lines
+        data={data}
+        series={series}
+        integerX
+        xFormat={String}
+        unit={info?.unit}
+      />
+    </ChartFrame>
   );
 }
 
-/** Bars of the variable for every group of `by` (largest first). */
+/** Bars of the variable for every group of `by` (largest first), names beside the bars. */
 export function BarsChart({
   by,
   limit = 30,
@@ -143,58 +154,42 @@ export function BarsChart({
     limit,
   });
   const rows = q.data?.rows ?? [];
-  const values = rows.map((r) => r.values[view.variable] ?? null);
-  const name = dimensionLabel(catalog, dimension);
-  // Many or long names (facilities, units) read better as horizontal bars.
-  const horizontal = rows.length > 12 || /facility|unit/.test(dimension);
   return (
-    <Chart
-      title={`${info?.label} by ${inSentence(name)}`}
-      subtitle={`${combinedLabel(info)} over the selected years${shownOf(limit, q.data?.total)}.`}
+    <ChartFrame
+      title={`${info?.label} by ${inSentence(dimensionLabel(catalog, dimension))}`}
+      subtitle={`${per(info, "over the selected years")}${shownOf(limit, q.data?.total)}.`}
       note={info?.definition}
       filename={`bars-${view.variable}-by-${dimension}`}
       meta={{ variables: [info] }}
-      {...status(q)}
-      height={horizontal ? Math.max(360, rows.length * 18 + 80) : 380}
-      data={[
-        {
-          type: "bar",
-          orientation: horizontal ? "h" : "v",
-          [horizontal ? "y" : "x"]: rows.map((r) => r.group),
-          [horizontal ? "x" : "y"]: values,
-          marker:
-            dimension === "fuelClass"
-              ? { color: rows.map((r) => getFuelTheme(r.group).color) }
-              : {},
-          customdata: rows.map((r) => r.n),
-          hovertemplate: `%{${horizontal ? "y" : "x"}}<br>%{${horizontal ? "x" : "y"}:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
-        },
-      ]}
-      layout={
-        horizontal
-          ? {
-              yaxis: {
-                autorange: "reversed",
-                automargin: true,
-                type: "category",
-              },
-              xaxis: { title: { text: variableLabel(info) } },
-              margin: { l: 16, r: 16, t: 8, b: 48 },
-            }
-          : {
-              xaxis: { title: { text: name }, type: "category" },
-              yaxis: { title: { text: variableLabel(info) } },
-            }
-      }
+      height={240}
+      {...queryStatus(q)}
       table={{
         head: ["rank", dimension, valueColumn(info), "unit_years"],
-        rows: rows.map((r, i) => [i + 1, r.group, values[i], r.n]),
+        rows: rows.map((r, i) => [
+          i + 1,
+          r.group,
+          r.values[view.variable],
+          r.n,
+        ]),
       }}
-    />
+    >
+      <BarList
+        unit={info?.unit}
+        rows={rows.map((r, i) => ({
+          label: r.group,
+          value: r.values[view.variable] ?? null,
+          color:
+            dimension === "fuelClass"
+              ? groupColor(dimension, r.group, i)
+              : undefined,
+          details: [{ label: "Unit-years", value: r.n.toLocaleString() }],
+        }))}
+      />
+    </ChartFrame>
   );
 }
 
-/** §4.4 rankings: the highest or lowest facilities or units, horizontal so names stay readable. */
+/** §4.4 rankings: the highest or lowest facilities or units, names beside the bars. */
 export function RankingChart({
   limit = 15,
   ...props
@@ -211,12 +206,11 @@ export function RankingChart({
     limit,
   });
   const rows = q.data?.rows ?? [];
-  const values = rows.map((r) => r.values[view.variable] ?? null);
   const noun = by === "unit" ? "units" : "facilities";
   return (
-    <Chart
+    <ChartFrame
       title={`${order === "desc" ? "Highest" : "Lowest"} ${limit} ${noun} by ${info?.label}`}
-      subtitle={`${combinedLabel(info)} over the selected years, of ${formatNumber(q.data?.total)} ${noun}.`}
+      subtitle={`${per(info, "over the selected years")}, of ${formatNumber(q.data?.total)} ${noun}.`}
       note={info?.definition}
       actions={
         <>
@@ -240,32 +234,31 @@ export function RankingChart({
       }
       filename={`ranking-${view.variable}-${by}-${order}`}
       meta={{ variables: [info] }}
-      {...status(q)}
-      height={460}
-      data={[
-        {
-          type: "bar",
-          orientation: "h",
-          y: rows.map((r) => r.group),
-          x: values,
-          customdata: rows.map((r) => r.n),
-          hovertemplate: `%{y}<br>%{x:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
-        },
-      ]}
-      layout={{
-        yaxis: { autorange: "reversed", automargin: true, type: "category" },
-        xaxis: { title: { text: variableLabel(info) } },
-        margin: { l: 16, r: 16, t: 8, b: 48 },
-      }}
+      height={limit * 26}
+      {...queryStatus(q)}
       table={{
         head: ["rank", by, valueColumn(info), "unit_years"],
-        rows: rows.map((r, i) => [i + 1, r.group, values[i], r.n]),
+        rows: rows.map((r, i) => [
+          i + 1,
+          r.group,
+          r.values[view.variable],
+          r.n,
+        ]),
       }}
-    />
+    >
+      <BarList
+        unit={info?.unit}
+        rows={rows.map((r) => ({
+          label: r.group,
+          value: r.values[view.variable] ?? null,
+          details: [{ label: "Unit-years", value: r.n.toLocaleString() }],
+        }))}
+      />
+    </ChartFrame>
   );
 }
 
-/** Histogram (overlaid per group) or box plot of the unit-year values. */
+/** Histogram (one line per group) or box plot of the unit-year values. */
 export function DistributionChart(props: TabProps) {
   const { filters, view, setView, catalog } = props;
   const info = findInfo(catalog, view.variable);
@@ -279,17 +272,23 @@ export function DistributionChart(props: TabProps) {
     variable: view.variable,
     by,
   });
-  const groups = q.data?.groups ?? [];
+  const groups = (q.data?.groups ?? []).map((g, i) => ({
+    label: g.group,
+    values: g.values,
+    // Boxes stand apart by position, so only fuel (which has its own colors) gets color.
+    color:
+      by && (!box || by === "fuelClass")
+        ? groupColor(by, g.group, i)
+        : "var(--chart-slate)",
+  }));
   // A log axis can't show zero or negative values: they are left out and counted in the note.
-  const shown = (xs: number[]) => (log ? xs.filter((x) => x > 0) : xs);
   const dropped = log
     ? groups.reduce((n, g) => n + g.values.filter((x) => x <= 0).length, 0)
     : 0;
-  const axis = variableLabel(info);
   return (
-    <Chart
+    <ChartFrame
       title={`Distribution of ${info?.label}${by ? ` by ${inSentence(dimensionLabel(catalog, by))}` : ""}`}
-      subtitle={`${formatNumber(q.data?.total)} unit-years with a value${by ? "; the 12 largest groups" : ""}.`}
+      subtitle={`${formatNumber(q.data?.total)} unit-years with a value, ${info?.unit}${by ? "; the 12 largest groups" : ""}${box ? ". Box: middle half; line: median; whiskers: 1.5 × IQR" : ""}.`}
       note={[
         q.data?.sampled && "An even sample of 20,000 unit-years is drawn.",
         dropped &&
@@ -311,44 +310,22 @@ export function DistributionChart(props: TabProps) {
           <Toggle {...bind(props, "log")} label="" off="Linear" on="Log" />
         </>
       }
+      legend={box ? undefined : groups.map((g) => ({ key: g.label, ...g }))}
       filename={`distribution-${view.variable}`}
       meta={{ variables: [info], sampled: q.data?.sampled }}
-      {...status(q)}
-      data={groups.map((g): Data =>
-        box
-          ? {
-              type: "box",
-              name: g.group,
-              y: shown(g.values),
-              boxpoints: false,
-              marker: { color: groupColor(by, g.group) },
-            }
-          : ({
-              type: "histogram",
-              name: g.group,
-              x: log ? shown(g.values).map(Math.log10) : g.values,
-              marker: { color: groupColor(by, g.group) },
-              opacity: groups.length > 1 ? 0.6 : 0.9,
-              nbinsx: 60, // a valid histogram key missing from @types/plotly.js
-            } as Data),
-      )}
-      layout={
-        box
-          ? {
-              yaxis: { title: { text: axis }, type: log ? "log" : undefined },
-              showlegend: false,
-            }
-          : {
-              barmode: "overlay",
-              xaxis: { title: { text: log ? `log₁₀ ${axis}` : axis } },
-              yaxis: { title: { text: "Unit-years" } },
-            }
-      }
+      height={340}
+      {...queryStatus(q)}
       table={{
         head: ["group", valueColumn(info)],
-        rows: groups.flatMap((g) => g.values.map((v) => [g.group, v])),
+        rows: groups.flatMap((g) => g.values.map((v) => [g.label, v])),
       }}
-    />
+    >
+      {box ? (
+        <BoxPlot groups={groups} log={log} unit={info?.unit} />
+      ) : (
+        <Histogram groups={groups} log={log} unit={info?.unit} />
+      )}
+    </ChartFrame>
   );
 }
 
@@ -358,7 +335,7 @@ export function ScatterChart(props: TabProps) {
   const x = findInfo(catalog, view.x);
   const y = findInfo(catalog, view.y);
   const color = asDimension(view.color) ?? "fuelClass";
-  const axisType = view.log === "1" ? "log" : undefined;
+  const log = view.log === "1";
   const q = api.analysis.scatter.useQuery({
     filters,
     x: view.x,
@@ -366,9 +343,17 @@ export function ScatterChart(props: TabProps) {
     color,
   });
   const points = q.data?.points ?? [];
-  const groups = [...new Set(points.map((p) => p.group))].slice(0, 10);
+  const groups = [...new Set(points.map((p) => p.group))]
+    .slice(0, 10)
+    .map((group, i) => ({
+      label: group,
+      color: groupColor(color, group, i),
+      points: points
+        .filter((p) => p.group === group && (!log || (p.x > 0 && p.y > 0)))
+        .map((p) => ({ x: p.x, y: p.y, label: p.label })),
+    }));
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <Controls>
         <VariableField {...bind(props, "x")} label="X axis" className="w-72" />
         <VariableField {...bind(props, "y")} label="Y axis" className="w-72" />
@@ -385,43 +370,37 @@ export function ScatterChart(props: TabProps) {
           on="Log–log"
         />
       </Controls>
-      <Chart
+      <ChartFrame
         title={`${y?.label} against ${x?.label}`}
         subtitle={`${formatNumber(q.data?.total)} unit-years with both values; Pearson r = ${formatStat(q.data?.r)}.`}
         note={[
           q.data &&
             q.data.total > points.length &&
             `An even sample of ${formatNumber(points.length)} is drawn; r uses all of them.`,
+          log &&
+            "Values of 0 or less can't be drawn on log scales and are left out.",
           "Correlation is association, not cause.",
         ]
           .filter(Boolean)
           .join(" ")}
+        legend={groups.map((g) => ({ key: g.label, ...g }))}
         filename={`scatter-${view.y}-vs-${view.x}`}
         meta={{ variables: [x, y], pearsonR: q.data?.r, pairs: q.data?.total }}
-        {...status(q)}
-        height={460}
-        data={groups.map((group): Data => {
-          const pts = points.filter((p) => p.group === group);
-          return {
-            type: pointsType(),
-            mode: "markers",
-            name: group,
-            x: pts.map((p) => p.x),
-            y: pts.map((p) => p.y),
-            text: pts.map((p) => p.label),
-            marker: { size: 5, opacity: 0.6, color: groupColor(color, group) },
-            hovertemplate: `%{text}<br>${x?.label}: %{x:,.4~g} ${x?.unit}<br>${y?.label}: %{y:,.4~g} ${y?.unit}<extra>${group}</extra>`,
-          };
-        })}
-        layout={{
-          xaxis: { title: { text: variableLabel(x) }, type: axisType },
-          yaxis: { title: { text: variableLabel(y) }, type: axisType },
-        }}
+        height={440}
+        {...queryStatus(q)}
         table={{
           head: ["unit_year", color, valueColumn(x), valueColumn(y)],
           rows: points.map((p) => [p.label, p.group, p.x, p.y]),
         }}
-      />
+      >
+        <ScatterPlot
+          groups={groups}
+          log={log}
+          height={440}
+          x={{ title: variableLabel(x), unit: x?.unit ?? "" }}
+          y={{ title: variableLabel(y), unit: y?.unit ?? "" }}
+        />
+      </ChartFrame>
     </div>
   );
 }
@@ -443,9 +422,9 @@ export function CorrelationChart({
   const labels = infos.map((v, i) => v?.label ?? CORRELATION_VARIABLES[i]!);
   const matrix = q.data?.matrix ?? [];
   return (
-    <Chart
+    <ChartFrame
       title={`${method === "pearson" ? "Pearson" : "Spearman"} correlation between variables`}
-      subtitle="1 = rise together, −1 = one falls as the other rises, 0 = no linear (or rank) link."
+      subtitle="Rust: rise together (up to 1). Slate: one falls as the other rises (down to −1). Pale: no link."
       note="Each cell uses the unit-years that report both variables (n on hover). Pearson measures straight-line association; Spearman uses ranks, so a few huge plants matter less. Correlation is association, not cause."
       actions={
         <Field group label="Method">
@@ -461,39 +440,19 @@ export function CorrelationChart({
       }
       filename={`correlation-${method}`}
       meta={{ variables: infos, method, pairCounts: q.data?.n }}
-      {...status(q)}
-      height={560}
-      data={[
-        {
-          type: "heatmap",
-          x: labels,
-          y: labels,
-          z: matrix,
-          customdata: (q.data?.n ?? []) as never,
-          zmin: -1,
-          zmax: 1,
-          colorscale: "RdBu",
-          text: matrix.map((row) =>
-            row.map((v) => (v === null ? "" : v.toFixed(2))),
-          ) as never,
-          texttemplate: "%{text}",
-          hovertemplate:
-            "%{y} × %{x}<br>r = %{z:.3f}<br>n = %{customdata:,}<extra></extra>",
-        },
-      ]}
-      layout={{
-        yaxis: { autorange: "reversed" },
-        margin: { l: 140, b: 120, t: 8, r: 16 },
-      }}
+      height={440}
+      {...queryStatus(q)}
       table={{
         head: ["variable", ...CORRELATION_VARIABLES],
         rows: matrix.map((row, i) => [CORRELATION_VARIABLES[i], ...row]),
       }}
-    />
+    >
+      <HeatGrid labels={labels} matrix={matrix} counts={q.data?.n} />
+    </ChartFrame>
   );
 }
 
-/** State choropleth of the variable (Plotly's built-in U.S. state shapes). */
+/** State choropleth of the variable. */
 export function MapChart(props: TabProps) {
   const { filters, view, catalog } = props;
   const info = findInfo(catalog, view.variable);
@@ -505,42 +464,29 @@ export function MapChart(props: TabProps) {
   });
   const rows = q.data?.rows ?? [];
   return (
-    <Chart
+    <ChartFrame
       title={`${info?.label} by state`}
-      subtitle={`${combinedLabel(info)} per state; blank states have no value.`}
+      subtitle={`${per(info, "per state")}; outlined states have no value.`}
       note={<>{info?.definition} For facility locations, see the Map page.</>}
       filename={`map-${view.variable}`}
       meta={{ variables: [info] }}
-      {...status(q)}
-      height={460}
-      data={[
-        {
-          type: "choropleth",
-          locationmode: "USA-states",
-          locations: rows.map((r) => r.group),
-          z: rows.map((r) => r.values[view.variable] ?? null) as number[],
-          customdata: rows.map((r) => r.n) as never,
-          colorscale: "YlOrRd",
-          reversescale: true,
-          marker: { line: { width: 0.5, color: "rgba(128,128,128,0.5)" } },
-          colorbar: { title: { text: info?.unit }, thickness: 12 },
-          hovertemplate: `%{location}: %{z:,.4~g} ${info?.unit}<br>%{customdata:,} unit-years<extra></extra>`,
-        },
-      ]}
-      layout={{
-        geo: {
-          scope: "usa",
-          bgcolor: "rgba(0,0,0,0)",
-          showlakes: false,
-          showland: true,
-          landcolor: "rgba(128,128,128,0.12)",
-        },
-        margin: { t: 8, r: 8, b: 8, l: 8 },
-      }}
+      height={320}
+      {...queryStatus(q)}
       table={{
         head: ["state", valueColumn(info), "unit_years"],
         rows: rows.map((r) => [r.group, r.values[view.variable], r.n]),
       }}
-    />
+    >
+      <StateMap
+        unit={info?.unit ?? ""}
+        values={Object.fromEntries(
+          rows.map((r) => [r.group, r.values[view.variable] ?? null]),
+        )}
+        details={(code) => {
+          const n = rows.find((r) => r.group === code)?.n;
+          return n ? `${n.toLocaleString()} unit-years` : "";
+        }}
+      />
+    </ChartFrame>
   );
 }

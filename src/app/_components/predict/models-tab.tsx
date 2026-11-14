@@ -1,6 +1,8 @@
 "use client";
 
-import { Chart, pointsType } from "~/components/ui/chart";
+import { BarList } from "~/components/charts/bars";
+import { ScatterPlot } from "~/components/charts/scatter";
+import { ChartFrame, queryStatus } from "~/components/ui/chart";
 import { ExportButton } from "~/components/ui/export-button";
 import {
   Disclosure,
@@ -131,7 +133,6 @@ export function ModelsTab({
   });
   const points = tests.data ?? [];
   const fuels = [...new Set(points.map((p) => p.fuel))];
-  const maxActual = Math.max(1, ...points.map((p) => p.actual));
   const base = sorted.find((m) => m.kind === "baseline");
   const gains = sorted
     .filter((m) => m !== base && base)
@@ -149,51 +150,12 @@ export function ModelsTab({
 
   return (
     <div className="space-y-8">
-      <Chart
+      <ChartFrame
         title={`Test error, ${chosen.testYears}: lower is better`}
-        subtitle={`Mean absolute error per unit-year, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
+        subtitle={`Mean absolute error per unit-year in short tons NOₓ, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
         note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median of unit-years with the same fuel and unit type. Intervals come from resampling test units (a unit's two test years together).`}
         filename="test-mae"
-        height={220}
-        data={[
-          {
-            type: "bar",
-            orientation: "h",
-            y: sorted.map((m) => m.name),
-            x: sorted.map((m) => metric(m, "test", "mae")),
-            marker: { color: sorted.map((m) => MODEL_COLORS[m.kind]!) },
-            // Whiskers from the point estimate to each end of the interval (none without one).
-            error_x: {
-              type: "data",
-              symmetric: false,
-              array: sorted.map((m) => {
-                const [, hi] = interval(m, "mae") ?? [];
-                const v = metric(m, "test", "mae");
-                return hi !== undefined && v !== null ? hi - v : 0;
-              }),
-              arrayminus: sorted.map((m) => {
-                const [lo] = interval(m, "mae") ?? [];
-                const v = metric(m, "test", "mae");
-                return lo !== undefined && v !== null ? v - lo : 0;
-              }),
-              thickness: 1.5,
-              width: 6,
-            },
-            text: sorted.map(
-              (m) => `${formatStat(metric(m, "test", "mae"))} t`,
-            ),
-            textposition: "inside",
-            insidetextanchor: "start",
-            customdata: sorted.map((m) => formatInterval(interval(m, "mae"))),
-            hovertemplate:
-              "%{y}: %{x:,.4~g} t<br>95 % interval %{customdata} t<extra></extra>",
-          },
-        ]}
-        layout={{
-          yaxis: { autorange: "reversed", automargin: true },
-          xaxis: { title: { text: "Test MAE (short tons NOₓ)" } },
-          margin: { l: 16, r: 48, t: 8, b: 48 },
-        }}
+        height={sorted.length * 26}
         table={{
           head: [
             "model",
@@ -207,7 +169,21 @@ export function ModelsTab({
             ...(interval(m, "mae") ?? [null, null]),
           ]),
         }}
-      />
+      >
+        <BarList
+          unit="t"
+          rows={sorted.map((m) => {
+            const [low, high] = interval(m, "mae") ?? [];
+            return {
+              label: m.name,
+              value: metric(m, "test", "mae"),
+              low,
+              high,
+              color: MODEL_COLORS[m.kind],
+            };
+          })}
+        />
+      </ChartFrame>
 
       <Section
         title="All metrics"
@@ -283,53 +259,18 @@ export function ModelsTab({
       </Controls>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Chart
+        <ChartFrame
           title={`Predicted vs actual NOₓ, ${chosen.testYears}`}
-          subtitle={`${formatNumber(points.length)} test unit-years (an even sample), log scales; on the dashed line the prediction is exact.`}
-          note="Predictions below 0.01 t are drawn at 0.01 so they fit the log scale."
+          subtitle={`${formatNumber(points.length)} test unit-years (an even sample), log scales. On the dashed line the prediction is exact; above it, over-predicted.`}
+          note="Predictions below 0.01 t are drawn at 0.01 so they fit the log scale. Log scales let small and large units show on one chart."
+          legend={fuels.map((fuel) => ({
+            key: fuel,
+            label: fuel,
+            color: getFuelTheme(fuel).color,
+          }))}
           filename={`predicted-vs-actual-${chosen.id}`}
-          isLoading={tests.isLoading}
-          error={tests.error}
-          onRetry={() => void tests.refetch()}
-          height={440}
-          data={[
-            ...fuels.map((fuel) => {
-              const pts = points.filter((p) => p.fuel === fuel && p.actual > 0);
-              return {
-                type: pointsType(),
-                mode: "markers" as const,
-                name: fuel,
-                x: pts.map((p) => p.actual),
-                y: pts.map((p) =>
-                  Math.max(p.predicted[chosen.kind] ?? 0, 0.01),
-                ),
-                text: pts.map((p) => p.label),
-                marker: {
-                  size: 5,
-                  opacity: 0.55,
-                  color: getFuelTheme(fuel).color,
-                },
-                hovertemplate:
-                  "%{text}<br>actual %{x:,.4~g} t<br>predicted %{y:,.4~g} t<extra></extra>",
-              };
-            }),
-            {
-              type: "scatter",
-              mode: "lines",
-              name: "Exact",
-              x: [0.01, maxActual],
-              y: [0.01, maxActual],
-              line: { dash: "dash", width: 1, color: "gray" },
-              hoverinfo: "skip",
-            },
-          ]}
-          layout={{
-            xaxis: { title: { text: "Actual NOₓ (short tons)" }, type: "log" },
-            yaxis: {
-              title: { text: "Predicted NOₓ (short tons)" },
-              type: "log",
-            },
-          }}
+          height={420}
+          {...queryStatus(tests)}
           table={{
             head: [
               "unit_year",
@@ -344,9 +285,29 @@ export function ModelsTab({
               ...sorted.map((m) => p.predicted[m.kind]),
             ]),
           }}
-        />
+        >
+          <ScatterPlot
+            log
+            height={420}
+            // Clipped to the axes: the line where prediction equals actual.
+            diagonal={[1e-6, 1e9]}
+            x={{ title: "Actual NOₓ (short tons)", unit: "t" }}
+            y={{ title: "Predicted NOₓ (short tons)", unit: "t" }}
+            groups={fuels.map((fuel) => ({
+              label: fuel,
+              color: getFuelTheme(fuel).color,
+              points: points
+                .filter((p) => p.fuel === fuel && p.actual > 0)
+                .map((p) => ({
+                  x: p.actual,
+                  y: Math.max(p.predicted[chosen.kind] ?? 0, 0.01),
+                  label: p.label,
+                })),
+            }))}
+          />
+        </ChartFrame>
         {chosen.kind !== "baseline" && (
-          <Chart
+          <ChartFrame
             title={
               chosen.kind === "tree"
                 ? "Feature importance"
@@ -355,7 +316,7 @@ export function ModelsTab({
             subtitle={
               chosen.kind === "tree"
                 ? "Share of the tree's error reduction per input; the 15 largest."
-                : "Effect on log(1 + NOₓ) per input; the 15 largest by size."
+                : "Right of the line: more of this input, more NOₓ; left: less NOₓ. Effect on log(1 + NOₓ); the 15 largest by size."
             }
             note={
               chosen.kind === "ridge"
@@ -363,26 +324,7 @@ export function ModelsTab({
                 : undefined
             }
             filename={`importance-${chosen.id}`}
-            height={440}
-            data={[
-              {
-                type: "bar",
-                orientation: "h",
-                y: importance.map(([k]) => featureLabel(k)),
-                x: importance.map(([, v]) => v),
-                marker: { color: MODEL_COLORS[chosen.kind] },
-                hovertemplate: "%{y}: %{x:.4f}<extra></extra>",
-              },
-            ]}
-            layout={{
-              yaxis: { autorange: "reversed", automargin: true },
-              xaxis: {
-                title: {
-                  text: chosen.kind === "tree" ? "Importance" : "Coefficient",
-                },
-              },
-              margin: { l: 16, r: 16, t: 8, b: 48 },
-            }}
+            height={importance.length * 26}
             table={{
               head: [
                 "feature",
@@ -393,7 +335,16 @@ export function ModelsTab({
                 v,
               ]),
             }}
-          />
+          >
+            <BarList
+              format={(v) => v.toFixed(chosen.kind === "tree" ? 3 : 2)}
+              color={MODEL_COLORS[chosen.kind]}
+              rows={importance.map(([k, v]) => ({
+                label: featureLabel(k),
+                value: v,
+              }))}
+            />
+          </ChartFrame>
         )}
       </div>
 

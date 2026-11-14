@@ -50,7 +50,8 @@ export interface ParsedDescription {
   unrecognized: string[];
 }
 
-const STATE_NAMES: Record<string, string> = {
+/** Full state names (lowercase) → postal codes. */
+export const STATE_NAMES: Record<string, string> = {
   alabama: "AL",
   alaska: "AK",
   arizona: "AZ",

@@ -25,13 +25,13 @@ type FuelKind =
 
 /** One color per fuel family, shared by the maps, their legend, and every fuel dot in the tables. */
 const FUEL_STYLES = {
-  coal: { name: "Coal", color: "#f59e0b" },
-  gas: { name: "Natural Gas", color: "#10b981" },
-  nuclear: { name: "Nuclear", color: "#06b6d4" },
-  oil: { name: "Oil / Petroleum", color: "#f43f5e" },
-  hydro: { name: "Hydro", color: "#3b82f6" },
-  renewable: { name: "Solar / Wind", color: "#84cc16" },
-  other: { name: "Other / Mixed", color: "#a1a1aa" },
+  coal: { name: "Coal", color: "#b07a1c" },
+  gas: { name: "Natural Gas", color: "#2b8a7e" },
+  nuclear: { name: "Nuclear", color: "#9a5b8a" },
+  oil: { name: "Oil / Petroleum", color: "#c05a32" },
+  hydro: { name: "Hydro", color: "#5a78a8" },
+  renewable: { name: "Solar / Wind", color: "#7d8a2e" },
+  other: { name: "Other / Mixed", color: "#8f8070" },
 };
 
 const FUEL_PATTERNS: [FuelKind, RegExp][] = [
