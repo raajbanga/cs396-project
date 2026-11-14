@@ -13,6 +13,8 @@ import {
 import { Select } from "~/components/ui/select";
 import { formatPct, formatStat } from "~/lib/analysis";
 import {
+  CATEGORY_INPUTS,
+  isCategoryInput,
   MAX_SENSITIVITY_POINTS,
   MODEL_COLORS,
   NUMERIC_INPUTS,
@@ -21,7 +23,36 @@ import {
   type NumericInput,
 } from "~/lib/model";
 import { Controls, Toggle } from "../analyze/shared";
+import { CategorySection } from "./category-sensitivity";
 import { rangeWarning, type PredictTabProps } from "./predict-view";
+
+/** The input a sensitivity varies: a number (a curve) or a category (bars). */
+export function VarySelect({
+  view,
+  setView,
+}: Pick<PredictTabProps, "view" | "setView">) {
+  return (
+    <Field label="Vary">
+      <Select
+        value={view.input}
+        onValueChange={(v) =>
+          setView({ input: v, values: "", from: "-50", to: "50", step: "5" })
+        }
+        className="w-60"
+        options={[
+          ...Object.entries(NUMERIC_INPUTS).map(([value, m]) => ({
+            value,
+            label: `${m.label} (${m.unit})`,
+          })),
+          ...Object.entries(CATEGORY_INPUTS).map(([value, label]) => ({
+            value,
+            label,
+          })),
+        ]}
+      />
+    </Field>
+  );
+}
 
 /** Three significant figures, for range defaults in an input's own unit. */
 const round3 = (x: number) => Number(x.toPrecision(3));
@@ -31,12 +62,15 @@ const round3 = (x: number) => Number(x.toPrecision(3));
  * percentages of the baseline value, everything else held constant; one curve per chosen model.
  * §6.4: the curve marks the baseline and shades values outside the training data.
  */
-export function SensitivitySection({
-  view,
-  setView,
-  chosen,
-  baseline,
-}: PredictTabProps) {
+export function SensitivitySection(props: PredictTabProps) {
+  return isCategoryInput(props.view.input) ? (
+    <CategorySection {...props} input={props.view.input} />
+  ) : (
+    <NumericSection {...props} />
+  );
+}
+
+function NumericSection({ view, setView, chosen, baseline }: PredictTabProps) {
   const input = (
     view.input in NUMERIC_INPUTS ? view.input : "heat_input_mmbtu"
   ) as NumericInput;
@@ -93,25 +127,7 @@ export function SensitivitySection({
       note="Every other input stays at its baseline value."
     >
       <Controls>
-        <Field label="Vary">
-          <Select
-            value={input}
-            onValueChange={(v) =>
-              setView({
-                input: v,
-                values: "",
-                from: "-50",
-                to: "50",
-                step: "5",
-              })
-            }
-            className="w-60"
-            options={Object.entries(NUMERIC_INPUTS).map(([value, m]) => ({
-              value,
-              label: `${m.label} (${m.unit})`,
-            }))}
-          />
-        </Field>
+        <VarySelect view={{ ...view, input }} setView={setView} />
         <Toggle
           label="Range in"
           value={view.values}

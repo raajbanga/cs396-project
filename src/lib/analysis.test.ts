@@ -15,7 +15,7 @@ import {
   type AnalysisRow,
 } from "./analysis";
 import { parseAnalysisParams, parsePredictParams } from "./analysis-state";
-import { SHORT_TON_KG, type TraciFactor } from "./traci";
+import { noxImpacts, SHORT_TON_KG, type TraciFactor } from "./traci";
 
 /** The committed TRACI extract, as the import script reads it. */
 const [header, ...lines] = readFileSync("data/traci/traci_2_2_air.csv", "utf8")
@@ -243,4 +243,26 @@ void test("missingReasons counts each EPA reporting gap", () => {
     steamOnly: 1,
     noPrevYear: 1,
   });
+});
+
+void test("noxImpacts: predicted NOₓ tons through each NOₓ factor only", () => {
+  const f = (pollutant: string, impactCategory: string, factor: number) => ({
+    traciVersion: "2.2",
+    pollutant,
+    substance: pollutant,
+    cas: "",
+    impactCategory,
+    factor,
+    factorUnit: "kg eq",
+  });
+  const out = noxImpacts(2, [
+    f("nox", "Smog formation", 24.79),
+    f("nox", "Acidification", 0.7),
+    f("so2", "Acidification", 1),
+  ]);
+  assert.deepEqual(
+    out.map((o) => o.category),
+    ["Smog formation", "Acidification"],
+  );
+  assert.ok(Math.abs(out[1]!.value - 2 * SHORT_TON_KG * 0.7) < 1e-9);
 });
