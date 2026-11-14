@@ -38,8 +38,14 @@ const interval = (m: Model, key: string) => {
   const hi = metric(m, "test_ci_high", key);
   return lo === null || hi === null ? null : ([lo, hi] as const);
 };
-const formatInterval = (ci: readonly [number, number] | null) =>
-  ci ? `${formatStat(ci[0])}–${formatStat(ci[1])}` : "—";
+const formatInterval = (
+  ci: readonly [number, number] | null,
+  format: (v: number) => string = formatStat,
+) => (ci ? `${format(ci[0])}–${format(ci[1])}` : "—");
+
+/** R² as a share: 0.951 → "95.1 %". */
+const formatR2 = (v: number | null) =>
+  v === null ? "—" : `${(v * 100).toFixed(1)} %`;
 
 /** Test metrics exported with their intervals (the table shows them under the value). */
 const CI_METRICS = ["mae", "rmse", "r2"] as const;
@@ -65,7 +71,7 @@ const METRICS: {
     key: "validation_r2",
     label: "Val. R²",
     get: (m) => metric(m, "validation", "r2"),
-    format: formatStat,
+    format: formatR2,
   },
   {
     key: "test_mae",
@@ -88,7 +94,7 @@ const METRICS: {
     ci: "r2",
     label: "Test R²",
     get: (m) => metric(m, "test", "r2"),
-    format: formatStat,
+    format: formatR2,
   },
   {
     key: "test_mape_pct",
@@ -101,7 +107,7 @@ const METRICS: {
     key: "validation_r2_without_activity",
     label: "Val. R², no same-year activity",
     get: (m) => metric(m, "validation_without_activity", "r2"),
-    format: formatStat,
+    format: formatR2,
   },
 ];
 
@@ -199,40 +205,74 @@ export function ModelsTab({
           ]}
         />
       )}
-      <ChartFrame
-        title={`Test error, ${chosen.testYears}: lower is better`}
-        subtitle={`Mean absolute error per unit-year in short tons NOₓ, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
-        note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median of unit-years with the same fuel and unit type. Intervals come from resampling test units (a unit's two test years together).`}
-        filename="test-mae"
-        height={sorted.length * 26}
-        table={{
-          head: [
-            "model",
-            "test_mae_tons",
-            "test_mae_ci_low",
-            "test_mae_ci_high",
-          ],
-          rows: sorted.map((m) => [
-            m.id,
-            metric(m, "test", "mae"),
-            ...(interval(m, "mae") ?? [null, null]),
-          ]),
-        }}
-      >
-        <BarList
-          unit="t"
-          rows={sorted.map((m) => {
-            const [low, high] = interval(m, "mae") ?? [];
-            return {
-              label: m.name,
-              value: metric(m, "test", "mae"),
-              low,
-              high,
-              color: MODEL_COLORS[m.kind],
-            };
-          })}
-        />
-      </ChartFrame>
+      <div className="grid grid-cols-1 gap-x-8 gap-y-6 xl:grid-cols-2">
+        <ChartFrame
+          title={`Test error, ${chosen.testYears}: lower is better`}
+          subtitle={`Mean absolute error per unit-year in short tons NOₓ, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
+          note={`Chronological split: trained on ${chosen.trainYears}, tuned on ${chosen.validationYears}, then refit on both and tested once on ${chosen.testYears}. The baseline predicts the training median of unit-years with the same fuel and unit type. Intervals come from resampling test units (a unit's two test years together).`}
+          filename="test-mae"
+          height={sorted.length * 26}
+          table={{
+            head: [
+              "model",
+              "test_mae_tons",
+              "test_mae_ci_low",
+              "test_mae_ci_high",
+            ],
+            rows: sorted.map((m) => [
+              m.id,
+              metric(m, "test", "mae"),
+              ...(interval(m, "mae") ?? [null, null]),
+            ]),
+          }}
+        >
+          <BarList
+            unit="t"
+            format={(v) => `${formatStat(v)} t`}
+            rows={sorted.map((m) => {
+              const [low, high] = interval(m, "mae") ?? [];
+              return {
+                label: m.name,
+                value: metric(m, "test", "mae"),
+                low,
+                high,
+                color: MODEL_COLORS[m.kind],
+              };
+            })}
+          />
+        </ChartFrame>
+        <ChartFrame
+          title={`Variation explained (R²), ${chosen.testYears}: higher is better`}
+          subtitle="Share of the differences in NOₓ between test unit-years each model accounts for, with 95 % intervals. 100 % would be perfect; 0 % is no better than guessing the average."
+          note="R² = 1 − (squared prediction errors ÷ squared differences from the test mean). It rewards getting the large units right, so it can be high while the error in tons on small units is still large; read it with the error chart."
+          filename="test-r2"
+          height={sorted.length * 26}
+          table={{
+            head: ["model", "test_r2", "test_r2_ci_low", "test_r2_ci_high"],
+            rows: sorted.map((m) => [
+              m.id,
+              metric(m, "test", "r2"),
+              ...(interval(m, "r2") ?? [null, null]),
+            ]),
+          }}
+        >
+          <BarList
+            unit="%"
+            format={(v) => `${v.toFixed(0)} %`}
+            rows={sorted.map((m) => {
+              const r2 = metric(m, "test", "r2");
+              const [low, high] = interval(m, "r2") ?? [];
+              return {
+                label: m.name,
+                value: r2 === null ? null : r2 * 100,
+                low: low == null ? undefined : low * 100,
+                high: high == null ? undefined : high * 100,
+                color: MODEL_COLORS[m.kind],
+              };
+            })}
+          />
+        </ChartFrame>
+      </div>
 
       <Disclosure
         title="All metrics"
@@ -290,7 +330,7 @@ export function ModelsTab({
                   <span key={c.key} title="95 % bootstrap interval">
                     {text}
                     <span className="text-fg-muted block text-xs">
-                      {formatInterval(ci)}
+                      {formatInterval(ci, (x) => c.format(x))}
                     </span>
                   </span>
                 ) : (
