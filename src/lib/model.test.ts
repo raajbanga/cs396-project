@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  changedInputs,
   featureLabel,
   modelInputs,
   outOfRange,
@@ -241,4 +242,24 @@ void test("scenarioResults: predictions and changes against the baseline predict
     { ...list[0]!, inputs: { ...base, primary_fuel: "Plasma" } },
   ]);
   assert.deepEqual(unseen[0]!.warnings, ["primary_fuel"]);
+});
+
+void test("changedInputs names each changed input with its value and the baseline's", () => {
+  const base = modelInputs(raw); // coal, with SCR
+  const [, load, heat, scr, fuel, efficient] = scenarios(base, 10, -5);
+  assert.deepEqual(changedInputs(base, base), []);
+  assert.match(
+    changedInputs(base, load!.inputs)[0]!,
+    /^Gross load .+ MWh \(from .+\)$/,
+  );
+  assert.match(
+    changedInputs(base, heat!.inputs)[0]!,
+    /^Heat input .+ MMBtu \(from .+\)$/,
+  );
+  assert.deepEqual(changedInputs(base, scr!.inputs), ["SCR no (from yes)"]);
+  assert.match(
+    changedInputs(base, fuel!.inputs)[0]!,
+    /Pipeline Natural Gas \(from Coal\)$/,
+  );
+  assert.equal(changedInputs(base, efficient!.inputs).length, 1); // heat input; SCR already on
 });

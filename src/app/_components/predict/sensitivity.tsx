@@ -242,7 +242,7 @@ export function SensitivitySection({
               ? [
                   {
                     label: "Change",
-                    value: `${formatStat(point.diff)} t (${formatPct(point.diffPct)})`,
+                    value: `${point.diff > 0 ? "+" : ""}${formatStat(point.diff)} t (${formatPct(point.diffPct)})`,
                   },
                 ]
               : [];

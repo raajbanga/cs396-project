@@ -4,6 +4,7 @@
  * predictions exactly (checked against ml/fixtures/parity.json by model.test.ts). Keep
  * `modelInputs` and `designRow` in step with `model_inputs` and `design_matrix` in ml/train.py.
  */
+import { shortNumber } from "./utils";
 
 /** A unit-year as ml/train.py's query reads it (snake_case, as stored). */
 export interface ModelRaw {
@@ -328,6 +329,35 @@ export function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
   ];
 }
 export type Scenario = ReturnType<typeof scenarios>[number];
+
+/** "26.4M", "7,839", "0.2266": an input value as the tooltips show it. */
+const inputNumber = (v: number) =>
+  shortNumber(v) ??
+  v.toLocaleString("en-US", {
+    maximumSignificantDigits: Math.abs(v) < 1 ? 4 : 6,
+  });
+
+/**
+ * §6.4 "input values": each input a scenario changes, with its value and the baseline's, e.g.
+ * "Heat input 25.1M MMBtu (from 26.4M)", "SCR yes (from no)".
+ */
+export function changedInputs(base: ModelInputs, inputs: ModelInputs) {
+  return (Object.keys(inputs) as (keyof ModelInputs)[]).flatMap((key) => {
+    const [now, was] = [inputs[key], base[key]];
+    if (now === was) return [];
+    if (key in NUMERIC_INPUTS) {
+      const unit = NUMERIC_INPUTS[key as NumericInput].unit;
+      const show = (v: unknown) =>
+        typeof v === "number" ? inputNumber(v) : "missing";
+      return [`${featureLabel(key)} ${show(now)} ${unit} (from ${show(was)})`];
+    }
+    if (key in CONTROLS)
+      return [
+        `${featureLabel(key)} ${now ? "yes" : "no"} (from ${was ? "yes" : "no"})`,
+      ];
+    return [`${featureLabel(key)} ${String(now)} (from ${String(was)})`];
+  });
+}
 
 /** §6.3–§6.4: one model's prediction per scenario, its change from the baseline, and range warnings. */
 export function scenarioResults(

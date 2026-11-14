@@ -17,6 +17,7 @@ import {
   MODEL_COLORS,
   scenarioResults,
   scenarios,
+  changedInputs,
 } from "~/lib/model";
 import { Controls } from "../analyze/shared";
 import type { PredictTabProps } from "./predict-view";
@@ -131,6 +132,27 @@ export function ScenariosSection({
               (x) => x.scenario.name === row.label && x.model.kind === key,
             );
             return !r || r.scenario === list[0] ? "" : formatPct(r.diffPct);
+          }}
+          detail={(row, key) => {
+            const r = results.find(
+              (x) => x.scenario.name === row.label && x.model.kind === key,
+            );
+            return !r || r.scenario === list[0]
+              ? ""
+              : `${r.diff > 0 ? "+" : ""}${formatStat(r.diff)} t, ${formatPct(r.diffPct)}`;
+          }}
+          footer={(row) => {
+            const scenario = list.find((s) => s.name === row.label);
+            const changed = scenario
+              ? changedInputs(baseline.inputs, scenario.inputs)
+              : [];
+            return changed.length ? (
+              <ul className="text-fg-muted space-y-0.5">
+                {changed.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            ) : null;
           }}
           faded={(row, key) =>
             Boolean(

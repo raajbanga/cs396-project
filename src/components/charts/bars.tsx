@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import {
   Bar,
   BarChart,
@@ -212,6 +214,8 @@ export function Columns({
   height = 320,
   unit = "",
   labels,
+  detail,
+  footer,
   faded,
 }: {
   data: ({ label: string } & Record<string, number | string | null>)[];
@@ -220,6 +224,10 @@ export function Columns({
   unit?: string;
   /** The text above a bar, e.g. its change from the baseline. */
   labels?: (row: Record<string, unknown>, key: string) => string;
+  /** The tooltip's text after a bar's value (defaults to `labels`). */
+  detail?: (row: Record<string, unknown>, key: string) => string;
+  /** Lines under the tooltip's values, e.g. what a scenario changed. */
+  footer?: (row: Record<string, unknown>) => ReactNode;
   faded?: (row: Record<string, unknown>, key: string) => boolean;
 }) {
   return (
@@ -246,7 +254,7 @@ export function Columns({
                 rows={series.map((s) => {
                   const row = payload[0]!.payload as Record<string, unknown>;
                   const v = row[s.key];
-                  const extra = labels?.(row, s.key);
+                  const extra = (detail ?? labels)?.(row, s.key);
                   return {
                     label: s.label,
                     value:
@@ -254,6 +262,9 @@ export function Columns({
                     color: s.color,
                   };
                 })}
+                footer={footer?.(
+                  payload[0]!.payload as Record<string, unknown>,
+                )}
               />
             ) : null
           }
