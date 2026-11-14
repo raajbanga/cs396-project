@@ -418,7 +418,14 @@ def main():
             (
                 model_id, name, kind, common["target"], json.dumps(common["features"]),
                 json.dumps(tuned[kind][0]), common["train_years"], common["validation_years"],
-                common["test_years"], json.dumps(model_metrics), json.dumps(artifact),
+                common["test_years"],
+                # The persistence reference rides along so the app can state it beside each model.
+                json.dumps({
+                    **model_metrics,
+                    "persistence_test": metrics(y[test], preds["persistence"][test]),
+                    "test_vs_persistence": intervals[kind]["test_vs_persistence"],
+                }),
+                json.dumps(artifact),
                 f"ml/models/{model_id}.joblib", common["pipeline_version"],
                 int(datetime.now(timezone.utc).timestamp()),
             )

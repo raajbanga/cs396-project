@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import type { SortDirection } from "~/lib/facility-filters";
+import { define } from "~/lib/glossary";
 import { cn, isNumericValue, sortRows, type SortValue } from "~/lib/utils";
 
 /** Caption above a form control or group of controls. */
@@ -93,6 +94,21 @@ const NUMERIC_TEXT =
   /^[<>≤≥]?\s*[-+−]?[\d,]*\.?\d+(e[-+]?\d+)?[KMBT]?\s*[%×]?(\s*–\s*[-+−]?[\d,]*\.?\d+[KMBT]?)?$/i;
 const BLANK = /^(—|-|baseline|)$/;
 
+/** A header with a plain definition on hover (dotted underline), when the glossary has one. */
+function Glossed({ term }: { term: string }) {
+  const definition = define(term);
+  return definition ? (
+    <span
+      title={definition}
+      className="decoration-fg-muted/60 cursor-help underline decoration-dotted underline-offset-4"
+    >
+      {term}
+    </span>
+  ) : (
+    term
+  );
+}
+
 /**
  * Compact monospace table for validation reports, histories, and record lists. With `sortable`,
  * headers sort ↑/↓ on click: text and number cells sort by their own value, other cells (badges,
@@ -152,7 +168,7 @@ export function ReportTable({
               canSort(j) ? (
                 <SortableTableHead
                   key={j}
-                  label={h}
+                  label={<Glossed term={h} />}
                   sort={String(j)}
                   {...localSortProps(sort, setSort, (f) => numeric(Number(f)))}
                   className={cn(
@@ -168,7 +184,7 @@ export function ReportTable({
                     alignRight[j] && "text-right",
                   )}
                 >
-                  {h}
+                  <Glossed term={h} />
                 </TableHead>
               ),
             )}

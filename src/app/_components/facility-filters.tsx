@@ -841,6 +841,25 @@ export function FacilityFilterBar({
               {...editor}
             />
           ))}
+          {/* The two most used filters stay one click away until set (then they're chips). */}
+          {(
+            [
+              ["stateCode", "State", filterOptions?.states],
+              ["primaryFuel", "Fuel", filterOptions?.fuels],
+            ] as const
+          ).map(
+            ([key, label, values]) =>
+              !isFilterActive(filters, key) && (
+                <Select
+                  key={key}
+                  value={filters[key]}
+                  onValueChange={(value) => onFilterChange(key, value)}
+                  options={toOptions(values, label)}
+                  aria-label={label}
+                  className="text-fg-2 h-7 w-auto border-dashed px-2.5"
+                />
+              ),
+          )}
           <AddFilter {...editor} />
           {hasActiveFilters && (
             <Button

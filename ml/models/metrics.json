@@ -94,29 +94,9 @@
     ]
   },
   "search": {
-    "ridge_alpha": [
-      0.01,
-      0.1,
-      1,
-      10,
-      100
-    ],
-    "tree_max_depth": [
-      4,
-      6,
-      8,
-      10,
-      12,
-      16,
-      20,
-      24,
-      null
-    ],
-    "tree_min_samples_leaf": [
-      5,
-      20,
-      50
-    ]
+    "ridge_alpha": [0.01, 0.1, 1, 10, 100],
+    "tree_max_depth": [4, 6, 8, 10, 12, 16, 20, 24, null],
+    "tree_min_samples_leaf": [5, 20, 50]
   },
   "bootstrap": "1000 replicates resampling units of the test years, 95 % percentile intervals",
   "models": {

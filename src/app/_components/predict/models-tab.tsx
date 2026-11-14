@@ -159,6 +159,22 @@ export function ModelsTab({
         (metric(b, "test", "mae") ?? Infinity),
     )[0];
 
+  const persistence = best ? metric(best, "persistence_test", "mae") : null;
+  // The importance chart in words: what pushes NOₓ up and down most (Ridge), or what the tree leans on.
+  const [first, second] = importance;
+  const cut = importance.find(([, v]) => v < 0);
+  const up = importance.find(([, v]) => v > 0);
+  const reading =
+    chosen.kind === "tree"
+      ? first &&
+        `The tree leans most on ${featureLabel(first[0]).toLowerCase()} (${(first[1] * 100).toFixed(0)} % of its error reduction)${second ? ` and ${featureLabel(second[0]).toLowerCase()} (${(second[1] * 100).toFixed(0)} %)` : ""}.`
+      : [
+          up && `${featureLabel(up[0])} raises predicted NOₓ the most`,
+          cut && `${featureLabel(cut[0])} lowers it the most`,
+        ]
+          .filter(Boolean)
+          .join("; ") + ".";
+
   return (
     <div className="space-y-8">
       {best && (
@@ -174,6 +190,8 @@ export function ModelsTab({
               metric(best, "test", "mape"),
             ),
             `Tested on ${chosen.testYears}, years none of the models saw while training.`,
+            persistence !== null &&
+              `A simple rule does better still: last year's NOₓ rate × this year's heat input is off by ${formatStat(persistence)} t on average. NOₓ mostly follows last year's rate times this year's fuel use, which the models only approximate.`,
           ]}
         />
       )}
@@ -347,8 +365,8 @@ export function ModelsTab({
             }
             subtitle={
               chosen.kind === "tree"
-                ? "Share of the tree's error reduction per input; the 15 largest."
-                : "Right of the line: more of this input, more NOₓ; left: less NOₓ. Effect on log(1 + NOₓ); the 15 largest by size."
+                ? `${reading} Share of the tree's error reduction per input; the 15 largest.`
+                : `${reading} Right of the line: more NOₓ; left: less. The 15 largest effects.`
             }
             note={
               chosen.kind === "ridge"
