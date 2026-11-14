@@ -74,8 +74,12 @@ export function BarList({
   const min = Math.min(0, ...finite);
   const diverging = min < 0;
   const span = Math.max(max, -min);
-  // Room past the longest bar for its label.
-  const domain = diverging ? [-span * 1.35, span * 1.35] : [0, max * 1.22 || 1];
+  // A fixed margin past the longest bar for its label, so it fits however narrow the chart is
+  // (a share of the plot width runs out on a phone).
+  const labelRoom =
+    Math.max(...finite.map((v) => format(v).length), 1) * CHAR + 12;
+  // Negative labels sit inside the 35 % of room left of zero; positive ones use the margin.
+  const domain = diverging ? [-span * 1.35, span] : [0, max || 1];
   const data = rows.map((r) => ({
     ...r,
     err:
@@ -92,7 +96,12 @@ export function BarList({
       <BarChart
         data={data}
         layout="vertical"
-        margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
+        margin={{
+          top: 0,
+          right: labelRoom,
+          bottom: 0,
+          left: 0,
+        }}
         barCategoryGap={5}
       >
         <XAxis type="number" hide domain={domain} />

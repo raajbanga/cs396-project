@@ -18,6 +18,7 @@ import { MapChart, RankingChart, TrendChart } from "./charts";
 import {
   bind,
   combinedLabel,
+  Controls,
   findInfo,
   VariableField,
   type TabProps,
@@ -49,10 +50,10 @@ export function OverviewTab(props: TabProps) {
   if (!summary) return null;
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
+      <Controls>
         <VariableField {...bind(props, "variable")} label="Show" />
-        <OverviewTakeaways {...props} />
-      </div>
+      </Controls>
+      <OverviewTakeaways {...props} />
       <TrendChart {...props} />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <MapChart {...props} />

@@ -28,7 +28,7 @@ export function SegmentedControl<T extends string>({
         // plus a -1px tab margin overflows the box and shows a vertical scrollbar.
         tabs
           ? "flex overflow-x-auto text-sm shadow-[inset_0_-1px_0_var(--edge)]"
-          : "border-edge bg-surface flex rounded-md border p-0.5 text-sm",
+          : "border-edge bg-surface flex max-w-full overflow-x-auto rounded-md border p-0.5 text-sm",
         className,
       )}
     >

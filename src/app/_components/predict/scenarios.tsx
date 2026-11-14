@@ -2,6 +2,7 @@
 
 import { Columns } from "~/components/charts/bars";
 import { ChartFrame } from "~/components/ui/chart";
+import { Takeaways } from "~/components/ui/takeaways";
 import { scenarioSentences } from "~/lib/takeaways";
 import { Input } from "~/components/ui/input";
 import {
@@ -60,9 +61,8 @@ export function ScenariosSection({
         </Field>
       </Controls>
 
-      <ChartFrame
-        title="Predicted NOₓ under each scenario"
-        subtitle={`${scenarioSentences(
+      <Takeaways
+        items={scenarioSentences(
           results
             .filter((r) => r.scenario !== list[0])
             .map((r) => ({
@@ -75,9 +75,12 @@ export function ScenariosSection({
               scenario: r.scenario.name,
               diffPct: r.diffPct,
             })),
-        ).join(
-          " ",
-        )} Short tons; labels are the change from each model's baseline; faded bars use inputs outside the training data.`}
+        )}
+      />
+
+      <ChartFrame
+        title="Predicted NOₓ under each scenario"
+        subtitle="Short tons. Labels: change from each model's baseline; faded bars use inputs outside the training data."
         note="The prior-year NOₓ rate still describes the unit as it was. When the models disagree on a scenario, the data cannot settle the effect: the tree learns NOₓ mostly from heat input and last year's rate, so adding SCR barely moves it, while Ridge applies one average SCR effect to every unit. Model responses, not measured effects."
         legend={chosen.map((m) => ({
           key: m.kind,

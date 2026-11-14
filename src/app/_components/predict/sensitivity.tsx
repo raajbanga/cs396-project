@@ -1,6 +1,7 @@
 "use client";
 
 import { Lines } from "~/components/charts/lines";
+import { Takeaways } from "~/components/ui/takeaways";
 import { ChartFrame } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
 import {
@@ -162,9 +163,11 @@ export function SensitivitySection({
         </p>
       )}
 
+      <Takeaways items={[reading]} />
+
       <ChartFrame
         title={`Predicted NOₓ as ${meta.label.toLowerCase()} changes`}
-        subtitle={`${reading} Dots and dashed lines mark the baseline; shading is outside the training data. ${baseline.label}, short tons.`}
+        subtitle={`Dots and dashed lines mark the baseline; shading is outside the training data. ${baseline.label}, short tons.`}
         note={`Training data range: ${formatStat(min)}–${formatStat(max)} ${meta.unit}. This shows how each model responds, not a measured real-world effect.`}
         legend={curves.map(({ model: m }) => ({
           key: m.kind,

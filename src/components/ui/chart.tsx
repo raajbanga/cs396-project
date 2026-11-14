@@ -281,7 +281,7 @@ export function ChartFrame({
       className={cn("border-edge min-w-0 space-y-3 border-t pt-4", className)}
     >
       <header className="flex flex-wrap items-start gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1 space-y-0.5">
+        <div className="min-w-0 flex-[1_1_16rem] space-y-0.5">
           <h3 className="text-fg text-[15px] font-semibold text-balance">
             {title}
           </h3>
@@ -291,7 +291,7 @@ export function ChartFrame({
             </p>
           )}
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           {actions}
           {table && (
             <ExportButton

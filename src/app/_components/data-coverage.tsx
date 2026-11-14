@@ -1,4 +1,4 @@
-import { plural, sourceLabel } from "~/lib/utils";
+import { cn, plural, sourceLabel } from "~/lib/utils";
 import { type RouterOutputs } from "~/trpc/react";
 
 type Stats = RouterOutputs["facilities"]["getStats"];
@@ -28,7 +28,7 @@ export function DataCoverage({
         {coverage.map(({ year, records }) => (
           <div
             key={year}
-            className="group relative flex h-full flex-1 flex-col justify-end"
+            className="group relative flex h-full min-w-0 flex-1 flex-col justify-end"
             title={`${year}: ${records.toLocaleString()} unit-years`}
           >
             <span className="text-fg pointer-events-none absolute inset-x-0 -top-0.5 text-center text-xs tabular-nums opacity-0 group-hover:opacity-100">
@@ -42,13 +42,16 @@ export function DataCoverage({
         ))}
       </div>
       <div aria-hidden className="flex gap-0.5 sm:gap-1">
-        {coverage.map(({ year }) => (
+        {coverage.map(({ year }, i) => (
           <span
             key={year}
-            className="text-fg-muted flex-1 text-center text-xs tabular-nums"
+            // Every other year on a phone, so the labels don't run together.
+            className={cn(
+              "text-fg-muted min-w-0 flex-1 text-center text-xs tabular-nums",
+              i % 2 === 1 && "max-sm:invisible",
+            )}
           >
-            <span className="sm:hidden">’{String(year).slice(2)}</span>
-            <span className="hidden sm:inline">{year}</span>
+            ’{String(year).slice(2)}
           </span>
         ))}
       </div>
