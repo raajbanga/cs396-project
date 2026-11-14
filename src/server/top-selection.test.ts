@@ -89,3 +89,29 @@ void test("the lowest-first order keeps the smallest emitters", async () => {
   const fifth = [...totals.values()].sort((a, b) => a - b)[4]!;
   for (const v of perFacility.values()) assert.ok(v <= fifth);
 });
+
+void test("capacity ranges and NOx-rate rankings select the right unit-years", async () => {
+  const big = await api.facilities.describeSearch({
+    text: "units over 1000 MW",
+  });
+  const bigRows = await analysisRows(big.filters);
+  assert.ok(bigRows.length > 0);
+  assert.ok(bigRows.every((r) => (r.nameplateCapacityMW ?? 0) > 1000));
+
+  const { filters } = await api.facilities.describeSearch({
+    text: "top 5 units by NOx rate in 2024",
+  });
+  const rate = (r: {
+    noxMassTons: number | null;
+    heatInputMMBtu: number | null;
+  }) =>
+    r.heatInputMMBtu && r.noxMassTons !== null
+      ? (r.noxMassTons * 2000) / r.heatInputMMBtu
+      : -1;
+  const kept = (await analysisRows(filters)).map(rate);
+  const all = (await analysisRows({ ...filters, topN: "ALL" }))
+    .map(rate)
+    .sort((a, b) => b - a);
+  assert.equal(kept.length, 5);
+  for (const v of kept) assert.ok(v >= all[4]! - 1e-9);
+});

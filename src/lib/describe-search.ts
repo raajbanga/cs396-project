@@ -1,5 +1,7 @@
 import type {
   FacilityFilters,
+  RangeMetric,
+  RankMetric,
   SortDirection,
   UNIT_METRICS,
 } from "./facility-filters";
@@ -13,7 +15,20 @@ import type {
  * qualitative terms for the server to resolve into percentile thresholds.
  */
 
+/** The measured unit-year metrics: what "high"/"low" resolve to percentiles of. */
 export type Metric = (typeof UNIT_METRICS)[number]["key"];
+const MEASURED = new Set<string>([
+  "operatingHours",
+  "grossGenerationMWh",
+  "heatInputMMBtu",
+  "co2MassTons",
+  "so2MassTons",
+  "noxMassTons",
+] satisfies Metric[]);
+const isMeasured = (m: RankMetric): m is Metric => MEASURED.has(m);
+/** Metrics with min/max filters: a number can bind to them ("over 1000 MW"); rates only rank. */
+const isRangeMetric = (m: RankMetric): m is RangeMetric =>
+  isMeasured(m) || m === "capacity";
 
 export interface SearchVocab {
   states: string[];
@@ -30,7 +45,7 @@ export interface SearchVocab {
 export interface ParsedDescription {
   filters: Partial<FacilityFilters>;
   tab?: "explorer" | "units";
-  sort?: { by: Metric; dir: SortDirection };
+  sort?: { by: RankMetric; dir: SortDirection };
   qualitative: { metric: Metric; level: "high" | "low" }[];
   unrecognized: string[];
 }
@@ -96,7 +111,27 @@ const AMBIGUOUS_CODES = new Set(
   "in or me oh ok hi la pa id co de al ma mo ne as".split(" "),
 );
 
-const METRIC_WORDS: Record<string, Metric> = {
+const METRIC_WORDS: Record<string, RankMetric> = {
+  // Rates and capacity first: "heat rate" must not read as "heat" + "rate".
+  "heat rate": "heatRate",
+  "heat rates": "heatRate",
+  "nox rate": "noxRate",
+  "nox rates": "noxRate",
+  "nox emission rate": "noxRate",
+  "nox emissions rate": "noxRate",
+  "nox emission rates": "noxRate",
+  "nox emissions rates": "noxRate",
+  "co2 intensity": "co2Intensity",
+  "carbon intensity": "co2Intensity",
+  "co2 rate": "co2Intensity",
+  "carbon rate": "co2Intensity",
+  intensity: "co2Intensity",
+  capacity: "capacity",
+  "nameplate capacity": "capacity",
+  nameplate: "capacity",
+  mw: "capacity",
+  megawatt: "capacity",
+  megawatts: "capacity",
   co2: "co2MassTons",
   carbon: "co2MassTons",
   "carbon dioxide": "co2MassTons",
@@ -300,7 +335,7 @@ const STOPWORDS = new Set(
 
 type Item =
   | { t: "filter"; key: keyof FacilityFilters; value: string; raw: string }
-  | { t: "metric"; metric: Metric; raw: string }
+  | { t: "metric"; metric: RankMetric; raw: string }
   | { t: "tons"; raw: string }
   | { t: "cmp"; op: "min" | "max" | "between"; strict: boolean; raw: string }
   | { t: "num"; value: number; raw: string; yearLike: boolean }
@@ -766,7 +801,13 @@ export function parseDescription(
       second === undefined
         ? undefined
         : (items[second] as Extract<Item, { t: "num" }>);
-    const metricIdx = findMetric(last, 3, true) ?? findMetric(i, 3);
+    const found = findMetric(last, 3, true) ?? findMetric(i, 3);
+    // A rate can rank but has no min/max filter: leave "heat rate over 10" unrecognized.
+    const metricIdx =
+      found !== undefined &&
+      isRangeMetric((items[found] as Extract<Item, { t: "metric" }>).metric)
+        ? found
+        : undefined;
     let tonsOnly = false;
     if (metricIdx === undefined) {
       const tons = [1, 2].map((d) => last + d).find((j) => at(j)?.t === "tons");
@@ -792,7 +833,8 @@ export function parseDescription(
       return;
     }
     const metric =
-      metricOf(metricIdx) ?? (tonsOnly ? "co2MassTons" : undefined);
+      (metricOf(metricIdx) as RangeMetric | undefined) ??
+      (tonsOnly ? "co2MassTons" : undefined);
     if (!metric) return;
     used.add(i).add(first);
     if (second !== undefined) used.add(second);
@@ -829,8 +871,15 @@ export function parseDescription(
   // "high CO2", "low SO2 emissions": resolved to percentile thresholds on the server.
   items.forEach((item, i) => {
     if (item.t !== "level" || used.has(i)) return;
+    // Percentiles come from the measured columns; "high heat rate" stays a word, not a filter.
+    const near = findMetric(i, 2);
+    const measured =
+      near !== undefined &&
+      isMeasured((items[near] as Extract<Item, { t: "metric" }>).metric)
+        ? near
+        : undefined;
     const metric =
-      metricOf(findMetric(i, 2)) ??
+      (metricOf(measured) as Metric | undefined) ??
       (item.raw.toLowerCase().startsWith("dirt") ||
       item.raw.toLowerCase() === "clean"
         ? "co2MassTons"

@@ -34,7 +34,7 @@ without saying what they mean.
 | 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)               |
 | 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer)   |
 | 2 Sensitivity and scenarios      |   8 | **One gap:** no baseline-prediction reference line (§6.4) |
-| 2 Integration and usability      |   5 | **Search ranks only on Explore** (P1); hosted is 11/11    |
+| 2 Integration and usability      |   5 | Search ranks on every page (11/13); hosted is 11/11       |
 | 2 Presentation and participation |   6 | **Not started** (#15, Final)                              |
 | 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                     |
 
@@ -42,7 +42,7 @@ without saying what they mean.
 
 ## P1 — costs points
 
-- [ ] **Search: one global selection, so rankings work on every page.** — RB
+- [x] **Search: one global selection, so rankings work on every page.** — RB (11/13)
   - [x] Rankings (11/13). Top N is now part of the filters (`topN`, `topBy`, `topDir`,
         `topLevel`, `rankGroup`): `topSelection` in `facilities.ts` keeps the first N facilities
         (their matching unit-years added up) or unit-years, and Explore, Map, Analyze, and every
@@ -55,8 +55,13 @@ without saying what they mean.
   - [x] What-if and Compare groups' facility pickers: Enter picks the highlighted or first match
         (waiting for the list if needed), and says "No facility matches" otherwise. What-if no
         longer shows the old plant's name beside the new ID while loading.
-  - Parser misses that affect Explore too: "NOx rate" ranks by NOₓ mass, "highest heat rate"
-    by heat input, "units over 1000 MW" is not understood (capacity is not a parsed field).
+  - [x] Parser: "NOx rate" ranks by NOₓ rate (lb/MMBtu, as on Analyze), "heat rate" and "carbon
+        intensity" by those rates, and "units over 1000 MW" / "between 100 and 300 MW" filter on
+        a new Capacity range (Advanced). "heat rate over 10" reports "over 10" as not
+        understood: rates rank but have no min/max filter.
+  - Note: a search that names no years ranks over all years on Explore and Map, but over
+    2015–2025 on Analyze (its default range), so the top N can differ there; naming a year
+    ("in 2024") gives the same rows everywhere.
 - [ ] **Pages show numbers without saying what they mean** (rubric 2: "interprets results
       rather than merely displaying numbers"; "explain what each visualization shows and why it
       is appropriate"). Explore's facility dialog is the model: every headline number has a

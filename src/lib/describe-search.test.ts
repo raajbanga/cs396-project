@@ -326,3 +326,36 @@ void test("parseAmount handles separators, suffixes, and exponents", () => {
   assert.equal(parseAmount("5e5"), 500000);
   assert.equal(parseAmount("coal"), undefined);
 });
+
+void test("rates and capacity: rank by them, range on capacity", () => {
+  expect(
+    "top 10 units by NOx rate in 2024",
+    { year: "2024", ...top(10, "noxRate", "unit") },
+    { tab: "units", sort: { by: "noxRate", dir: "desc" } },
+  );
+  expect("highest heat rate coal plants", {
+    primaryFuel: "Coal",
+    ...top(10, "heatRate", "facility"),
+  });
+  expect("lowest carbon intensity facilities", {
+    ...top(10, "co2Intensity", "facility", "asc"),
+  });
+  expect("10 largest plants by capacity", top(10, "capacity", "facility"));
+  expect(
+    "units over 1000 MW",
+    { capacityMin: "1000", capacityMinStrict: "1" },
+    { tab: "units" },
+  );
+  expect("gas units between 100 and 300 MW in Texas", {
+    stateCode: "TX",
+    primaryFuel: "Natural Gas",
+    capacityMin: "100",
+    capacityMax: "300",
+  });
+  // A rate has no min/max filter: the bound is reported, not dropped silently.
+  expect(
+    "heat rate over 10",
+    {},
+    { unrecognized: ["over", "10"], sort: { by: "heatRate", dir: "desc" } },
+  );
+});

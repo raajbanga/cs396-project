@@ -19,6 +19,7 @@ import {
   DEFAULT_FILTERS,
   explorerSearchParams,
   isFilterActive,
+  isUnitSortField,
   nextSort,
   type ExplorerState,
   type FilterChangeHandler,
@@ -116,7 +117,10 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
       setUnitTable((t) => ({
         ...t,
         page: 1,
-        ...(r.sort ? { sortBy: r.sort.by, sortDir: r.sort.dir } : {}),
+        // NOₓ rate has no Units column: the rows are right, the order stays.
+        ...(r.sort && isUnitSortField(r.sort.by)
+          ? { sortBy: r.sort.by, sortDir: r.sort.dir }
+          : {}),
       }));
       setDescribedQuery(text);
     },

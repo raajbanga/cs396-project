@@ -265,6 +265,17 @@ function unitConditions(f: FilterInput): SQL[] {
   for (const [col, value] of containsFilters) {
     if (active(value)) conditions.push(contains(col, value));
   }
+  const capMin = toNumber(f.capacityMin);
+  const capMax = toNumber(f.capacityMax);
+  const capacity = units.nameplateCapacityMW;
+  if (capMin !== undefined)
+    conditions.push(
+      f.capacityMinStrict ? gt(capacity, capMin) : gte(capacity, capMin),
+    );
+  if (capMax !== undefined)
+    conditions.push(
+      f.capacityMaxStrict ? lt(capacity, capMax) : lte(capacity, capMax),
+    );
   // Prefix match: "Retired" must not catch "Operating (Retired 04/15/2016)".
   if (active(f.operatingStatus)) {
     conditions.push(
@@ -318,6 +329,7 @@ function recordConditions(f: FilterInput): SQL[] {
     );
   }
   for (const { key } of RANGE_FIELDS) {
+    if (key === "capacity") continue; // a unit attribute (unitConditions)
     const min = toNumber(f[`${key}Min`]);
     const max = toNumber(f[`${key}Max`]);
     const column = annualRecords[key];
@@ -340,21 +352,30 @@ const unranked = (f: FilterInput): FilterInput => ({ ...f, topN: "ALL" });
 
 /** A facility's ranking value over its matching unit-years (one GROUP BY facility). */
 const facilityRankValue = (metric: RankMetric): SQL => {
-  const gen = annualRecords.grossGenerationMWh;
-  /** Σ numerator / Σ generation over the unit-years that report both. */
-  const perMWh = (col: SQLiteColumn, scale: number) =>
-    sql`SUM(CASE WHEN ${gen} > 0 AND ${col} IS NOT NULL THEN ${col} END) * ${scale} / NULLIF(SUM(CASE WHEN ${gen} > 0 AND ${col} IS NOT NULL THEN ${gen} END), 0)`;
+  /** Σ numerator × scale / Σ denominator over the unit-years that report both (denominator > 0). */
+  const ratio = (num: SQLiteColumn, den: SQLiteColumn, scale: number) =>
+    sql`SUM(CASE WHEN ${den} > 0 AND ${num} IS NOT NULL THEN ${num} END) * ${scale} / NULLIF(SUM(CASE WHEN ${den} > 0 AND ${num} IS NOT NULL THEN ${den} END), 0)`;
+  const { co2MassTons, grossGenerationMWh, heatInputMMBtu, noxMassTons } =
+    annualRecords;
   switch (metric) {
     case "capacity":
       return sql`MAX(${facilityMetrics().totalCapacityMW})`;
     case "co2Intensity":
-      return perMWh(annualRecords.co2MassTons, 2000);
+      return ratio(co2MassTons, grossGenerationMWh, 2000);
     case "heatRate":
-      return perMWh(annualRecords.heatInputMMBtu, 1);
+      return ratio(heatInputMMBtu, grossGenerationMWh, 1);
+    case "noxRate":
+      return ratio(noxMassTons, heatInputMMBtu, 2000);
     default:
       return sql`SUM(${annualRecords[metric]})`;
   }
 };
+
+/** A unit-year's ranking value: its column, or NOₓ rate (lb/MMBtu) computed like Analyze's. */
+const unitRankValue = (metric: RankMetric): SQL | SQLiteColumn =>
+  metric === "noxRate"
+    ? sql`CASE WHEN ${annualRecords.heatInputMMBtu} > 0 THEN ${annualRecords.noxMassTons} * 2000.0 / ${annualRecords.heatInputMMBtu} END`
+    : UNIT_SORT_COLUMNS[metric];
 
 /**
  * §8.3 Top N as part of the selection, so Explore, Map, Analyze, and every download keep the same
@@ -379,7 +400,7 @@ function topSelection(f: FilterInput) {
   const rows =
     level === "unit"
       ? sql`SELECT "annual_records"."id" AS "id", "annual_records"."facility_id" AS "facility_id",
-          "facilities"."state_code" AS "state_code", ${UNIT_SORT_COLUMNS[metric]} AS "value" ${joined}`
+          "facilities"."state_code" AS "state_code", ${unitRankValue(metric)} AS "value" ${joined}`
       : sql`SELECT "annual_records"."facility_id" AS "id", "annual_records"."facility_id" AS "facility_id",
           MAX("facilities"."state_code") AS "state_code", ${facilityRankValue(metric)} AS "value" ${joined}
           GROUP BY "annual_records"."facility_id"`;

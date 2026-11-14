@@ -13,11 +13,14 @@ export const UNIT_METRICS = [
   { key: "so2MassTons", label: "SO₂", unit: "tons" },
   { key: "noxMassTons", label: "NOₓ", unit: "tons" },
 ] as const;
-/** §8.2 min/max filters: the reporting year (for 2015–2025 style history) plus every metric. */
+/** §8.2 min/max filters: the reporting year (for 2015–2025 style history), every metric, and the unit's nameplate capacity. */
 export const RANGE_FIELDS = [
   { key: "year", label: "Reporting year", unit: "yr" },
   ...UNIT_METRICS,
+  { key: "capacity", label: "Capacity", unit: "MW" },
 ] as const;
+/** Range fields a description can bind a number to ("over 1000 MW", "CO2 above 1M"). */
+export type RangeMetric = Exclude<(typeof RANGE_FIELDS)[number]["key"], "year">;
 type RangeField = (typeof RANGE_FIELDS)[number]["key"];
 type RangeKey = `${RangeField}${"Min" | "Max"}`;
 const RANGE_KEYS = RANGE_FIELDS.flatMap(
@@ -42,6 +45,8 @@ export const UNIT_SORT_FIELDS = [
   "heatRate",
 ] as const;
 export type UnitSortField = (typeof UNIT_SORT_FIELDS)[number];
+export const isUnitSortField = (v: string): v is UnitSortField =>
+  (UNIT_SORT_FIELDS as readonly string[]).includes(v);
 
 /** Top-N choices; "ALL" = no limit. With rankGroup "state", N applies within each state. */
 export const TOP_N_OPTIONS = [5, 10, 20, 50, 100] as const;
@@ -55,6 +60,7 @@ export const RANK_METRICS = [
   { key: "capacity", label: "Capacity", unit: "MW" },
   { key: "co2Intensity", label: "CO₂ intensity", unit: "lb/MWh" },
   { key: "heatRate", label: "Heat rate", unit: "MMBtu/MWh" },
+  { key: "noxRate", label: "NOₓ rate", unit: "lb/MMBtu" },
 ] as const;
 export type RankMetric = (typeof RANK_METRICS)[number]["key"];
 export const isRankMetric = (v: string): v is RankMetric =>
