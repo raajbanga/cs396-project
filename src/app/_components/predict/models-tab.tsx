@@ -21,7 +21,12 @@ import { formatStat } from "~/lib/analysis";
 import { modelMetadata } from "~/lib/export-bundle";
 import type { PredictView } from "~/lib/analysis-state";
 import { getFuelTheme } from "~/lib/map-utils";
-import { featureLabel, fitYears, MODEL_COLORS } from "~/lib/model";
+import {
+  featureLabel,
+  fitYears,
+  MODEL_COLORS,
+  residualsByGroup,
+} from "~/lib/model";
 import { formatNumber } from "~/lib/utils";
 import { api } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
@@ -145,6 +150,17 @@ export function ModelsTab({
   });
   const points = tests.data ?? [];
   const fuels = [...new Set(points.map((p) => p.fuel))];
+  const residuals = residualsByGroup(
+    points.map((p) => ({
+      group: p.fuel,
+      actual: p.actual,
+      predicted: p.predicted[chosen.kind] ?? null,
+    })),
+  );
+  const worst = residuals[0];
+  const residualReading = worst
+    ? `Largest errors on ${worst.group} (${formatStat(worst.mae)} t per unit-year on average), where ${chosen.name.toLowerCase().startsWith("ridge") ? "Ridge" : `the ${chosen.name.toLowerCase()}`} ${worst.bias > 0 ? "over" : "under"}-predicts by ${formatStat(Math.abs(worst.bias))} t on average.`
+    : "";
   const base = sorted.find((m) => m.kind === "baseline");
   const gains = sorted
     .filter((m) => m !== base && base)
@@ -443,6 +459,37 @@ export function ModelsTab({
             />
           </ChartFrame>
         )}
+        <ChartFrame
+          title={`Average error by fuel, ${chosen.testYears}`}
+          subtitle={`${residualReading} Bars: average of predicted − actual (right of the line: over-predicts, left: under-predicts); hover for the typical error size.`}
+          note="Residuals of the same even sample as the scatter. A bias near 0 with a large typical error means the misses cancel out: the model is right on average for that fuel but wrong for individual units."
+          filename={`residuals-${chosen.id}`}
+          height={residuals.length * 26}
+          {...queryStatus(tests)}
+          table={{
+            head: [
+              "fuel_class",
+              "test_unit_years",
+              "mean_error_tons",
+              "mean_absolute_error_tons",
+            ],
+            rows: residuals.map((r) => [r.group, r.n, r.bias, r.mae]),
+          }}
+        >
+          <BarList
+            unit="t"
+            format={(v) => `${v > 0 ? "+" : ""}${formatStat(v)} t`}
+            rows={residuals.map((r) => ({
+              label: r.group,
+              value: r.bias,
+              color: getFuelTheme(r.group).color,
+              details: [
+                { label: "Typical error", value: `${formatStat(r.mae)} t` },
+                { label: "Unit-years", value: formatNumber(r.n) },
+              ],
+            }))}
+          />
+        </ChartFrame>
       </div>
 
       <Disclosure

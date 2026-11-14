@@ -19,6 +19,8 @@ import {
   scenarios,
   changedInputs,
 } from "~/lib/model";
+import { IMPACT_DISCLAIMER, noxImpacts } from "~/lib/traci";
+import { api } from "~/trpc/react";
 import { Controls } from "../analyze/shared";
 import type { PredictTabProps } from "./predict-view";
 
@@ -41,6 +43,8 @@ export function ScenariosSection({
     load < -100 && "gross load",
     heat < -100 && "heat input",
   ].filter(Boolean);
+  const { data: catalog } = api.analysis.catalog.useQuery();
+  const factors = catalog?.factors ?? [];
   const results = chosen.flatMap((m) =>
     scenarioResults(m.artifact, baseline.inputs, list).map((r) => ({
       model: m,
@@ -114,6 +118,10 @@ export function ScenariosSection({
             "change_tons",
             "change_pct",
             "outside_training_range",
+            ...noxImpacts(0, factors).map(
+              (i) =>
+                `nox_${i.category.toLowerCase().replace(/[^a-z0-9]+/g, "_")}_${i.unit.replace(/[^A-Za-z0-9.]+/g, "_")}`,
+            ),
           ],
           rows: results.map((r) => [
             r.model.id,
@@ -123,6 +131,7 @@ export function ScenariosSection({
             r.diff,
             r.diffPct,
             r.warnings.map(featureLabel).join("; "),
+            ...noxImpacts(r.prediction, factors).map((i) => i.value),
           ]),
         }}
       >
@@ -210,6 +219,59 @@ export function ScenariosSection({
           })}
         />
       </Disclosure>
+
+      <ScenarioImpacts results={results} factors={factors} />
     </Section>
+  );
+}
+
+/**
+ * §6.4 "or impact indicators": the predicted NOₓ of each scenario through TRACI's NOₓ factors,
+ * so a scenario's change reads as smog, acidification, and particulate potential too.
+ */
+function ScenarioImpacts({
+  results,
+  factors,
+}: {
+  results: {
+    model: PredictTabProps["chosen"][number];
+    scenario: { name: string };
+    prediction: number;
+  }[];
+  factors: Parameters<typeof noxImpacts>[1];
+}) {
+  const rows = results.map((r) => ({
+    ...r,
+    impacts: noxImpacts(r.prediction, factors),
+  }));
+  const categories = rows[0]?.impacts ?? [];
+  if (!categories.length) return null;
+  return (
+    <Disclosure
+      title="Potential impacts of the predicted NOₓ"
+      hint="TRACI 2.2 smog, acidification, and particulate potential per scenario"
+    >
+      <Section
+        title=""
+        note={`Predicted NOₓ × 907.18474 kg per short ton × the TRACI 2.2 factor for NOₓ. NOₓ only: the models predict no CO₂ or SO₂, so these are NOₓ's part of each category, not the unit's whole impact. ${IMPACT_DISCLAIMER}`}
+      >
+        <ReportTable
+          head={[
+            "Scenario",
+            "Model",
+            "Predicted NOₓ (t)",
+            ...categories.map((c) => `${c.category} (${c.unit})`),
+          ]}
+          rows={rows.map((r) => [
+            <span key="n" className="text-fg font-medium">
+              {r.scenario.name}
+            </span>,
+            r.model.name,
+            formatStat(r.prediction),
+            ...r.impacts.map((i) => formatStat(i.value)),
+          ])}
+        />
+      </Section>
+    </Disclosure>
   );
 }

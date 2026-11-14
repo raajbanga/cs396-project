@@ -12,6 +12,8 @@ import {
   scenarioResults,
   scenarios,
   sensitivityCurve,
+  categoryCurve,
+  residualsByGroup,
   sensitivityGrid,
   type ModelArtifact,
   type ModelRaw,
@@ -283,4 +285,45 @@ void test("scenarios: high efficiency always cuts heat input", () => {
   // A rise in heat input isn't efficiency: a 5 % cut is used, and the description says so.
   assert.equal(efficient(10).inputs.heat_input_mmbtu, heat * 0.95);
   assert.match(efficient(10).change, /5 % cut/);
+});
+
+void test("categoryCurve: every training fuel, the baseline's marked at zero change", () => {
+  const base = modelInputs({ ...raw, prev_heat_input_mmbtu: 10_000_000 });
+  const ridge = models.ridge!;
+  const { pred0, points } = categoryCurve(ridge, base, "primary_fuel");
+  assert.equal(
+    points.length,
+    ridge.ranges.categorical.primary_fuel.length +
+      (ridge.ranges.categorical.primary_fuel.includes(base.primary_fuel)
+        ? 0
+        : 1),
+  );
+  const own = points.find((q) => q.baseline)!;
+  assert.equal(own.value, base.primary_fuel);
+  assert.equal(own.prediction, pred0);
+  for (const q of points)
+    assert.equal(
+      q.prediction,
+      predict(ridge, { ...base, primary_fuel: q.value as string }),
+    );
+  // A control is off and on.
+  const scr = categoryCurve(ridge, base, "scr");
+  assert.deepEqual(
+    scr.points.map((q) => q.label),
+    ["No", "Yes"],
+  );
+  assert.ok(scr.points.every((q) => !q.outside));
+});
+
+void test("residualsByGroup: signed bias and absolute error per group, worst first", () => {
+  const r = residualsByGroup([
+    { group: "Coal", actual: 100, predicted: 130 },
+    { group: "Coal", actual: 100, predicted: 90 },
+    { group: "Gas", actual: 10, predicted: 8 },
+    { group: "Gas", actual: 10, predicted: null },
+  ]);
+  assert.deepEqual(r, [
+    { group: "Coal", n: 2, bias: 10, mae: 20 },
+    { group: "Gas", n: 1, bias: -2, mae: 2 },
+  ]);
 });

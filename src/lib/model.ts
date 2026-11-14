@@ -385,3 +385,78 @@ export function scenarioResults(
     };
   });
 }
+
+/** §6.2 over a category: the non-numeric inputs a sensitivity can vary, one value at a time. */
+export const CATEGORY_INPUTS = {
+  primary_fuel: "Primary fuel",
+  unit_type: "Unit type",
+  ...(Object.fromEntries(
+    Object.entries(CONTROLS).map(([k, c]) => [k, c.label]),
+  ) as Record<Control, string>),
+} as Record<"primary_fuel" | "unit_type" | Control, string>;
+export type CategoryInput = keyof typeof CATEGORY_INPUTS;
+
+export const isCategoryInput = (key: string): key is CategoryInput =>
+  key in CATEGORY_INPUTS;
+
+/**
+ * §6.2 for a categorical input: one model's prediction for each value the training data had
+ * (each fuel, each unit type, or a control off and on), everything else at the baseline. The
+ * baseline's own value is always included, even when the training data never saw it.
+ */
+export function categoryCurve(
+  model: ModelArtifact,
+  base: ModelInputs,
+  input: CategoryInput,
+) {
+  const pred0 = predict(model, base);
+  const known: (string | number)[] =
+    input === "primary_fuel" || input === "unit_type"
+      ? [...model.ranges.categorical[input]]
+      : [0, 1];
+  if (!known.includes(base[input])) known.push(base[input]);
+  return {
+    pred0,
+    points: known.map((value) => {
+      const prediction = predict(model, { ...base, [input]: value });
+      return {
+        value,
+        label: typeof value === "number" ? (value ? "Yes" : "No") : value,
+        baseline: value === base[input],
+        prediction,
+        diff: prediction - pred0,
+        diffPct: percentChange(prediction, pred0),
+        // A category the model never saw gets no coefficient or split of its own.
+        outside:
+          typeof value === "string" &&
+          !model.ranges.categorical[input as "primary_fuel"].includes(value),
+      };
+    }),
+  };
+}
+
+/**
+ * Residuals by group (fuel class): how many test unit-years, the average signed error
+ * (predicted − actual; above 0 the model over-predicts the group), and the mean absolute error.
+ * Ordered by mean absolute error, largest first.
+ */
+export function residualsByGroup(
+  points: { group: string; actual: number; predicted: number | null }[],
+) {
+  const groups = new Map<string, number[]>();
+  for (const p of points) {
+    if (p.predicted === null || !Number.isFinite(p.predicted)) continue;
+    groups.set(p.group, [
+      ...(groups.get(p.group) ?? []),
+      p.predicted - p.actual,
+    ]);
+  }
+  return [...groups]
+    .map(([group, errors]) => ({
+      group,
+      n: errors.length,
+      bias: errors.reduce((s, e) => s + e, 0) / errors.length,
+      mae: errors.reduce((s, e) => s + Math.abs(e), 0) / errors.length,
+    }))
+    .sort((a, b) => b.mae - a.mae);
+}
