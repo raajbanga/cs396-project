@@ -96,7 +96,10 @@ export async function baselineUnitYear(
   };
 }
 
-/** Actual vs predicted NOₓ for an even sample of test-year unit-years, per model (evaluation charts). */
+/**
+ * Actual vs predicted NOₓ per model for test-year unit-years: an even sample of `max` for the
+ * evaluation charts, or every one (`max` = Infinity) for the §7 predictions export.
+ */
 export async function testPredictions(from: number, to: number, max = 3000) {
   const [rows, registered] = await Promise.all([
     modelRows(
@@ -107,9 +110,12 @@ export async function testPredictions(from: number, to: number, max = 3000) {
     ),
     listModels(),
   ]);
-  return sample(rows, max).map((r) => {
+  return (Number.isFinite(max) ? sample(rows, max) : rows).map((r) => {
     const inputs = modelInputs(r);
     return {
+      facilityId: r.facilityId,
+      unitId: r.unitId,
+      year: r.year,
       label: `${r.facilityName} (${r.facilityId}) unit ${r.unitId}, ${r.year}`,
       fuel: getFuelTheme(r.primary_fuel).name,
       actual: r.noxMassTons!,

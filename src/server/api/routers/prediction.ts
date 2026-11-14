@@ -29,6 +29,15 @@ export const predictionRouter = createTRPCRouter({
     ),
 
   testPredictions: publicProcedure
-    .input(z.object({ from: z.number().int(), to: z.number().int() }))
-    .query(({ input }) => testPredictions(input.from, input.to)),
+    .input(
+      z.object({
+        from: z.number().int(),
+        to: z.number().int(),
+        /** Every test unit-year (the §7 export) instead of the charts' sample. */
+        all: z.boolean().optional(),
+      }),
+    )
+    .query(({ input }) =>
+      testPredictions(input.from, input.to, input.all ? Infinity : undefined),
+    ),
 });

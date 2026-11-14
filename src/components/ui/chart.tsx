@@ -138,7 +138,7 @@ export function TooltipCard({
           </div>
         ))}
       </div>
-      {footer && <p className="text-fg-muted mt-1">{footer}</p>}
+      {footer && <div className="text-fg-muted mt-1">{footer}</div>}
     </div>
   );
 }
