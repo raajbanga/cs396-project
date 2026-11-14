@@ -1,5 +1,6 @@
 "use client";
 
+import { GlossedText } from "~/components/ui/glossed-text";
 import { useRef, type ReactNode } from "react";
 import { ResponsiveContainer } from "recharts";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
@@ -287,7 +288,7 @@ export function ChartFrame({
           </h3>
           {subtitle && (
             <p className="text-fg-muted max-w-[80ch] text-xs text-pretty">
-              {subtitle}
+              <GlossedText>{subtitle}</GlossedText>
             </p>
           )}
         </div>
@@ -325,7 +326,9 @@ export function ChartFrame({
           <summary className="hover:text-fg-2 w-fit cursor-pointer">
             About this chart
           </summary>
-          <div className="mt-1 max-w-[80ch] space-y-1 text-pretty">{note}</div>
+          <div className="mt-1 max-w-[80ch] space-y-1 text-pretty">
+            <GlossedText>{note}</GlossedText>
+          </div>
         </details>
       )}
     </figure>

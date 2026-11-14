@@ -14,6 +14,7 @@ import {
 } from "~/components/ui/table";
 import type { SortDirection } from "~/lib/facility-filters";
 import { define } from "~/lib/glossary";
+import { GLOSS_CLASS, GlossedText } from "~/components/ui/glossed-text";
 import { cn, isNumericValue, sortRows, type SortValue } from "~/lib/utils";
 
 /** Caption above a form control or group of controls. */
@@ -67,7 +68,11 @@ export function Section({
           {title && (
             <h2 className="text-fg text-base font-semibold">{title}</h2>
           )}
-          {note && <p className="text-fg-muted max-w-3xl text-xs">{note}</p>}
+          {note && (
+            <p className="text-fg-muted max-w-3xl text-xs">
+              <GlossedText>{note}</GlossedText>
+            </p>
+          )}
         </div>
         {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
       </div>
@@ -98,10 +103,7 @@ const BLANK = /^(—|-|baseline|)$/;
 function Glossed({ term }: { term: string }) {
   const definition = define(term);
   return definition ? (
-    <span
-      title={definition}
-      className="decoration-fg-muted/60 cursor-help underline decoration-dotted underline-offset-4"
-    >
+    <span title={definition} className={GLOSS_CLASS}>
       {term}
     </span>
   ) : (

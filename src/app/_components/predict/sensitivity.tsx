@@ -118,6 +118,10 @@ export function SensitivitySection({
           onChange={setUnits}
           off="% of baseline"
           on={meta.unit}
+          titles={[
+            "Set the range as percentages of this unit's actual value (-50 to 50 means half to one and a half times it).",
+            `Set the range in ${meta.unit} directly.`,
+          ]}
         />
         {(
           [
