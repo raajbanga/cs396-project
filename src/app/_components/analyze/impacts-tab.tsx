@@ -2,6 +2,8 @@
 
 import { BarList } from "~/components/charts/bars";
 import { ChartFrame, queryStatus } from "~/components/ui/chart";
+import { Takeaways } from "~/components/ui/takeaways";
+import { leadersSentence } from "~/lib/takeaways";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
 import { Disclosure, ReportTable, Section } from "~/components/ui/report";
@@ -80,6 +82,22 @@ export function ImpactsTab(props: TabProps) {
           on="Per MWh of gross load"
         />
       </Controls>
+
+      <Takeaways
+        items={[
+          leadersSentence(
+            impacts.flatMap((v, i) => {
+              const top = tops[i]?.data?.rows.find(
+                (r) => r.values[v.key] != null,
+              );
+              return top ? [{ category: v.label, group: top.group }] : [];
+            }),
+          ),
+          perMWh
+            ? "Per MWh of gross load: how much impact each unit of electricity carries, so small but dirty plants rise and large clean ones fall."
+            : "Each category has its own unit, the amount of a reference pollutant with the same effect: kg CO₂ eq for warming, SO₂ eq for acid rain, PM2.5 eq for fine particles that harm breathing, O₃ eq for smog. Categories can't be added together.",
+        ]}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {impacts.map((v, i) => {

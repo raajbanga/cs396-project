@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   correlationSentence,
   groupMedianSentence,
+  leadersSentence,
   leaderSentence,
   modelSentence,
   outlierSentence,
+  scenarioSentences,
   shareSentence,
   spreadSentences,
   strongestPairs,
@@ -142,4 +144,41 @@ void test("the model verdict gives relative error and the gain over the baseline
     "The best model, decision tree, is off by 26.31 t of NOₓ per unit-year on average (21 % of the actual value), 76 % less than the simple baseline. It accounts for 95 % of the variation in NOₓ between unit-years (R²).",
   );
   assert.equal(modelSentence({ name: "x", mae: null, r2: null }, 1, 1), null);
+});
+
+void test("impact leaders are grouped by who leads", () => {
+  assert.equal(
+    leadersSentence([
+      { category: "Global warming", group: "TX" },
+      { category: "Acidification", group: "TX" },
+      { category: "Smog formation", group: "TX" },
+      { category: "Human health (particulate)", group: "TX" },
+    ]),
+    "TX leads all four categories.",
+  );
+  assert.equal(
+    leadersSentence([
+      { category: "Global warming", group: "TX" },
+      { category: "Acidification", group: "MO" },
+      { category: "Smog formation", group: "TX" },
+    ]),
+    "TX leads global warming and smog formation; MO leads acidification.",
+  );
+  assert.equal(leadersSentence([]), null);
+});
+
+void test("scenarios read as the largest change and the biggest disagreement", () => {
+  const rows = [
+    { model: "Ridge", scenario: "Baseline", diffPct: 0 },
+    { model: "Ridge", scenario: "Add SCR", diffPct: -58.9 },
+    { model: "Ridge", scenario: "Gas", diffPct: -68.8 },
+    { model: "the tree", scenario: "Baseline", diffPct: 0 },
+    { model: "the tree", scenario: "Add SCR", diffPct: 0 },
+    { model: "the tree", scenario: "Gas", diffPct: -9.1 },
+  ];
+  assert.deepEqual(scenarioSentences(rows), [
+    "Largest change: Gas with Ridge (-69 %); Gas with the tree (-9 %).",
+    "The models disagree most on Gas (Ridge -69 %, the tree -9 %), so treat that effect as uncertain.",
+  ]);
+  assert.deepEqual(scenarioSentences([]), []);
 });

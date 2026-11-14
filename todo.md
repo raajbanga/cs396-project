@@ -74,8 +74,10 @@ without saying what they mean.
     group, outliers), Relationships (strength in words; strongest and most opposed pairs),
     Compare (its Result, same style), Models (error in tons and %, gain over baseline, R²),
     What-if curve (each model's range). Big tables fold under "Show details"-style sections;
-    numbers ≥ 10,000 show short (19.5B). Still open below: glossary tooltips, TRACI reading,
-    the persistence result, scenario reading, Ridge coefficients in words.
+    numbers ≥ 10,000 show short (19.5B). Also done: glossary on table headers (`src/lib/glossary.ts`), TRACI reading (who leads,
+    what "kg CO₂ eq" means), the persistence result on Models, scenario reading (largest change,
+    biggest model disagreement), coefficients/importance in words, quick State/Fuel filters.
+    Still open: definitions for terms inside sentences and subtitles (only headers have them).
   - Shared fixes, one place each: (1) a **reading line** under each chart title, computed from
     the data, saying what the chart shows (e.g. "Gas emitted more CO₂ than coal in 2023 and 2024; coal fell 41 % from 2015 to 2025"); (2) a **glossary tooltip** (one dictionary, an ⓘ next to the term) for MAE,
     RMSE, R², MAPE, IQR, P5–P95, Pearson/Spearman, log scale, kg CO₂ eq, standardized

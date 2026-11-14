@@ -221,3 +221,80 @@ export function modelSentence(
     s += ` It accounts for ${pct(best.r2)} of the variation in NOₓ between unit-years (R²).`;
   return s;
 }
+
+/** "TX leads all four categories." or "TX leads global warming and smog; MO leads acidification." */
+export function leadersSentence(
+  leaders: { category: string; group: string }[],
+) {
+  if (!leaders.length) return null;
+  const byGroup = new Map<string, string[]>();
+  for (const { category, group } of leaders)
+    byGroup.set(group, [...(byGroup.get(group) ?? []), category]);
+  if (byGroup.size === 1 && leaders.length > 1)
+    return `${leaders[0]!.group} leads all ${leaders.length === 4 ? "four" : leaders.length} categories.`;
+  const list = (xs: string[]) =>
+    xs.length < 2
+      ? (xs[0] ?? "")
+      : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
+  return `${[...byGroup]
+    .map(
+      ([group, cats]) =>
+        `${group} leads ${list(cats.map((c) => (/^[A-Z][A-Z]/.test(c) ? c : c.charAt(0).toLowerCase() + c.slice(1))))}`,
+    )
+    .join("; ")}.`;
+}
+
+/**
+ * The scenario chart in words: each model's largest change, and where two models disagree most
+ * (by at least 20 points), since that is where the data can't settle the effect.
+ * `diffPct` is in percent (−58.9 means −58.9 %).
+ */
+export function scenarioSentences(
+  results: { model: string; scenario: string; diffPct: number | null }[],
+) {
+  const out: string[] = [];
+  const pctText = (v: number) => {
+    const r = Math.round(v) || 0;
+    return `${r > 0 ? "+" : ""}${r} %`;
+  };
+  const models = [...new Set(results.map((r) => r.model))];
+  const biggest = models
+    .map(
+      (model) =>
+        results
+          .filter(
+            (r): r is typeof r & { diffPct: number } =>
+              r.model === model && r.diffPct !== null,
+          )
+          .sort((a, b) => Math.abs(b.diffPct) - Math.abs(a.diffPct))[0],
+    )
+    .filter(
+      (r): r is NonNullable<typeof r> =>
+        r !== undefined && Math.abs(r.diffPct) >= 0.5,
+    );
+  if (biggest.length)
+    out.push(
+      `Largest change: ${biggest.map((r) => `${r.scenario} with ${r.model} (${pctText(r.diffPct)})`).join("; ")}.`,
+    );
+  if (models.length === 2) {
+    const [a, b] = models as [string, string];
+    const gaps = [...new Set(results.map((r) => r.scenario))]
+      .map((scenario) => {
+        const x = results.find(
+          (r) => r.model === a && r.scenario === scenario,
+        )?.diffPct;
+        const y = results.find(
+          (r) => r.model === b && r.scenario === scenario,
+        )?.diffPct;
+        return x == null || y == null ? null : { scenario, x, y };
+      })
+      .filter((g) => g !== null)
+      .sort((p, q) => Math.abs(q.x - q.y) - Math.abs(p.x - p.y));
+    const g = gaps[0];
+    if (g && Math.abs(g.x - g.y) >= 20)
+      out.push(
+        `The models disagree most on ${g.scenario} (${a} ${pctText(g.x)}, ${b} ${pctText(g.y)}), so treat that effect as uncertain.`,
+      );
+  }
+  return out;
+}
