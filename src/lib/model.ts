@@ -241,11 +241,16 @@ export function sensitivityGrid(
   ) {
     grid.push(toValue(x));
   }
+  // Every model input is a physical amount (heat, load, hours, MW, years, a rate): below 0 is
+  // impossible, so those points are dropped and counted for the page to say so.
+  const unique = [...new Set(grid)];
+  const values = unique.filter((v) => v >= 0).sort((a, b) => a - b);
   return {
-    values: [...new Set(grid)].sort((a, b) => a - b),
+    values,
     capped: grid.length >= maxPoints,
     reversed,
     step: size,
+    negative: unique.length - values.length,
   };
 }
 
@@ -289,6 +294,7 @@ export function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
   const fuel = gas ? "Coal" : "Pipeline Natural Gas";
   const scr = base.scr ? 0 : 1;
   const signed = (p: number) => `${p > 0 ? "+" : ""}${p} %`;
+  const efficientPct = heatPct < 0 ? heatPct : -5;
   return [
     { name: "Baseline", change: "As reported", inputs: base },
     {
@@ -318,11 +324,13 @@ export function scenarios(base: ModelInputs, loadPct: number, heatPct: number) {
       inputs: { ...base, primary_fuel: fuel },
     },
     {
+      // Efficiency means less fuel for the same load: the heat-input change when it is a cut,
+      // else a fixed 5 % cut (a rise in heat input is not more efficient).
       name: "High efficiency",
-      change: `Heat input × ${1 + heatPct / 100} with the same gross load, plus SCR`,
+      change: `Heat input × ${1 + efficientPct / 100}${heatPct < 0 ? "" : " (a 5 % cut; the heat input change above is not a cut)"} with the same gross load, plus SCR`,
       inputs: {
         ...base,
-        heat_input_mmbtu: scaleBy(base.heat_input_mmbtu, heatPct),
+        heat_input_mmbtu: scaleBy(base.heat_input_mmbtu, efficientPct),
         scr: 1,
       },
     },

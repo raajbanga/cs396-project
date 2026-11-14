@@ -263,3 +263,24 @@ void test("changedInputs names each changed input with its value and the baselin
   );
   assert.equal(changedInputs(base, efficient!.inputs).length, 1); // heat input; SCR already on
 });
+
+void test("sensitivityGrid: drops impossible negative values and counts them", () => {
+  const pct = sensitivityGrid(100, -200, 0, 50, false);
+  assert.deepEqual(pct.values, [0, 50, 100]);
+  assert.equal(pct.negative, 2); // -200 % and -150 %
+  const raw = sensitivityGrid(10, -10, 10, 10, true);
+  assert.deepEqual(raw.values, [0, 10]);
+  assert.equal(raw.negative, 1);
+  assert.equal(sensitivityGrid(100, -50, 50, 25, false).negative, 0);
+});
+
+void test("scenarios: high efficiency always cuts heat input", () => {
+  const base = modelInputs(raw);
+  const heat = base.heat_input_mmbtu!;
+  const efficient = (pct: number) =>
+    scenarios(base, 10, pct).find((s) => s.name === "High efficiency")!;
+  assert.equal(efficient(-8).inputs.heat_input_mmbtu, heat * 0.92);
+  // A rise in heat input isn't efficiency: a 5 % cut is used, and the description says so.
+  assert.equal(efficient(10).inputs.heat_input_mmbtu, heat * 0.95);
+  assert.match(efficient(10).change, /5 % cut/);
+});
