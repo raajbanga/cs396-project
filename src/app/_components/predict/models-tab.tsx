@@ -3,6 +3,8 @@
 import { BarList } from "~/components/charts/bars";
 import { ScatterPlot } from "~/components/charts/scatter";
 import { ChartFrame, queryStatus } from "~/components/ui/chart";
+import { Takeaways } from "~/components/ui/takeaways";
+import { modelSentence } from "~/lib/takeaways";
 import { ExportButton } from "~/components/ui/export-button";
 import {
   Disclosure,
@@ -148,8 +150,33 @@ export function ModelsTab({
     .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
     .slice(0, 15);
 
+  // The plain answer: how far off the best model is, in tons and relative to the actual value.
+  const best = sorted
+    .filter((m) => m !== base)
+    .sort(
+      (a, b) =>
+        (metric(a, "test", "mae") ?? Infinity) -
+        (metric(b, "test", "mae") ?? Infinity),
+    )[0];
+
   return (
     <div className="space-y-8">
+      {best && (
+        <Takeaways
+          items={[
+            modelSentence(
+              {
+                name: best.name,
+                mae: metric(best, "test", "mae"),
+                r2: metric(best, "test", "r2"),
+              },
+              base ? metric(base, "test", "mae") : null,
+              metric(best, "test", "mape"),
+            ),
+            `Tested on ${chosen.testYears}, years none of the models saw while training.`,
+          ]}
+        />
+      )}
       <ChartFrame
         title={`Test error, ${chosen.testYears}: lower is better`}
         subtitle={`Mean absolute error per unit-year in short tons NOₓ, with 95 % intervals; against the baseline, ${gains.join(", ")} lower.`}
@@ -185,68 +212,73 @@ export function ModelsTab({
         />
       </ChartFrame>
 
-      <Section
+      <Disclosure
         title="All metrics"
-        note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the ablation column refits without same-year heat input, load, and hours; small print under a test value is its 95 % bootstrap interval over test units."
-        actions={
-          <ExportButton
-            name="model-comparison"
-            title="NOₓ model comparison"
-            table={{
-              head: [
-                "model",
-                "settings",
-                ...METRICS.map((m) => m.key),
-                ...CI_METRICS.flatMap((k) => [
-                  `test_${k}_ci_low`,
-                  `test_${k}_ci_high`,
-                ]),
-              ],
-              rows: sorted.map((m) => [
-                m.id,
-                settings(m),
-                ...METRICS.map((c) => c.get(m)),
-                ...CI_METRICS.flatMap((k) => interval(m, k) ?? [null, null]),
-              ]),
-            }}
-            meta={{ models: sorted.map(modelMetadata) }}
-          />
-        }
+        hint="Validation and test error, R², MAPE, intervals, and the ablation, per model"
       >
-        <ReportTable
-          head={["Model", "Settings", ...METRICS.map((m) => m.label)]}
-          rows={sorted.map((m) => [
-            <span key="n" className="text-fg font-medium">
-              {m.name}
-            </span>,
-            settings(m),
-            ...METRICS.map((c) => {
-              const v = c.get(m);
-              const values = sorted.map(c.get).filter((x) => x !== null);
-              const best = c.lowerIsBetter
-                ? Math.min(...values)
-                : Math.max(...values);
-              const text =
-                v === best && values.length > 1 ? (
-                  <span className="text-fg font-semibold">{c.format(v)}</span>
-                ) : (
-                  c.format(v)
-                );
-              const ci = c.ci && interval(m, c.ci);
-              return ci ? (
-                <span key={c.key} title="95 % bootstrap interval">
-                  {text}
-                  <span className="text-fg-muted block text-xs">
-                    {formatInterval(ci)}
+        <Section
+          title=""
+          note="Best value per column in bold. MAPE counts unit-years of at least 1 ton; the ablation column refits without same-year heat input, load, and hours; small print under a test value is its 95 % bootstrap interval over test units."
+          actions={
+            <ExportButton
+              name="model-comparison"
+              title="NOₓ model comparison"
+              table={{
+                head: [
+                  "model",
+                  "settings",
+                  ...METRICS.map((m) => m.key),
+                  ...CI_METRICS.flatMap((k) => [
+                    `test_${k}_ci_low`,
+                    `test_${k}_ci_high`,
+                  ]),
+                ],
+                rows: sorted.map((m) => [
+                  m.id,
+                  settings(m),
+                  ...METRICS.map((c) => c.get(m)),
+                  ...CI_METRICS.flatMap((k) => interval(m, k) ?? [null, null]),
+                ]),
+              }}
+              meta={{ models: sorted.map(modelMetadata) }}
+            />
+          }
+        >
+          <ReportTable
+            head={["Model", "Settings", ...METRICS.map((m) => m.label)]}
+            rows={sorted.map((m) => [
+              <span key="n" className="text-fg font-medium">
+                {m.name}
+              </span>,
+              settings(m),
+              ...METRICS.map((c) => {
+                const v = c.get(m);
+                const values = sorted.map(c.get).filter((x) => x !== null);
+                const best = c.lowerIsBetter
+                  ? Math.min(...values)
+                  : Math.max(...values);
+                const text =
+                  v === best && values.length > 1 ? (
+                    <span className="text-fg font-semibold">{c.format(v)}</span>
+                  ) : (
+                    c.format(v)
+                  );
+                const ci = c.ci && interval(m, c.ci);
+                return ci ? (
+                  <span key={c.key} title="95 % bootstrap interval">
+                    {text}
+                    <span className="text-fg-muted block text-xs">
+                      {formatInterval(ci)}
+                    </span>
                   </span>
-                </span>
-              ) : (
-                <span key={c.key}>{text}</span>
-              );
-            }),
-          ])}
-        />
-      </Section>
+                ) : (
+                  <span key={c.key}>{text}</span>
+                );
+              }),
+            ])}
+          />
+        </Section>
+      </Disclosure>
 
       <Controls>
         <Field group label="Model">

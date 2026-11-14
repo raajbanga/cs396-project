@@ -4,9 +4,24 @@ import { ProgressBar } from "~/components/ui/metric-bar";
 import { Disclosure, ReportTable, Section } from "~/components/ui/report";
 import { KpiStrip, StatTile } from "~/components/ui/stat-tile";
 import type { VariableInfo } from "~/lib/analysis";
+import { Takeaways } from "~/components/ui/takeaways";
+import { formatStat } from "~/lib/analysis";
+import {
+  leaderSentence,
+  measureName,
+  shareSentence,
+  trendSentence,
+} from "~/lib/takeaways";
 import { formatNumber } from "~/lib/utils";
+import { api } from "~/trpc/react";
 import { MapChart, RankingChart, TrendChart } from "./charts";
-import { bind, combinedLabel, VariableField, type TabProps } from "./shared";
+import {
+  bind,
+  combinedLabel,
+  findInfo,
+  VariableField,
+  type TabProps,
+} from "./shared";
 
 const KINDS: { group: VariableInfo["group"]; note: string }[] = [
   { group: "Measured", note: "As reported to CAMPD." },
@@ -32,34 +47,12 @@ const KINDS: { group: VariableInfo["group"]; note: string }[] = [
 export function OverviewTab(props: TabProps) {
   const { summary } = props;
   if (!summary) return null;
-  const { records, years } = summary;
   return (
     <div className="space-y-6">
-      <KpiStrip className="lg:grid-cols-4">
-        <StatTile
-          variant="card"
-          label="Unit-years"
-          value={formatNumber(records)}
-        />
-        <StatTile
-          variant="card"
-          label="Facilities"
-          value={formatNumber(summary.facilities)}
-        />
-        <StatTile
-          variant="card"
-          label="Units"
-          value={formatNumber(summary.units)}
-        />
-        <StatTile
-          variant="card"
-          label="Reporting years"
-          value={formatNumber(years.length)}
-          subtext={years.length ? `${years[0]}–${years.at(-1)}` : "—"}
-        />
-      </KpiStrip>
-
-      <VariableField {...bind(props, "variable")} label="Show" />
+      <div className="space-y-4">
+        <VariableField {...bind(props, "variable")} label="Show" />
+        <OverviewTakeaways {...props} />
+      </div>
       <TrendChart {...props} />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <MapChart {...props} />
@@ -68,6 +61,74 @@ export function OverviewTab(props: TabProps) {
 
       <DataQuality {...props} />
     </div>
+  );
+}
+
+/**
+ * The answer first: what the selection is, how the variable changed, which fuel dominates it, and
+ * how much the largest facility accounts for. Shares only make sense for totals, so rates and
+ * means get the trend alone.
+ */
+function OverviewTakeaways({ filters, view, catalog, summary }: TabProps) {
+  const info = findInfo(catalog, view.variable);
+  const variables = [view.variable];
+  const sum = info?.aggregation === "sum";
+  const years = api.analysis.aggregate.useQuery({
+    filters,
+    variables,
+    by: "year",
+  });
+  const fuels = api.analysis.aggregate.useQuery(
+    { filters, variables, by: "fuelClass", limit: 30 },
+    { enabled: sum },
+  );
+  // The ranking chart's own query: shared from the cache.
+  const top = api.analysis.aggregate.useQuery(
+    { filters, variables, by: "facility", order: "desc", limit: 15 },
+    { enabled: sum },
+  );
+  if (!summary || !info) return null;
+  const value = (r: { values: Record<string, number | null> }) =>
+    r.values[view.variable] ?? null;
+  const yearRows = years.data?.rows ?? [];
+  const total = yearRows.reduce((t, r) => t + (value(r) ?? 0), 0);
+  const span = summary.years.length
+    ? summary.years.length === 1
+      ? ` in ${summary.years[0]}`
+      : `, ${summary.years[0]}–${summary.years.at(-1)}`
+    : "";
+  return (
+    <Takeaways
+      items={[
+        `${formatNumber(summary.records)} unit-years from ${formatNumber(summary.facilities)} facilities and ${formatNumber(summary.units)} units${span}.`,
+        sum &&
+          total > 0 &&
+          `${measureName(info.label, "sum")}: ${formatStat(total)} ${info.unit}.`,
+        trendSentence({
+          label: info.label,
+          unit: info.unit,
+          aggregation: info.aggregation,
+          points: yearRows.map((r) => ({
+            year: Number(r.group),
+            value: value(r),
+          })),
+        }),
+        sum &&
+          shareSentence(
+            (fuels.data?.rows ?? []).map((r) => ({
+              group: r.group,
+              value: value(r),
+              n: r.n,
+            })),
+          ),
+        sum &&
+          top.data?.rows[0] &&
+          leaderSentence(
+            { group: top.data.rows[0].group, value: value(top.data.rows[0]) },
+            total,
+          ),
+      ]}
+    />
   );
 }
 

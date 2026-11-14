@@ -62,7 +62,10 @@ export function Section({
     <section className="space-y-2.5">
       <div className="flex items-end gap-3">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <h2 className="text-fg text-base font-semibold">{title}</h2>
+          {/* Inside a Disclosure the disclosure's title stands in for it. */}
+          {title && (
+            <h2 className="text-fg text-base font-semibold">{title}</h2>
+          )}
           {note && <p className="text-fg-muted max-w-3xl text-xs">{note}</p>}
         </div>
         {actions && <div className="flex shrink-0 gap-2">{actions}</div>}

@@ -68,6 +68,14 @@ without saying what they mean.
       plain sub-label (heat rate "9.4 MMBtu/MWh", "≈ 1.7M homes"), and a short paragraph built
       from the data says what they mean. Phase 2 pages have numbers and controls, and the
       little explanation there is is hidden under "About this chart".
+  - **Done 11/13:** every Analyze tab and Models opens with plain sentences built from the data
+    (`src/lib/takeaways.ts`, tested): Overview (selection, total, yearly trend, top fuel's
+    share, top facility's share), Distribution (typical range, mean vs median, top/bottom
+    group, outliers), Relationships (strength in words; strongest and most opposed pairs),
+    Compare (its Result, same style), Models (error in tons and %, gain over baseline, R²),
+    What-if curve (each model's range). Big tables fold under "Show details"-style sections;
+    numbers ≥ 10,000 show short (19.5B). Still open below: glossary tooltips, TRACI reading,
+    the persistence result, scenario reading, Ridge coefficients in words.
   - Shared fixes, one place each: (1) a **reading line** under each chart title, computed from
     the data, saying what the chart shows (e.g. "Gas emitted more CO₂ than coal in 2023 and 2024; coal fell 41 % from 2015 to 2025"); (2) a **glossary tooltip** (one dictionary, an ⓘ next to the term) for MAE,
     RMSE, R², MAPE, IQR, P5–P95, Pearson/Spearman, log scale, kg CO₂ eq, standardized
