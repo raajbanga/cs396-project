@@ -11,7 +11,9 @@ import { TryExamples } from "~/components/ui/try-examples";
 import {
   ADVANCED_FILTER_KEYS,
   DEFAULT_FILTERS,
+  describeRanking,
   isFilterActive,
+  RANK_METRICS,
   TOP_N_OPTIONS,
   RANGE_FIELDS,
   type FacilityFilters,
@@ -170,7 +172,9 @@ function activeChips(filters: FacilityFilters, names: Record<string, string>) {
     const maxStrict = on(`${key}MaxStrict`);
     const bounds =
       min && max && !minStrict && !maxStrict
-        ? `${min}–${max}`
+        ? min === max
+          ? min
+          : `${min}–${max}`
         : [
             min && `${minStrict ? ">" : "≥"} ${min}`,
             max && `${maxStrict ? "<" : "≤"} ${max}`,
@@ -182,13 +186,11 @@ function activeChips(filters: FacilityFilters, names: Record<string, string>) {
       keys: [`${key}Min`, `${key}Max`, `${key}MinStrict`, `${key}MaxStrict`],
     });
   }
-  if (on("topN") || on("rankGroup")) {
+  const ranking = describeRanking(filters);
+  if (ranking) {
     chips.push({
-      label:
-        [on("topN") && `First ${filters.topN}`, on("rankGroup") && "per state"]
-          .filter(Boolean)
-          .join(" ") || "Ranked",
-      keys: ["topN", "rankGroup"],
+      label: ranking,
+      keys: ["topN", "topBy", "topDir", "topLevel", "rankGroup"],
     });
   }
   return chips;
@@ -453,43 +455,83 @@ function AdvancedFilters({
         </div>
       </fieldset>
 
-      {view !== "flags" && !analysis && (
-        <div className="flex flex-wrap items-end gap-3">
-          <Field label="Ranking">
-            <Select
-              value={filters.topN}
-              onValueChange={(value) => onFilterChange("topN", value)}
-              options={[
-                { value: "ALL", label: "All rows" },
-                ...TOP_N_OPTIONS.map((n) => ({
-                  value: String(n),
-                  label: `First ${n}`,
-                })),
-              ]}
-              size="toolbar"
-              className="w-32"
-            />
-          </Field>
-          <Field label="Group">
-            <Select
-              value={filters.rankGroup}
-              onValueChange={(value) => onFilterChange("rankGroup", value)}
-              options={[
-                { value: "ALL", label: "Overall" },
-                { value: "state", label: "Per state" },
-              ]}
-              size="toolbar"
-              className="w-32"
-            />
-          </Field>
-          <p className="text-fg-muted max-w-xl pb-2 text-xs">
-            Ranks follow the table sort: sort a column descending for Top-N,
-            ascending for Bottom-N.{" "}
-            {view === "unit-years"
-              ? "Each row is one unit in one reporting year."
-              : "Unit and range filters keep facilities with at least one matching unit-year; a reporting year also scopes the CO₂ totals."}
+      {view !== "flags" && (
+        <fieldset className="space-y-2">
+          <legend className={FIELD_LABEL}>Top N</legend>
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label="Keep">
+              <Select
+                value={filters.topN}
+                onValueChange={(value) => onFilterChange("topN", value)}
+                options={[
+                  { value: "ALL", label: "All rows" },
+                  ...TOP_N_OPTIONS.map((n) => ({
+                    value: String(n),
+                    label: `First ${n}`,
+                  })),
+                ]}
+                size="toolbar"
+                className="w-32"
+              />
+            </Field>
+            {(
+              [
+                [
+                  "topLevel",
+                  "Of",
+                  [
+                    { value: "facility", label: "Facilities" },
+                    { value: "unit", label: "Unit-years" },
+                  ],
+                ],
+                [
+                  "topBy",
+                  "By",
+                  RANK_METRICS.map((m) => ({
+                    value: m.key,
+                    label: `${m.label} (${m.unit})`,
+                  })),
+                ],
+                [
+                  "topDir",
+                  "Order",
+                  [
+                    { value: "desc", label: "Highest first" },
+                    { value: "asc", label: "Lowest first" },
+                  ],
+                ],
+                [
+                  "rankGroup",
+                  "Group",
+                  [
+                    { value: "ALL", label: "Overall" },
+                    { value: "state", label: "Per state" },
+                  ],
+                ],
+              ] as const
+            ).map(([key, label, options]) => (
+              <Field key={key} label={label}>
+                <Select
+                  value={filters[key]}
+                  onValueChange={(value) => onFilterChange(key, value)}
+                  options={options}
+                  size="toolbar"
+                  disabled={filters.topN === "ALL"}
+                  className={key === "topBy" ? "w-52" : "w-36"}
+                />
+              </Field>
+            ))}
+          </div>
+          <p className="text-fg-muted max-w-2xl text-xs">
+            Keeps only the first N facilities or unit-years after the other
+            filters, and every page (Explore, Map, Analyze) and download uses
+            the same rows. A facility ranks by its matching unit-years added up
+            (rates: total over total).
+            {view === "unit-years" && !analysis
+              ? " Sorting the table only changes the order."
+              : ""}
           </p>
-        </div>
+        </fieldset>
       )}
     </div>
   );
@@ -511,7 +553,7 @@ interface FilterBarProps {
    * instead.
    */
   onPickFacility?: (facility: FacilitySuggestion) => void;
-  /** Analyze page: the year range among the basic fields, no Top-N ranking (analyses ignore it). */
+  /** Analyze page: the year range among the basic fields instead of a single year. */
   analysis?: boolean;
 }
 
@@ -538,7 +580,9 @@ export function FacilityFilterBar({
       isFilterActive(filters, key) &&
       // A facility picked in the search box shows as a chip; it shouldn't open Advanced.
       key !== "facilityId" &&
-      !(analysis && /^year|^topN|^rankGroup/.test(key)),
+      !(analysis && key.startsWith("year")) &&
+      // One Top N counts once, however many of its settings are changed.
+      !["topBy", "topDir", "topLevel", "rankGroup"].includes(key),
   ).length;
   // Until toggled by hand, Advanced is open exactly when one of its filters is set.
   const [advancedToggled, setAdvancedToggled] = useState<boolean | null>(null);

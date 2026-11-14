@@ -54,7 +54,7 @@ export const DEFAULT_VIEW = {
 export type AnalysisView = typeof DEFAULT_VIEW;
 
 /** The selection when the page opens with no parameters: the complete API years. */
-const DEFAULT_ANALYSIS_FILTERS: FacilityFilters = {
+export const DEFAULT_ANALYSIS_FILTERS: FacilityFilters = {
   ...DEFAULT_FILTERS,
   yearMin: "2015",
   yearMax: "2025",

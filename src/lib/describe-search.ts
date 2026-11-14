@@ -865,11 +865,17 @@ export function parseDescription(
     }
   });
 
+  const unitView = views.some((v) => v.tab === "units");
   if (rankWord) {
     // "the top facility in each state" = 1 per state; plural or unspecified = 10.
     topN ??=
       views.some((v) => v.singular) && !views.some((v) => !v.singular) ? 1 : 10;
+    // Part of the selection, so every page keeps the same rows: "units" ranks unit-years,
+    // anything else ranks facilities by their matching unit-years added up.
     filters.topN = String(topN);
+    filters.topBy = sort!.by;
+    filters.topDir = sort!.dir;
+    filters.topLevel = unitView ? "unit" : "facility";
   }
 
   const connective = new Set<Item["t"]>([
@@ -882,14 +888,20 @@ export function parseDescription(
     if (!used.has(i) && !connective.has(item.t)) unrecognized.push(item.raw);
   }
 
-  let tab = views.some((v) => v.tab === "units")
+  let tab = unitView
     ? ("units" as const)
-    : views.length
+    : views.length || rankWord
       ? ("explorer" as const)
       : undefined;
-  // The Facilities table only sorts by CO₂; other metrics and unit-year thresholds need the Units view.
+  // The Facilities table only shows CO₂; a display sort or threshold on another metric needs the
+  // Units view. A facility ranking stays on Facilities: the facilities are what was asked for.
   const sortMetric = sort?.by ?? qualitative[0]?.metric;
-  if (tab === "explorer" && sortMetric && sortMetric !== "co2MassTons")
+  if (
+    tab === "explorer" &&
+    !rankWord &&
+    sortMetric &&
+    sortMetric !== "co2MassTons"
+  )
     tab = "units";
 
   return { filters, tab, sort, qualitative, unrecognized };

@@ -7,6 +7,7 @@ import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import {
   analysisSearchParams,
+  DEFAULT_ANALYSIS_FILTERS,
   DEFAULT_VIEW,
   type AnalysisView,
   type parseAnalysisParams,
@@ -15,6 +16,7 @@ import { exportUrl } from "~/lib/csv";
 import { ExportContext } from "~/components/ui/export-button";
 import { analyzeMetadata } from "~/lib/export-bundle";
 import {
+  applyDescribed,
   DEFAULT_FILTERS,
   filterSearchParams,
   type FilterChangeHandler,
@@ -57,10 +59,16 @@ export function AnalyzeView({
   const setFilter: FilterChangeHandler = (key, value) =>
     setFilters((f) => ({ ...f, [key]: value }));
   // The explorer's description search; analyses use its filters (sort and view don't apply).
+  // A search that names no years keeps the default 2015–2025 range.
   const { describe, reset: resetDescribe } = useDescribeSearch({
     initialText: initial.filters.search,
     onNameSearch: (text) => setFilter("search", text),
-    onApply: (r) => setFilters(r.filters),
+    onApply: (r) =>
+      setFilters(
+        applyDescribed(DEFAULT_ANALYSIS_FILTERS, r.filters, {
+          yearRange: true,
+        }),
+      ),
   });
 
   const [catalog] = api.analysis.catalog.useSuspenseQuery();

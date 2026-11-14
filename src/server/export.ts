@@ -149,7 +149,6 @@ function selectUnitYears(
   return db
     .select()
     .from(ranked)
-    .where(view.where)
     .orderBy(asc(ranked.facilityId), asc(ranked.unitId), asc(ranked.year));
 }
 

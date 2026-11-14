@@ -83,10 +83,6 @@ async function selectRows(filters: FilterInput): Promise<AnalysisRow[]> {
     .where(and(...unitYearConditions(filters)));
 }
 
-/** Ranking (Top N) is an Explore view, not a selection: analyses ignore it. */
-const selection = ({ topN: _n, rankGroup: _g, ...filters }: FilterInput) =>
-  filters;
-
 const CACHE_MS = 5 * 60_000;
 const cache = new Map<string, { at: number; rows: Promise<AnalysisRow[]> }>();
 
@@ -99,11 +95,12 @@ const dataVersion = async () =>
  * share one query and an import is visible at once.
  */
 export async function analysisRows(filters: FilterInput) {
-  const key = JSON.stringify([selection(filters), await dataVersion()]);
+  // A Top N is part of the selection (unitYearConditions), as on Explore and Map.
+  const key = JSON.stringify([filters, await dataVersion()]);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.rows;
   if (cache.size > 20) cache.clear();
-  const rows = selectRows(selection(filters));
+  const rows = selectRows(filters);
   cache.set(key, { at: Date.now(), rows });
   rows.catch(() => cache.delete(key));
   return rows;

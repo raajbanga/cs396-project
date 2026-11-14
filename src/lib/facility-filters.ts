@@ -46,6 +46,22 @@ export type UnitSortField = (typeof UNIT_SORT_FIELDS)[number];
 /** Top-N choices; "ALL" = no limit. With rankGroup "state", N applies within each state. */
 export const TOP_N_OPTIONS = [5, 10, 20, 50, 100] as const;
 
+/**
+ * §8.3 ranking measures (`topBy`). A unit-year ranks by its own value; a facility by its matching
+ * unit-years added up (rates: the ratio of the sums; capacity: the plant's nameplate total).
+ */
+export const RANK_METRICS = [
+  ...UNIT_METRICS,
+  { key: "capacity", label: "Capacity", unit: "MW" },
+  { key: "co2Intensity", label: "CO₂ intensity", unit: "lb/MWh" },
+  { key: "heatRate", label: "Heat rate", unit: "MMBtu/MWh" },
+] as const;
+export type RankMetric = (typeof RANK_METRICS)[number]["key"];
+export const isRankMetric = (v: string): v is RankMetric =>
+  RANK_METRICS.some((m) => m.key === v);
+/** Ranking keys that only mean something while `topN` is set. */
+const RANK_KEYS = ["topBy", "topDir", "topLevel", "rankGroup"] as const;
+
 const text = z.string().optional();
 
 /**
@@ -68,7 +84,10 @@ export const facilityFilterSchema = z.object({
   pmControl: text,
   programCode: text, // emissions program as reported that year, e.g. "ARP", "CSNOX"
   operatingStatus: text,
-  topN: text,
+  topN: text, // keep only the first N facilities or unit-years by `topBy`
+  topBy: text, // a RANK_METRICS key
+  topDir: text, // "desc" = highest first, "asc" = lowest first
+  topLevel: text, // "facility" | "unit": what is ranked
   rankGroup: text, // "state" = rank within each state
   origin: text, // "API" | "UPLOAD": where the unit-year record came from
   auditFlag: text, // physical-sanity rule (flag_type) the unit-year was flagged with
@@ -96,6 +115,9 @@ export const DEFAULT_FILTERS = {
   programCode: "ALL",
   operatingStatus: "ALL",
   topN: "ALL",
+  topBy: "co2MassTons",
+  topDir: "desc",
+  topLevel: "facility",
   rankGroup: "ALL",
   origin: "ALL",
   auditFlag: "ALL",
@@ -123,14 +145,67 @@ export const ADVANCED_FILTER_KEYS = (
     !(BASIC_FILTER_KEYS as readonly string[]).includes(k) && !isStrictKey(k),
 );
 
-/** Set to a non-default value; a strict flag counts only while its bound is set. */
+/**
+ * Set to a non-default value; a strict flag counts only while its bound is set, and the ranking
+ * measure, order, level, and grouping only while Top N is set.
+ */
 export const isFilterActive = (
   filters: FacilityFilters,
   key: keyof FacilityFilters,
 ): boolean =>
   filters[key].trim() !== DEFAULT_FILTERS[key] &&
   (!isStrictKey(key) ||
-    isFilterActive(filters, key.slice(0, -"Strict".length) as RangeKey));
+    isFilterActive(filters, key.slice(0, -"Strict".length) as RangeKey)) &&
+  (!(RANK_KEYS as readonly string[]).includes(key) ||
+    isFilterActive(filters, "topN"));
+
+/** The page's `defaults` with a description search's filters on top (only the ones it set). A search
+ * that names no year keeps the page's year range; one that does replaces it. */
+export function applyDescribed(
+  defaults: FacilityFilters,
+  described: FacilityFilters,
+  { yearRange = false } = {},
+): FacilityFilters {
+  const set = (
+    Object.keys(DEFAULT_FILTERS) as (keyof FacilityFilters)[]
+  ).filter((k) => described[k] !== DEFAULT_FILTERS[k]);
+  const base = set.some((k) => k.startsWith("year"))
+    ? { ...defaults, year: "ALL", yearMin: "", yearMax: "" }
+    : defaults;
+  const next = {
+    ...base,
+    ...Object.fromEntries(set.map((k) => [k, described[k]])),
+  };
+  // Pages that pick years as a range (Analyze) show "in 2025" as 2025–2025.
+  if (yearRange && next.year !== "ALL") {
+    return { ...next, yearMin: next.year, yearMax: next.year, year: "ALL" };
+  }
+  return next;
+}
+
+/** "Top 10 facilities by CO₂", "Lowest 5 unit-years by heat rate per state"; undefined without Top N. */
+export function describeRanking(filters: FacilityFilters) {
+  if (!isFilterActive(filters, "topN")) return undefined;
+  const { label } =
+    RANK_METRICS.find((m) => m.key === filters.topBy) ??
+    RANK_METRICS.find((m) => m.key === DEFAULT_FILTERS.topBy)!;
+  const n = Number(filters.topN);
+  const what =
+    filters.topLevel === "unit"
+      ? n === 1
+        ? "unit-year"
+        : "unit-years"
+      : n === 1
+        ? "facility"
+        : "facilities";
+  // "heat rate", but "CO₂ intensity": formulas keep their capitals.
+  const measure = /^[A-Z]{2}/.test(label)
+    ? label
+    : label[0]!.toLowerCase() + label.slice(1);
+  return `${filters.topDir === "asc" ? "Lowest" : "Top"} ${n} ${what} by ${measure}${
+    filters.rankGroup === "state" ? " per state" : ""
+  }`;
+}
 
 export const DEFAULT_TABLE_STATE = {
   page: 1,
@@ -276,6 +351,18 @@ export function parseExplorerParams(params: Params): ExplorerState {
     sortBy: oneOf(sorts, get("sort")) ?? defaults.sortBy,
     sortDir: oneOf(["asc", "desc"] as const, get("dir")) ?? defaults.sortDir,
   });
+  // Links from before the ranking was part of the filters ranked by the table's sort.
+  if (get("topN") !== undefined && get("topBy") === undefined) {
+    const { sortBy, sortDir } = state[key];
+    const by = sortBy === "co2" ? "co2MassTons" : sortBy;
+    if ((tab === "explorer" || tab === "units") && isRankMetric(by)) {
+      Object.assign(filters, {
+        topBy: by,
+        topDir: sortDir,
+        topLevel: tab === "units" ? "unit" : "facility",
+      });
+    }
+  }
   return state;
 }
 

@@ -15,8 +15,10 @@ import { PageTitle } from "~/components/ui/page";
 import { SegmentedControl } from "~/components/ui/segmented-control";
 import { exportUrl } from "~/lib/csv";
 import {
+  applyDescribed,
   DEFAULT_FILTERS,
   explorerSearchParams,
+  isFilterActive,
   nextSort,
   type ExplorerState,
   type FilterChangeHandler,
@@ -95,13 +97,20 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
     },
     onApply: (r, text) => {
       const tab = r.tab ?? (activeTab === "explorer" ? "explorer" : "units");
-      setFilters(r.filters);
+      setFilters(applyDescribed(DEFAULT_FILTERS, r.filters));
       setActiveTab(tab);
+      // The Facilities table shows CO₂ and capacity; other metrics keep its current order.
+      const facilitySort =
+        r.sort?.by === "co2MassTons"
+          ? ("co2" as const)
+          : r.filters.topBy === "capacity" && r.filters.topN !== "ALL"
+            ? ("capacity" as const)
+            : undefined;
       setTable((t) => ({
         ...t,
         page: 1,
-        ...(r.sort && tab === "explorer"
-          ? { sortBy: "co2" as const, sortDir: r.sort.dir }
+        ...(r.sort && facilitySort
+          ? { sortBy: facilitySort, sortDir: r.sort.dir }
           : {}),
       }));
       setUnitTable((t) => ({
@@ -113,7 +122,20 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
     },
   });
 
-  const showRank = filters.topN !== "ALL";
+  // A Top N's position number, shown while the table is sorted by the ranking measure.
+  const ranked = isFilterActive(filters, "topN");
+  const sameOrder = (sortDir: SortDirection) => sortDir === filters.topDir;
+  const showFacilityRank =
+    ranked &&
+    filters.topLevel === "facility" &&
+    sameOrder(table.sortDir) &&
+    ((table.sortBy === "co2" && filters.topBy === "co2MassTons") ||
+      (table.sortBy === "capacity" && filters.topBy === "capacity"));
+  const showUnitRank =
+    ranked &&
+    filters.topLevel === "unit" &&
+    sameOrder(unitTable.sortDir) &&
+    unitTable.sortBy === filters.topBy;
 
   const { data: stats } = api.facilities.getStats.useQuery();
   const { data: filterOptions } = api.facilities.getFilterOptions.useQuery();
@@ -246,7 +268,7 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
         <UnitsTable
           data={unitsQuery.data}
           {...tableProps(unitTable, setUnitTable, unitsQuery)}
-          showRank={showRank}
+          showRank={showUnitRank}
           compareUnitIds={compareUnitIds}
           onToggleCompare={toggleUnitCompare}
           onResetFilters={resetFilters}
@@ -255,7 +277,7 @@ export function Explorer({ initialState }: { initialState: ExplorerState }) {
         <FacilitiesTable
           data={facilitiesQuery.data}
           {...tableProps(table, setTable, facilitiesQuery)}
-          showRank={showRank}
+          showRank={showFacilityRank}
           year={filters.year}
           compareIds={compareIds}
           onToggleCompare={toggleCompare}

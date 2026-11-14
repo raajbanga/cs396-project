@@ -42,27 +42,16 @@ without saying what they mean.
 
 ## P1 — costs points
 
-- [ ] **Search: one global selection, so rankings work on every page.** Found 11/12 in the
-      browser. "top 10 facilities by CO2 in 2025" gives 10 facilities on Explore, but 1,311 on
-      Map and 3,989 unit-years on Analyze. Name searches ("Ghent") and filter searches ("coal
-      units in Kentucky", "SCR in Ohio") work on all three; only rankings fail.
-  - Cause: the parser (`describeSearch`) returns `{ filters, sort, tab }`, and the ranking metric
-    is in `sort`, which only Explore reads (its table sort). Map and Analyze call
-    `setFilters(r.filters)`, so the metric is lost; `topN` reaches the URL but
-    `getMapFacilities` never ranks, and `analysisRows` strips `topN`/`rankGroup` on purpose
-    (`src/server/analysis.ts:86`). The Top-N control under Advanced is dead on both pages for
-    the same reason, and its note ("ranks follow the table sort") mentions a table those pages
-    lack.
-  - Fix: make the ranking part of the selection instead of a table view. Add `rankBy` and
-    `rankDir` to `facilityFilterSchema` (filled by the parser and the Advanced control); one
-    server helper adds "row is in the top N" to the conditions, reusing `rankedFacilities` /
-    `rankedUnitYears` (facility metrics rank facilities, unit metrics rank unit-years); Explore,
-    Map, and Analyze all call it, and Explore's column sort goes back to being display order
-    only. One shared `onApply` merges the result onto each page's defaults, and one chip reads
-    "Top 10 by CO₂, 2025". Test: the same query gives the same facilities on all three pages.
-  - Also found: on Analyze a description search _replaces_ the default 2015–2025 range, so
-    "coal units in Kentucky" quietly includes 1996–2008 and partial 2026 (a name search keeps
-    the range).
+- [ ] **Search: one global selection, so rankings work on every page.** — RB
+  - [x] Rankings (11/13). Top N is now part of the filters (`topN`, `topBy`, `topDir`,
+        `topLevel`, `rankGroup`): `topSelection` in `facilities.ts` keeps the first N facilities
+        (their matching unit-years added up) or unit-years, and Explore, Map, Analyze, and every
+        download apply it. "top 10 facilities by CO2 in 2025" gives 10 facilities on all three
+        pages (38 unit-years); Explore's column sort is display order only. Advanced has Keep /
+        Of / By / Order / Group on every page, one chip reads "Top 10 facilities by CO₂", and old
+        `topN` links rank by their table sort. Test: `src/server/top-selection.test.ts`.
+  - [x] On Analyze a description search keeps the 2015–2025 range unless it names years ("in
+        2025" becomes 2025–2025).
   - Also found: on What-if and Compare groups' facility picker, Enter without a highlighted
     suggestion does nothing, even when "Ghent" matches the first suggestion exactly; pick the
     first match, or say "choose a facility from the list".
