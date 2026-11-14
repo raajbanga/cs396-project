@@ -1,132 +1,267 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { useTheme } from "next-themes";
-import type { Config, Data, Layout } from "plotly.js";
-import { DataPanel } from "~/components/ui/data-panel";
+import { useRef, type ReactNode } from "react";
+import { ResponsiveContainer } from "recharts";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ExportButton } from "~/components/ui/export-button";
 import type { ExportMetadata, ExportTable } from "~/lib/export-bundle";
-
-/** Series colors per theme, led by the app's own accent and status tokens. */
-const COLORWAY = {
-  light: [
-    "#1d4ed8",
-    "#b45309",
-    "#15803d",
-    "#b91c1c",
-    "#0369a1",
-    "#7c3aed",
-    "#0f766e",
-    "#be185d",
-    "#92400e",
-    "#475569",
-  ],
-  dark: [
-    "#7ea6ff",
-    "#fbbf24",
-    "#4ade80",
-    "#f87171",
-    "#38bdf8",
-    "#c4b5fd",
-    "#5eead4",
-    "#f9a8d4",
-    "#fdba74",
-    "#cbd5e1",
-  ],
-};
-
-const token = (name: string) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-/** The theme's tokens as a Plotly layout: transparent paper, app fonts, hairline grid. */
-function themeLayout(dark: boolean): Partial<Layout> {
-  const axis = {
-    gridcolor: token("--edge"),
-    linecolor: token("--edge"),
-    zerolinecolor: token("--edge"),
-    automargin: true,
-  };
-  return {
-    paper_bgcolor: "rgba(0,0,0,0)",
-    plot_bgcolor: "rgba(0,0,0,0)",
-    font: {
-      family: getComputedStyle(document.body).fontFamily,
-      size: 12,
-      color: token("--fg-2"),
-    },
-    colorway: COLORWAY[dark ? "dark" : "light"],
-    margin: { t: 16, r: 16, b: 48, l: 56 },
-    hoverlabel: {
-      bgcolor: token("--surface"),
-      bordercolor: token("--edge"),
-      font: { color: token("--fg") },
-    },
-    legend: { orientation: "h", y: -0.18 },
-    xaxis: axis,
-    yaxis: axis,
-  };
-}
-
-/** Shallow-merges each axis so callers set titles without losing the theme's grid colors. */
-function mergeLayout(base: Partial<Layout>, layout: Partial<Layout>) {
-  const merged: Record<string, unknown> = { ...base, ...layout };
-  for (const key of ["xaxis", "yaxis"] as const) {
-    merged[key] = { ...base[key], ...layout[key] };
-  }
-  return merged as Partial<Layout>;
-}
-
-/** Error bars default to Plotly's near-black, invisible on the dark theme; give them the text color. */
-function themeData(data: Data[]): Data[] {
-  const color = token("--fg-2");
-  return data.map((trace) => {
-    const t = { ...trace } as Record<string, unknown>;
-    for (const key of ["error_x", "error_y"]) {
-      const bars = t[key] as Record<string, unknown> | undefined;
-      if (bars && bars.color === undefined) t[key] = { color, ...bars };
-    }
-    return t;
-  });
-}
-
-/** WebGL draws thousands of points fast; without it (old GPUs, some VMs) Plotly shows an error, so use SVG. */
-let webgl: boolean | undefined;
-/** "scattergl" when the browser has WebGL, else "scatter". */
-export const pointsType = (): "scattergl" | "scatter" => {
-  if (webgl === undefined && typeof document !== "undefined") {
-    try {
-      webgl = Boolean(document.createElement("canvas").getContext("webgl"));
-    } catch {
-      webgl = false;
-    }
-  }
-  return (webgl ?? true) ? "scattergl" : "scatter";
-};
+import { cn } from "~/lib/utils";
 
 /**
- * A titled Plotly chart in a panel (Phase 2 §4.4): zoom, hover tooltips, and PNG export from the
- * mode bar, plus a "Data" button that saves `table`, the image, and metadata as a ZIP (§7). Plotly loads only when a chart mounts.
+ * The chart system (shadcn/ui charts on Recharts): one palette, one axis style, one tooltip, and
+ * one frame around every chart. Charts are quiet by default: horizontal gridlines only, no axis
+ * lines or tick marks, no point markers, and color only where it means something (fuel, model,
+ * sign).
  */
-export function Chart({
+
+/** Earthy categorical palette (globals.css), in the order series take it. */
+export const PALETTE = [
+  "var(--chart-slate)",
+  "var(--chart-ochre)",
+  "var(--chart-teal)",
+  "var(--chart-rust)",
+  "var(--chart-plum)",
+  "var(--chart-olive)",
+  "var(--chart-clay)",
+  "var(--chart-sand)",
+] as const;
+
+/** The color of series `i` when nothing more meaningful (a fuel, a model) applies. */
+export const seriesColor = (i: number) => PALETTE[i % PALETTE.length]!;
+
+/** One series: its key in the data rows, its label, and its color. */
+export interface Series {
+  key: string;
+  label: string;
+  color: string;
+}
+
+const compact = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumSignificantDigits: 3,
+});
+const plain = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 4 });
+
+/** Axis ticks: "1.4B", "250K", "0.05". */
+export const formatTick = (v: unknown) =>
+  typeof v === "number" && Number.isFinite(v)
+    ? Math.abs(v) >= 1e4
+      ? compact.format(v)
+      : plain.format(v)
+    : typeof v === "string"
+      ? v
+      : "";
+
+/** Tooltip and label values: "1,234,567", "0.0123". */
+export const formatValue = (v: unknown) =>
+  typeof v === "number" && Number.isFinite(v)
+    ? v.toLocaleString("en-US", { maximumSignificantDigits: 4 })
+    : "—";
+
+const TICK = { fill: "var(--fg-muted)", fontSize: 12 };
+
+/** Shared axis look: no line, no tick marks, muted labels. */
+export const axisProps = {
+  tickLine: false,
+  axisLine: false,
+  tick: TICK,
+  tickMargin: 8,
+  tickFormatter: formatTick,
+} as const;
+
+/** Shared grid look: faint dashed lines along the value axis only. */
+export const gridProps = {
+  stroke: "var(--edge)",
+  strokeDasharray: "3 3",
+  strokeOpacity: 0.8,
+} as const;
+
+/** Recharts animates on every data change; the charts redraw often (filters), so don't. */
+export const still = { isAnimationActive: false } as const;
+
+/** A sized, responsive drawing area for a Recharts chart. */
+export function ChartContainer({
+  height,
+  children,
+  className,
+}: {
+  height: number;
+  children: React.ReactElement;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "w-full text-xs [&_.recharts-surface]:outline-none",
+        className,
+      )}
+      style={{ height }}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** One tooltip row: swatch, label, value. */
+export interface TooltipRow {
+  label: ReactNode;
+  value: ReactNode;
+  color?: string;
+}
+
+/** The shadcn tooltip card: a title and aligned rows. */
+export function TooltipCard({
+  title,
+  rows,
+  footer,
+}: {
+  title?: ReactNode;
+  rows: TooltipRow[];
+  footer?: ReactNode;
+}) {
+  return (
+    <div className="border-edge bg-surface text-fg min-w-36 rounded-md border px-2.5 py-1.5 text-xs shadow-md shadow-black/10">
+      {title && <p className="mb-1 font-medium">{title}</p>}
+      <div className="space-y-0.5">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-2">
+            {r.color && (
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                style={{ backgroundColor: r.color }}
+              />
+            )}
+            <span className="text-fg-muted flex-1">{r.label}</span>
+            <span className="font-medium tabular-nums">{r.value}</span>
+          </div>
+        ))}
+      </div>
+      {footer && <p className="text-fg-muted mt-1">{footer}</p>}
+    </div>
+  );
+}
+
+/** Small color chips naming the series, above a chart with more than one. */
+export function SeriesLegend({ series }: { series: Series[] }) {
+  if (series.length < 2) return null;
+  return (
+    <ul className="text-fg-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      {series.map((s) => (
+        <li key={s.key} className="flex items-center gap-1.5">
+          <span
+            className="h-2.5 w-2.5 rounded-[2px]"
+            style={{ backgroundColor: s.color }}
+          />
+          {s.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** SVG presentation properties a standalone image needs, read from the live chart. */
+const INLINE_STYLES = [
+  "fill",
+  "fill-opacity",
+  "stroke",
+  "stroke-width",
+  "stroke-opacity",
+  "stroke-dasharray",
+  "opacity",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "text-anchor",
+  "dominant-baseline",
+];
+
+/**
+ * The chart's SVG as a PNG (2×): computed styles are inlined, since CSS variables and classes
+ * don't travel with the image, and the panel color fills the background.
+ */
+async function chartPng(root: HTMLElement | null) {
+  const svg = [...(root?.querySelectorAll("svg") ?? [])].sort(
+    (a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight,
+  )[0];
+  if (!svg) return undefined;
+  const { width, height } = svg.getBoundingClientRect();
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  const live = [svg, ...svg.querySelectorAll("*")];
+  const cloned = [copy, ...copy.querySelectorAll("*")];
+  live.forEach((el, i) => {
+    const css = getComputedStyle(el);
+    const target = cloned[i] as SVGElement;
+    for (const prop of INLINE_STYLES)
+      target.style.setProperty(prop, css.getPropertyValue(prop));
+  });
+  copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  copy.setAttribute("width", String(width));
+  copy.setAttribute("height", String(height));
+  const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  bg.setAttribute("width", "100%");
+  bg.setAttribute("height", "100%");
+  bg.setAttribute(
+    "fill",
+    getComputedStyle(document.documentElement).getPropertyValue("--surface"),
+  );
+  copy.insertBefore(bg, copy.firstChild);
+
+  const img = new Image();
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(copy))}`;
+  await img.decode();
+  const canvas = document.createElement("canvas");
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return undefined;
+  ctx.scale(2, 2);
+  ctx.drawImage(img, 0, 0, width, height);
+  const blob = await new Promise<Blob | null>((r) =>
+    canvas.toBlob(r, "image/png"),
+  );
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : undefined;
+}
+
+/** A query's state as ChartFrame props: loading, error, and retry. */
+export const queryStatus = (q: {
+  isLoading: boolean;
+  error: { message: string } | null;
+  refetch: () => unknown;
+}) => ({
+  isLoading: q.isLoading,
+  error: q.error,
+  onRetry: () => void q.refetch(),
+});
+
+/**
+ * Every chart's frame (Phase 2 §4.4): title and one-line subtitle, the chart's own controls, a
+ * download (CSV + PNG + metadata in a ZIP, §7), an optional legend, and "About this chart" for the
+ * method and caveats. No box: a hairline above separates charts.
+ */
+export function ChartFrame({
   title,
   subtitle,
-  data,
-  layout = {},
+  note,
+  actions,
+  legend,
   table,
   meta,
   filename,
   isLoading,
   error,
   onRetry,
-  note,
-  height = 380,
-  actions,
+  height,
+  children,
+  className,
 }: {
   title: string;
   subtitle?: ReactNode;
-  data: Data[];
-  layout?: Partial<Layout>;
+  /** Method, definitions, and caveats, under "About this chart". */
+  note?: ReactNode;
+  actions?: ReactNode;
+  legend?: Series[];
   table?: ExportTable;
   /** Added to the export's metadata.json, e.g. the definitions of the variables shown. */
   meta?: ExportMetadata;
@@ -135,63 +270,28 @@ export function Chart({
   /** A failed query: shown in place of the chart, with a retry. */
   error?: { message: string } | null;
   onRetry?: () => void;
-  /** Method, definitions, and caveats, under "About this chart", so the subtitle stays one line. */
-  note?: ReactNode;
-  height?: number;
-  actions?: ReactNode;
+  /** Reserved while loading, so the page doesn't jump. */
+  height: number;
+  children: ReactNode;
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const { resolvedTheme } = useTheme();
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || isLoading || error) return;
-    let cancelled = false;
-    void import("plotly.js-dist-min").then(({ default: Plotly }) => {
-      if (cancelled) return;
-      const config: Partial<Config> = {
-        responsive: true,
-        displaylogo: false,
-        toImageButtonOptions: { filename, format: "png", scale: 2 },
-        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-      };
-      void Plotly.react(
-        el,
-        themeData(data),
-        mergeLayout(themeLayout(resolvedTheme === "dark"), {
-          height,
-          ...layout,
-        }),
-        config,
-      );
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [data, layout, resolvedTheme, height, filename, isLoading, error]);
-
-  useEffect(() => {
-    const el = ref.current;
-    return () => {
-      if (el)
-        void import("plotly.js-dist-min").then(({ default: P }) => P.purge(el));
-    };
-  }, []);
-
   return (
-    <DataPanel className="p-4">
-      <div className="mb-2 flex items-start gap-3">
+    <figure
+      className={cn("border-edge min-w-0 space-y-3 border-t pt-4", className)}
+    >
+      <header className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1 space-y-0.5">
-          <h3 className="text-fg text-sm font-semibold text-balance">
+          <h3 className="text-fg text-[15px] font-semibold text-balance">
             {title}
           </h3>
           {subtitle && (
-            <p className="text-fg-muted max-w-[90ch] text-xs text-pretty">
+            <p className="text-fg-muted max-w-[80ch] text-xs text-pretty">
               {subtitle}
             </p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {actions}
           {table && (
             <ExportButton
@@ -201,37 +301,33 @@ export function Chart({
               title={title}
               table={table}
               meta={meta}
-              png={async () => {
-                const el = ref.current;
-                if (!el) return undefined;
-                const { default: Plotly } = await import("plotly.js-dist-min");
-                const url = await Plotly.toImage(el, {
-                  format: "png",
-                  scale: 2,
-                  width: el.clientWidth,
-                  height,
-                });
-                return new Uint8Array(await (await fetch(url)).arrayBuffer());
-              }}
+              png={() => chartPng(ref.current)}
             />
           )}
         </div>
+      </header>
+      {legend && <SeriesLegend series={legend} />}
+      {/* The height is held only while there's no chart yet; charts size themselves. */}
+      <div
+        ref={ref}
+        style={{ minHeight: isLoading || error ? height : undefined }}
+      >
+        {error ? (
+          <QueryError error={error} onRetry={onRetry} />
+        ) : isLoading ? (
+          <InlineLoading title="Loading…" />
+        ) : (
+          children
+        )}
       </div>
-      {error ? (
-        <QueryError error={error} onRetry={onRetry} />
-      ) : isLoading ? (
-        <InlineLoading title="Loading…" />
-      ) : (
-        <div ref={ref} style={{ minHeight: height }} />
-      )}
       {note && (
-        <details className="text-fg-muted mt-2 text-xs">
+        <details className="text-fg-muted text-xs">
           <summary className="hover:text-fg-2 w-fit cursor-pointer">
             About this chart
           </summary>
-          <div className="mt-1 max-w-[90ch] space-y-1 text-pretty">{note}</div>
+          <div className="mt-1 max-w-[80ch] space-y-1 text-pretty">{note}</div>
         </details>
       )}
-    </DataPanel>
+    </figure>
   );
 }

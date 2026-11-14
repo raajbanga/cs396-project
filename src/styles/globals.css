@@ -44,6 +44,16 @@
   --warn: #b45309;
   --danger: #b91c1c;
   --info: #0369a1;
+  /* Chart palette: earthy mid-tones that keep 3:1 contrast on both themes' surfaces, so one set
+     serves light and dark. Ochre, teal, and rust are coal, gas, and oil everywhere. */
+  --chart-ochre: #b07a1c;
+  --chart-teal: #2b8a7e;
+  --chart-rust: #c05a32;
+  --chart-olive: #7d8a2e;
+  --chart-slate: #5a78a8;
+  --chart-plum: #9a5b8a;
+  --chart-clay: #b56a6a;
+  --chart-sand: #8f8070;
   color-scheme: light;
 }
 

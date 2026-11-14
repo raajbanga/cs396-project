@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Chart } from "~/components/ui/chart";
+import { BarList } from "~/components/charts/bars";
+import { ChartFrame } from "~/components/ui/chart";
 import { InlineLoading, QueryError } from "~/components/ui/empty-state";
 import { ReportTable, Section } from "~/components/ui/report";
 import { TryExamples } from "~/components/ui/try-examples";
@@ -18,7 +19,6 @@ import {
   DimensionField,
   dimensionLabel,
   findInfo,
-  variableLabel,
   VariableField,
   type TabProps,
 } from "./shared";
@@ -306,34 +306,12 @@ export function CompareTab(props: TabProps) {
                 ],
               ].filter((r): r is string[] => Boolean(r))}
             />
-            <Chart
+            <ChartFrame
               title={`Mean ${info.label} per unit-year, with 95 % confidence intervals`}
-              subtitle={`The table's ${combined.toLowerCase()} weights every unit-year by its size; the mean here counts each unit-year once.`}
+              subtitle={`In ${unit}. The table's ${combined.toLowerCase()} weights every unit-year by its size; the mean here counts each unit-year once, and the whisker shows how sure that mean is.`}
               filename={`compare-${view.variable}-by-${by}`}
               meta={{ variables: [info], groups, tests: result.data.tests }}
-              data={[
-                {
-                  type: "bar",
-                  x: rows.map((g) => g.group),
-                  y: rows.map((g) => g.mean),
-                  error_y: {
-                    type: "data",
-                    symmetric: false,
-                    array: rows.map((g) => (g.ci ? g.ci.high - g.ci.mean : 0)),
-                    arrayminus: rows.map((g) =>
-                      g.ci ? g.ci.mean - g.ci.low : 0,
-                    ),
-                  },
-                  hovertemplate: `%{x}: mean %{y:,.4~g} ${unit}<extra></extra>`,
-                },
-              ]}
-              layout={{
-                xaxis: {
-                  title: { text: dimensionLabel(catalog, by) },
-                  type: "category",
-                },
-                yaxis: { title: { text: variableLabel(info) } },
-              }}
+              height={rows.length * 26}
               table={{
                 head: [
                   "group",
@@ -362,7 +340,20 @@ export function CompareTab(props: TabProps) {
                   g.sd,
                 ]),
               }}
-            />
+            >
+              <BarList
+                unit={unit}
+                rows={rows.map((g) => ({
+                  label: g.group,
+                  value: g.mean,
+                  low: g.ci?.low,
+                  high: g.ci?.high,
+                  details: [
+                    { label: "Unit-years", value: g.count.toLocaleString() },
+                  ],
+                }))}
+              />
+            </ChartFrame>
           </>
         )
       )}

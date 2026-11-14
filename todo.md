@@ -24,19 +24,19 @@ from the README passes `npm run validate` (82 tests: 81 pass, 1 skipped) and `np
 commit spread, one missing §6.4 element, search outside Explore, and pages that show numbers
 without saying what they mean.
 
-| Rubric area                      | Pts | State                                                     |
-| :------------------------------- | --: | :-------------------------------------------------------- |
-| 1.1 Weekly meetings              |  12 | People (table below)                                      |
-| 1.2 Commit history               |   3 | **At risk:** commits fall in 3 weeks (W41, W44, W46)      |
-| 1.2 Team participation           |   2 | OK (Arnav shows on the contributor graph)                 |
-| 1.2 Branches, issues, repo       |   3 | OK (6 PRs, issues #6–#15, README current, no secrets)     |
-| 2 Data layer, analysis, TRACI    |  22 | Met; **results shown, rarely interpreted** (P1 UX)        |
-| 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)               |
-| 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer)   |
-| 2 Sensitivity and scenarios      |   8 | **One gap:** no baseline-prediction reference line (§6.4) |
-| 2 Integration and usability      |   5 | Search ranks on every page (11/13); hosted is 11/11       |
-| 2 Presentation and participation |   6 | **Not started** (#15, Final)                              |
-| 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                     |
+| Rubric area                      | Pts | State                                                   |
+| :------------------------------- | --: | :------------------------------------------------------ |
+| 1.1 Weekly meetings              |  12 | People (table below)                                    |
+| 1.2 Commit history               |   3 | **At risk:** commits fall in 3 weeks (W41, W44, W46)    |
+| 1.2 Team participation           |   2 | OK (Arnav shows on the contributor graph)               |
+| 1.2 Branches, issues, repo       |   3 | OK (6 PRs, issues #6–#15, README current, no secrets)   |
+| 2 Data layer, analysis, TRACI    |  22 | Met; **results shown, rarely interpreted** (P1 UX)      |
+| 2 Visualization                  |  10 | Met; jargon and toggles unexplained (P1 UX)             |
+| 2 Prediction                     |   9 | Met; persistence beats the models (rehearse the answer) |
+| 2 Sensitivity and scenarios      |   8 | Baseline input and prediction lines in place (§6.4)     |
+| 2 Integration and usability      |   5 | Search ranks on every page (11/13); hosted is 11/11     |
+| 2 Presentation and participation |   6 | **Not started** (#15, Final)                            |
+| 3 Report                         |  20 | Met; cite CAMPD and the software (P2)                   |
 
 ---
 
@@ -98,10 +98,15 @@ without saying what they mean.
 - [ ] **Commit steadily in W47 and W48 (1.2 history, 3 pts).** Nothing was committed in W42,
       W43, or W45; the rubric discounts a burst before the deadline. Spread the remaining items
       over both weeks and both members.
-- [ ] **§6.4 baseline-prediction reference line.** The spec asks for reference lines at the
-      baseline input _and_ prediction; the curve has only the vertical one. The horizontal line
-      (`refLine("y", pred0)`, still defined in `sensitivity.tsx`) was dropped when "Both" was
-      added on 11/11. Draw one per model in its color, then re-take the sensitivity figure.
+- [x] **§6.4 baseline-prediction reference line.** One dashed horizontal line per model at its
+      baseline prediction, in the model's color, plus the vertical one at the baseline input
+      (11/13, with the chart rework). Re-take the sensitivity figure for the report.
+- [x] **Charts on Recharts (shadcn charts), decluttered** (11/13). Plotly is gone; eight shared
+      pieces in `src/components/charts/` (lines, bar list, columns, histogram, box plot, scatter,
+      heat grid, state map) and one `ChartFrame` replace 14 hand-built configs. Quiet style:
+      horizontal gridlines only, no boxes, values written on bars, color only for fuel, model,
+      or sign (earthy palette in `globals.css`, also the Map's fuel colors). Lost: Plotly's
+      drag-zoom; PNG export is kept (SVG → canvas). Re-take report figures.
 - [ ] **Merge `dev` into `master` and redeploy before the demo.** The hosted build is still 11/11
       (no intervals, persistence, or the 11/12 fixes).
 - [ ] (#15) Slides and demo script (Final section).
@@ -147,7 +152,6 @@ Checks:
 
 ## P3 — optional
 
-- [ ] Memoize chart `data`/`layout` so `Plotly.react` doesn't run on every parent render.
 - [ ] OVAT over a categorical input (fuel, a control flag) as a bar chart.
 - [ ] TRACI impacts of the predicted NOₓ on What-if (§6.4, optional).
 - [ ] Residual plot on the Models tab; display CAS numbers with dashes.
@@ -200,7 +204,7 @@ plan. Both members attend and speak.
 | :---------------- | :-------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------- |
 | Compute stack     | Stats, indicators, TRACI in TS on the server; models trained in Python, replayed in TS. | Keeps pandas/sklearn, works on the read-only Vercel deploy, instant what-ifs. |
 | Prediction target | Annual NOₓ mass (short tons) per unit-year, regression.                                 | Every spec scenario (+10 % load, −5 % heat input, control change) changes it. |
-| Charts            | Plotly.js behind `<Chart>`, lazy-loaded.                                                | Spec recommendation; zoom, tooltips, heat maps, PNG export built in.          |
+| Charts            | Recharts (shadcn charts) behind `ChartFrame` + `src/components/charts/`.                | Matches the shadcn UI; quieter; small; tooltips and PNG export kept, no zoom. |
 | Web stack         | Next.js 16 + tRPC + Drizzle + SQLite. No Flask rewrite.                                 | Spec allows it ("React is optional"); justified in the report.                |
 | Modeling years    | Tune: train 2016–2021, validate 2022–2023. Final fit 2016–2023, test 2024–2025.         | §5.4 chronological split; 2016 is the first year with a prior-year input.     |
 | Analyze layout    | One tab per question, one tab level, results before controls.                           | Professor's critique (11/11); matches Explore and Map.                        |

@@ -1,6 +1,7 @@
 "use client";
 
-import { Chart } from "~/components/ui/chart";
+import { Columns } from "~/components/charts/bars";
+import { ChartFrame } from "~/components/ui/chart";
 import { Input } from "~/components/ui/input";
 import {
   Disclosure,
@@ -16,7 +17,7 @@ import {
   scenarios,
 } from "~/lib/model";
 import { Controls } from "../analyze/shared";
-import { rangeWarning, type PredictTabProps } from "./predict-view";
+import type { PredictTabProps } from "./predict-view";
 
 /** §6.3–§6.4: named scenarios against the baseline, for each chosen model. */
 export function ScenariosSection({
@@ -58,42 +59,17 @@ export function ScenariosSection({
         </Field>
       </Controls>
 
-      <Chart
+      <ChartFrame
         title="Predicted NOₓ under each scenario"
-        subtitle="Labels: change from the model's baseline prediction; faded bars use inputs outside the training data."
+        subtitle="Short tons. Labels: change from the model's baseline prediction; faded bars use inputs outside the training data."
         note="The prior-year NOₓ rate still describes the unit as it was. When the models disagree on a scenario, the data cannot settle the effect: the tree learns NOₓ mostly from heat input and last year's rate, so adding SCR barely moves it, while Ridge applies one average SCR effect to every unit. Model responses, not measured effects."
+        legend={chosen.map((m) => ({
+          key: m.kind,
+          label: m.name,
+          color: MODEL_COLORS[m.kind]!,
+        }))}
         filename="scenarios"
-        height={420}
-        data={chosen.map((m) => {
-          const rows = results.filter((r) => r.model === m);
-          return {
-            type: "bar",
-            name: m.name,
-            x: rows.map((r) => r.scenario.name),
-            y: rows.map((r) => r.prediction),
-            text: rows.map((r) =>
-              r.scenario.name === "Baseline" ? "" : formatPct(r.diffPct),
-            ),
-            textposition: "outside",
-            marker: {
-              color: MODEL_COLORS[m.kind],
-              opacity: rows.map((r) => (r.warnings.length ? 0.4 : 1)),
-            },
-            customdata: rows.map((r) => [
-              formatStat(r.diff),
-              formatPct(r.diffPct),
-              rangeWarning(r.warnings),
-            ]) as never,
-            hovertemplate: `%{x}<br>NOₓ %{y:,.4~g} t<br>change %{customdata[0]} t (%{customdata[1]})<br>%{customdata[2]}<extra>${m.name}</extra>`,
-          };
-        })}
-        layout={{
-          barmode: "group",
-          yaxis: {
-            title: { text: "Predicted NOₓ (short tons)" },
-            rangemode: "tozero",
-          },
-        }}
+        height={360}
         table={{
           head: [
             "model",
@@ -114,7 +90,38 @@ export function ScenariosSection({
             r.warnings.map(featureLabel).join("; "),
           ]),
         }}
-      />
+      >
+        <Columns
+          height={360}
+          unit="t"
+          series={chosen.map((m) => ({
+            key: m.kind,
+            label: m.name,
+            color: MODEL_COLORS[m.kind]!,
+          }))}
+          data={list.map((scenario) => ({
+            label: scenario.name,
+            ...Object.fromEntries(
+              results
+                .filter((r) => r.scenario === scenario)
+                .map((r) => [r.model.kind, r.prediction]),
+            ),
+          }))}
+          labels={(row, key) => {
+            const r = results.find(
+              (x) => x.scenario.name === row.label && x.model.kind === key,
+            );
+            return !r || r.scenario === list[0] ? "" : formatPct(r.diffPct);
+          }}
+          faded={(row, key) =>
+            Boolean(
+              results.find(
+                (x) => x.scenario.name === row.label && x.model.kind === key,
+              )?.warnings.length,
+            )
+          }
+        />
+      </ChartFrame>
 
       <Disclosure title="Show values" hint="what each scenario changes">
         <ReportTable
